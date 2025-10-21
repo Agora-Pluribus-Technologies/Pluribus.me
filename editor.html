@@ -32,4 +32,14 @@
       </article>
     </main>
   </body>
+  <script>
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const token = hash.get("access_token");
+    if (token) {
+      sessionStorage.setItem("gitlab_token", token);
+      console.log("✅ Logged in with GitLab token:", token);
+    } else {
+      console.warn("⚠️ No token found. Please log in again.");
+    }
+  </script>
 </html>
