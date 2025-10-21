@@ -33,13 +33,24 @@
     </main>
   </body>
   <script>
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    const token = hash.get("access_token");
+    // 1. Parse token from URL fragment (after the '#')
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const token = hashParams.get("access_token");
+
+    // 2. If a token is present, store it in sessionStorage
     if (token) {
       sessionStorage.setItem("gitlab_token", token);
-      console.log("✅ Logged in with GitLab token:", token);
+
+      // 3. Clean the URL bar by removing the fragment
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // 4. Retrieve it later from sessionStorage (for API calls)
+    const accessToken = sessionStorage.getItem("gitlab_token");
+    if (accessToken) {
+      console.log("✅ GitLab token available:", accessToken.slice(0, 10) + "..."); // optional debug
     } else {
-      console.warn("⚠️ No token found. Please log in again.");
+      console.warn("⚠️ No token found. Redirect user to log in.");
     }
   </script>
 </html>
