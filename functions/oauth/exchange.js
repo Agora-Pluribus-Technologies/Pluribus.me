@@ -1,5 +1,5 @@
 export async function onRequestPost(context) {
-  const { NETLIFY_CLIENT_ID, NETLIFY_SECRET } = context.env;
+  const { NETLIFY_CLIENT_ID, NETLIFY_CLIENT_SECRET } = context.env;
 
   // Parse JSON body from frontend
   const body = await context.request.json();
@@ -15,14 +15,14 @@ export async function onRequestPost(context) {
   // Prepare form data for token exchange
   const form = new URLSearchParams({
     client_id: NETLIFY_CLIENT_ID,
-    client_secret: NETLIFY_SECRET,
+    client_secret: NETLIFY_CLIENT_SECRET,
     code,
     grant_type: "authorization_code",
     redirect_uri
   });
 
   // Exchange code for token
-  const resp = await fetch("https://gitlab.com/oauth/token", {
+  const resp = await fetch("https://app.netlify.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form
