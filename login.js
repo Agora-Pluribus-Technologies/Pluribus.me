@@ -3,7 +3,7 @@ const NETLIFY_CLIENT_ID =
   "YrSXJx6H250qmnq5dgb4rlRdynecY16jGKhNcJJx60E";
 const REDIRECT_URI = "https://pluribus-me.pages.dev/oauth/callback";
 // const SCOPE = "api read_repository write_repository";
-const AUTH_URL = "https://app.netlify.com/oauth/authorize";
+const AUTH_URL = "https://app.netlify.com/authorize";
 
 document.getElementById("login-button").addEventListener("click", () => {
   // Build the authorization URL
