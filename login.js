@@ -14,7 +14,7 @@ document.getElementById("login-button").addEventListener("click", () => {
     // scope: SCOPE,
   });
 
-  // Redirect user to GitLab's login page
+  // Redirect user to login page
   window.location.href = `${AUTH_URL}?${params.toString()}`;
 });
 

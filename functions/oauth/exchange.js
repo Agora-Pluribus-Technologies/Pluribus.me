@@ -1,5 +1,5 @@
 export async function onRequestPost(context) {
-  const { GITLAB_CLIENT_ID, GITLAB_CLIENT_SECRET } = context.env;
+  const { NETLIFY_CLIENT_ID, NETLIFY_SECRET } = context.env;
 
   // Parse JSON body from frontend
   const body = await context.request.json();
@@ -14,8 +14,8 @@ export async function onRequestPost(context) {
 
   // Prepare form data for token exchange
   const form = new URLSearchParams({
-    client_id: GITLAB_CLIENT_ID,
-    client_secret: GITLAB_CLIENT_SECRET,
+    client_id: NETLIFY_CLIENT_ID,
+    client_secret: NETLIFY_SECRET,
     code,
     grant_type: "authorization_code",
     redirect_uri
