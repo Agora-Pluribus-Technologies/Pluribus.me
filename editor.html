@@ -48,7 +48,7 @@
     // 4. Retrieve it later from sessionStorage (for API calls)
     const accessToken = sessionStorage.getItem("token");
     if (accessToken) {
-      console.log("✅ Token available:", accessToken.slice(0, 10) + "..."); // optional debug
+      window.alert("✅ Token available:", accessToken);
     } else {
       console.warn("⚠️ No token found. Redirect user to log in.");
     }
