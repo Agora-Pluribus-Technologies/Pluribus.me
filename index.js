@@ -10,19 +10,23 @@ document.addEventListener("DOMContentLoaded", async function () {
     method: "HEAD",
     headers: {
       Authorization: `Bearer ${token}`,
-    }
+    },
   });
   if (!response.ok) {
     displayLoginButton();
     return;
-  }
-  else {
+  } else {
     console.log(token);
   }
 });
 
 function displayLoginButton() {
-  document.getElementById("login-button").addEventListener("click", () => {
+  var loginButton = document.createElement("button");
+  loginButton.id = "login-button";
+  loginButton.style.padding = "10px 18px";
+  loginButton.style.cursor = "pointer";
+
+  loginButton.addEventListener("click", () => {
     // Build the authorization URL
     const params = new URLSearchParams({
       client_id: NETLIFY_CLIENT_ID,
@@ -34,4 +38,7 @@ function displayLoginButton() {
     // Redirect user to login page
     window.location.href = `${AUTH_URL}?${params.toString()}`;
   });
+
+  const mainDiv = document.getElementById("main");
+  mainDiv.appendChild(loginButton);
 }
