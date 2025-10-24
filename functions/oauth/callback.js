@@ -36,8 +36,45 @@ export async function onRequestGet(context) {
 
   // Build a redirect URL to your front-end (e.g. /editor.html)
   // Pass token info via fragment (#token=...) so it doesn't get logged in server logs
-  const redirectUrl = new URL(`${url.origin}/editor.html`);
+  const redirectUrl = new URL(`${url.origin}`);
   redirectUrl.hash = `access_token=${tokenData.access_token}`;
+  sessionStorage.setItem("token", tokenData.access_token);
+
+  // Get account type "free"
+  const netlifyAccountTypeUrl = "https://api.netlify.com/api/v1/accounts/types";
+  const payload = {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  };
+  const data = await netlifyApiRequest(netlifyAccountTypeUrl, payload);
+  for (let i = 0; i < data.length; i++) {
+    var typeObj = data[i];
+    if (typeObj.name.toLowerCase() == "free") {
+      console.log("Free account type_id: " + typeObj.id);
+      sessionStorage.setItem("ACCOUNT_TYPE_ID_FREE", typeObj.id);
+      break;
+    }
+  }
 
   return Response.redirect(redirectUrl.toString(), 302);
 }
+
+async function netlifyApiRequest(url, body) {
+  const accessToken = sessionStorage.getItem("token");
+  if (!accessToken) {
+    console.warn("⚠️ No token found. Redirect user to log in.");
+    return;
+  }
+  const response = await fetch(url, body);
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  console.log(data);
+  return data;
+}
+
