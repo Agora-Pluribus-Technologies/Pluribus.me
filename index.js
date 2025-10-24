@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     
     const sitesList = await getNetlifySites();
     for (let i=0; i < sitesList.length; i++) {
-      console.log("Site found: " + sitesList);
+      console.log("Site found: " + sitesList[i]);
     }
   }
 });
