@@ -27,7 +27,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     displayLoginButton();
   } else {
     console.log("Netlify access token present and valid");
-    await getNetlifyAccountTypeFree();
+    
+    const sitesList = await getNetlifySites();
+    console.log("Sites: " + sitesList);
   }
 });
 
@@ -48,16 +50,27 @@ async function netlifyApiRequest(url, body) {
   return data;
 }
 
-async function getNetlifyAccountTypeFree() {
-  // Get account type "free"
-  const netlifyAccountTypeUrl = "https://api.netlify.com/api/v1/accounts/types";
+async function getNetlifySites() {
+  const netlifySitesUrl = "https://api.netlify.com/api/v1/sites";
   const payload = {
     method: "GET",
     headers: {
       Authorization: `Bearer ${sessionStorage.getItem("token")}`,
     },
   };
-  const data = await netlifyApiRequest(netlifyAccountTypeUrl, payload);
+  const data = await netlifyApiRequest(netlifySitesUrl, payload);
+  return data;
+}
+
+async function createPluribusSiteNetlify() {
+  const netlifySitesUrl = "https://api.netlify.com/api/v1/sites";
+  const payload = {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${sessionStorage.getItem("token")}`,
+    },
+  };
+  const data = await netlifyApiRequest(netlifySitesUrl, payload);
   for (let i = 0; i < data.length; i++) {
     var typeObj = data[i];
     if (typeObj.name.toLowerCase() == "free") {
