@@ -60,6 +60,7 @@ async function getNetlifyAccountTypeFree() {
 function displayLoginButton() {
   var loginButton = document.createElement("button");
   loginButton.id = "login-button";
+  loginButton.innerText = "Sign into Netlify";
   loginButton.style.padding = "10px 18px";
   loginButton.style.cursor = "pointer";
 
