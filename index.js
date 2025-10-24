@@ -3,6 +3,17 @@ const REDIRECT_URI = "https://pluribus-me.pages.dev/oauth/callback";
 // const SCOPE = "api read_repository write_repository";
 const AUTH_URL = "https://app.netlify.com/authorize";
 
+// Check if we have a token in the URL hash (from OAuth callback redirect)
+if (window.location.hash) {
+  const params = new URLSearchParams(window.location.hash.substring(1));
+  const accessToken = params.get("access_token");
+  if (accessToken) {
+    sessionStorage.setItem("token", accessToken);
+    // Clear the hash from URL
+    window.history.replaceState(null, null, window.location.pathname);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async function () {
   const token = sessionStorage.getItem("token");
   const response = await fetch("https://api.netlify.com/api/v1/user", {

@@ -22,7 +22,7 @@ export async function onRequestPost(context) {
   });
 
   // Exchange code for token
-  const resp = await fetch("https://app.netlify.com/oauth/token", {
+  const resp = await fetch("https://api.netlify.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form
