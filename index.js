@@ -29,7 +29,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     console.log("Netlify access token present and valid");
     
     const sitesList = await getNetlifySites();
-    console.log("Sites: " + sitesList);
+    for (let i=0; i < sitesList.length; i++) {
+      console.log("Site found: " + sitesList);
+    }
   }
 });
 
