@@ -18,14 +18,14 @@ export async function onRequestGet(context) {
   });
 
   // Exchange the code for an access token
-  console.log("Before oauth get");
+  window.alert("Before oauth get");
   const tokenResponse = await fetch("https://app.netlify.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: tokenParams
   });
 
-  console.log("Oauth token fetched");
+  window.alert("Oauth token fetched");
   const tokenData = await tokenResponse.json();
 
   // If something went wrong, return the error JSON
@@ -39,6 +39,8 @@ export async function onRequestGet(context) {
   // Pass token info via fragment (#token=...) so it doesn't get logged in server logs
   const redirectUrl = new URL(`${url.origin}`);
   redirectUrl.hash = `access_token=${tokenData.access_token}`;
+
+  window.alert(redirectUrl.toString());
 
   return Response.redirect(redirectUrl.toString(), 302);
 }
