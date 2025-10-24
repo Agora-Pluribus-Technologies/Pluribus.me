@@ -18,7 +18,7 @@ export async function onRequestGet(context) {
   });
 
   // Exchange the code for an access token
-  const tokenResponse = await fetch("https://app.netlify.com/oauth/token", {
+  const tokenResponse = await fetch("https://api.netlify.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: tokenParams
