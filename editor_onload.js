@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
   // Save token from callback
   const accessToken = saveToken();
 
@@ -10,8 +10,7 @@ document.addEventListener("DOMContentLoaded", function () {
       Authorization: `Bearer ${accessToken}`,
     },
   };
-  const response = apiRequest(url, payload);
-  const data = response.json();
+  const data = await apiRequest(url, payload);
   for (let i = 0; i < data.length; i++) {
     var typeObj = data[i];
     if (typeObj.name.toLowerCase() == "free") {
@@ -39,10 +38,9 @@ function saveToken() {
 
 async function apiRequest(url, body) {
   const accessToken = sessionStorage.getItem("token");
-  if (accessToken) {
-    window.alert("✅ Token available: " + accessToken);
-  } else {
+  if (!accessToken) {
     console.warn("⚠️ No token found. Redirect user to log in.");
+    return;
   }
   const response = await fetch(url, body);
 
