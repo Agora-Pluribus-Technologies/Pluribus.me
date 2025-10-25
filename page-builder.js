@@ -1,7 +1,12 @@
 let editor; // Global variable to store editor instance
 
 async function loadZipLogic() {
-  document.getElementById("deploySite").addEventListener("click", async () => {
+  const main = document.getElementById("main");
+  var deploySiteButton = document.createElement("button");
+  main.appendChild(deploySiteButton);
+  
+  deploySiteButton.innerText = "Deploy Site";
+  deploySiteButton.addEventListener("click", async () => {
     console.log("Building zip blob");
     const zipBlob = await buildZipBlob();
 
