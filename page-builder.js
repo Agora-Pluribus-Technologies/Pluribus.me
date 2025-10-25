@@ -12,9 +12,8 @@ async function loadZipLogic() {
 
     const resp0 = await createSite();
     console.log(resp0);
-    const siteId = resp0.site_id;
+    const siteId = resp0.id;
     console.log(siteId);
-
     
     const resp1 = await deploySite(siteId, zipBlob);
     console.log(resp1);
