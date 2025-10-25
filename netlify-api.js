@@ -18,7 +18,9 @@ if (window.location.hash) {
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
-  const oauthTokenNetlify = sessionStorage.getItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY);
+  const oauthTokenNetlify = sessionStorage.getItem(
+    STORAGE_KEY_OAUTH_TOKEN_NETLIFY
+  );
   const response = await fetch("https://api.netlify.com/api/v1/user", {
     method: "HEAD",
     headers: {
@@ -74,7 +76,9 @@ async function createPluribusSiteNetlify() {
   const payload = {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${sessionStorage.getItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY)}`,
+      Authorization: `Bearer ${sessionStorage.getItem(
+        STORAGE_KEY_OAUTH_TOKEN_NETLIFY
+      )}`,
     },
   };
   const data = await netlifyApiRequest(netlifySitesUrl, payload);
