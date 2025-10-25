@@ -37,10 +37,10 @@
 
     <body>
       <script>
-        document.addEventListener("DOMContentLoaded", function () {
+        document.addEventListener("DOMContentLoaded", async function () {
           loadScript("https://cdn.jsdelivr.net/npm/marked@latest/marked.min.js", () => { });
           loadScript("https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js", () => { });
-          fetchPageContent();
+          await fetchPageContent();
         });
 
         function loadScript(url, callback) {
