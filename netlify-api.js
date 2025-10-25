@@ -22,7 +22,7 @@ async function fetchNetlifySites(oauthToken) {
   const payload = {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${oauthToken}`,
+      "Authorization": `Bearer ${oauthToken}`,
     },
   };
   const sitesList = await netlifyApiRequest(netlifySitesUrl, payload);
@@ -55,7 +55,7 @@ async function createPluribusSiteNetlify() {
   const payload = {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getOauthTokenNetlify()}`,
+      "Authorization": `Bearer ${getOauthTokenNetlify()}`,
     },
   };
   const data = await netlifyApiRequest(netlifySitesUrl, payload);
@@ -68,7 +68,8 @@ async function deploySite(siteId, zipBlob) {
   const payload = {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getOauthTokenNetlify()}`,
+      "Content-Type": "application/zip",
+      "Authorization": `Bearer ${getOauthTokenNetlify()}`,
     },
     body: zipBlob,
   };

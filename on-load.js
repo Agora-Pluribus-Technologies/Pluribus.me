@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const response = await fetch("https://api.netlify.com/api/v1/user", {
     method: "HEAD",
     headers: {
-      Authorization: `Bearer ${oauthTokenNetlify}`,
+      "Authorization": `Bearer ${oauthTokenNetlify}`,
     },
   });
   if (!response.ok) {
