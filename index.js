@@ -3,19 +3,22 @@ const REDIRECT_URI = "https://pluribus-me.pages.dev/oauth/callback";
 // const SCOPE = "api read_repository write_repository";
 const AUTH_URL = "https://app.netlify.com/authorize";
 
+const STORAGE_KEY_OAUTH_TOKEN_NETLIFY = "pluribus.me.oauth_token.netlify";
+const STORAGE_KEY_SITE_ID_LIST = "pluribus.me.siteIdList";
+
 // Check if we have a token in the URL hash (from OAuth callback redirect)
 if (window.location.hash) {
   const params = new URLSearchParams(window.location.hash.substring(1));
   const accessToken = params.get("access_token");
   if (accessToken) {
-    sessionStorage.setItem("pluribus.me.oauth_token.netlify", accessToken);
+    sessionStorage.setItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY, accessToken);
     // Clear the hash from URL
     window.history.replaceState(null, null, window.location.pathname);
   }
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
-  const oauthTokenNetlify = sessionStorage.getItem("pluribus.me.oauth_token.netlify");
+  const oauthTokenNetlify = sessionStorage.getItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY);
   const response = await fetch("https://api.netlify.com/api/v1/user", {
     method: "HEAD",
     headers: {
@@ -46,11 +49,11 @@ async function fetchNetlifySites(oauthToken) {
     const idDomain = sitesList[i].id_domain;
     siteIdList.push(idDomain);
   }
-  sessionStorage.setItem("pluribus.me.siteIdList", siteIdList);
+  sessionStorage.setItem(STORAGE_KEY_SITE_ID_LIST, siteIdList);
 }
 
 async function netlifyApiRequest(url, body) {
-  const accessToken = sessionStorage.getItem("token");
+  const accessToken = sessionStorage.getItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY);
   if (!accessToken) {
     console.warn("⚠️ No token found. Redirect user to log in.");
     return;
@@ -71,18 +74,10 @@ async function createPluribusSiteNetlify() {
   const payload = {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${sessionStorage.getItem("token")}`,
+      Authorization: `Bearer ${sessionStorage.getItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY)}`,
     },
   };
   const data = await netlifyApiRequest(netlifySitesUrl, payload);
-  for (let i = 0; i < data.length; i++) {
-    var typeObj = data[i];
-    if (typeObj.name.toLowerCase() == "free") {
-      console.log("Free account type_id: " + typeObj.id);
-      sessionStorage.setItem("ACCOUNT_TYPE_ID_FREE", typeObj.id);
-      break;
-    }
-  }
 }
 
 function displayLoginButton() {
