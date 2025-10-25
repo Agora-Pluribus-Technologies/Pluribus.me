@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 async function loadZipLogic() {
   document.getElementById("makeZip").addEventListener("click", async () => {
     const owoHomepageHtml = document.getElementById("owo-homepage-template");
-    const indexHtml = `<!DOCTYPE html>\n${owoHomepageHtml}`;
+    const indexHtml = `<!DOCTYPE html>\n${owoHomepageHtml.innerHTML}`;
     // Example inputs (mix of text files and a generated Blob):
     const files = [
       { path: "index.md", data: exportToMarkdown() },
