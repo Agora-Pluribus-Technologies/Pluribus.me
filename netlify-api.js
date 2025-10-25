@@ -64,12 +64,14 @@ async function createPluribusSiteNetlify() {
 }
 
 async function deploySite(siteId, zipBlob) {
-  const netlifySitesUrl = `https://api.netlify.com/api/v1/sites/${siteId}/deploys`;
+  const netlifySitesUrl = `${location.origin}/netlify/deploy-site`;
   const payload = {
     method: "POST",
     headers: {
       "Content-Type": "application/zip",
       "Authorization": `Bearer ${getOauthTokenNetlify()}`,
+      "X-Oauth-Token": getOauthTokenNetlify(),
+      "X-Site-ID": siteId,
     },
     body: zipBlob,
   };
