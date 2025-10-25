@@ -4,14 +4,17 @@ async function loadZipLogic() {
   const main = document.getElementById("main");
   var deploySiteButton = document.createElement("button");
   main.appendChild(deploySiteButton);
-  
+
   deploySiteButton.innerText = "Deploy Site";
   deploySiteButton.addEventListener("click", async () => {
     console.log("Building zip blob");
     const zipBlob = await buildZipBlob();
 
     const resp0 = createPluribusSiteNetlify();
+    console.log(resp0);
     const siteId = resp0.site_id;
+    console.log(siteId);
+
     
     const resp1 = deploySite(siteId, zipBlob);
     console.log(resp1);

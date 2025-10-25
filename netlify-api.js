@@ -3,7 +3,9 @@ const REDIRECT_URI = "https://pluribus-me.pages.dev/oauth/callback";
 // const SCOPE = "api read_repository write_repository";
 const AUTH_URL = "https://app.netlify.com/authorize";
 
+let OAUTH_TOKEN_NETLIFY;
 const STORAGE_KEY_OAUTH_TOKEN_NETLIFY = "pluribus.me.oauth_token.netlify";
+let SITE_ID_LIST;
 const STORAGE_KEY_SITE_ID_LIST = "pluribus.me.siteIdList";
 
 // Check if we have a token in the URL hash (from OAuth callback redirect)
@@ -12,6 +14,7 @@ if (window.location.hash) {
   const accessToken = params.get("access_token");
   if (accessToken) {
     sessionStorage.setItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY, accessToken);
+    OAUTH_TOKEN_NETLIFY = accessToken;
     // Clear the hash from URL
     window.history.replaceState(null, null, window.location.pathname);
   }
@@ -55,9 +58,7 @@ async function createPluribusSiteNetlify() {
   const payload = {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${sessionStorage.getItem(
-        STORAGE_KEY_OAUTH_TOKEN_NETLIFY
-      )}`,
+      Authorization: `Bearer ${OAUTH_TOKEN_NETLIFY}`,
     },
   };
   const data = await netlifyApiRequest(netlifySitesUrl, payload);
@@ -70,9 +71,7 @@ async function deploySite(siteId, zipBlob) {
   const payload = {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${sessionStorage.getItem(
-        STORAGE_KEY_OAUTH_TOKEN_NETLIFY
-      )}`,
+      Authorization: `Bearer ${OAUTH_TOKEN_NETLIFY}`,
     },
     body: zipBlob,
   };
