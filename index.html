@@ -4,12 +4,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pluribus.me Site Builder</title>
+  <title>Pluribus.me Website Builder</title>
   <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css?family=Montserrat:400,700" rel="stylesheet" type="text/css" />
   <link href="https://fonts.googleapis.com/css?family=Crimson+Text:400,400italic" rel="stylesheet" type="text/css" />
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.31.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@2.0.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/quote@2.7.6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/code@2.9.3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/delimiter@1.4.2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/table@2.4.5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/embed@2.7.6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/image@2.10.3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/paragraph@2.11.7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/link@2.6.2"></script>
   <script src="index.js"></script>
 </head>
 
@@ -17,10 +28,110 @@
   <main id="main-article" class="content-area container-fluid">
     <article id="main" class="panel">
       <header>
-        <h1>Pluribus Website Builder and Publisher</h1>
+        <h1>Pluribus.me Website Builder</h1>
       </header>
     </article>
   </main>
+  <div id="editorjs"></div>
 </body>
+<script>
+
+  const editor = new EditorJS({
+    /**
+     * Where to render the editor
+     */
+    holder: 'editorjs',
+
+    /**
+     * Enable autofocus on start
+     */
+    autofocus: true,
+
+    /**
+     * Define block tools
+     */
+    tools: {
+      paragraph: {
+        class: Paragraph,
+        inlineToolbar: true,
+      },
+      header: {
+        class: Header,
+        inlineToolbar: ['link'],
+        config: {
+          placeholder: 'Enter a header',
+          levels: [1, 2, 3, 4, 5, 6],
+          defaultLevel: 1,
+        },
+      },
+      list: {
+        class: EditorjsList,
+        inlineToolbar: true,
+        config: {
+          defaultStyle: 'unordered'
+        },
+      },
+      quote: {
+        class: Quote,
+        inlineToolbar: true,
+        config: {
+          quotePlaceholder: 'Enter a quote',
+          captionPlaceholder: 'Author',
+        },
+      },
+      code: CodeTool,
+      delimiter: Delimiter,
+      table: {
+        class: Table,
+        inlineToolbar: true,
+        config: {
+          rows: 2,
+          cols: 3,
+        },
+      },
+      embed: {
+        class: Embed,
+        config: {
+          services: {
+            youtube: true
+          },
+        },
+        inlineToolbar: true
+      },
+      image: {
+        class: ImageTool,
+        config: {
+          endpoints: {
+            byFile: 'http://localhost:8000/api/v1/sites/uploadFile',
+          },
+          field: 'file'
+        }
+      },
+      linkTool: {
+        class: LinkTool,
+        config: {
+          endpoint: '/fetchUrlMetadata', // your backend endpoint
+        },
+      },
+    },
+
+    /**
+     * Data example (optional)
+     */
+    data: {
+      blocks: [
+        {
+          type: 'header',
+          data: { text: 'Welcome to Editor.js!', level: 1 },
+        },
+        {
+          type: 'paragraph',
+          data: { text: 'You can edit this text, add new blocks, and save as JSON.' },
+        },
+      ],
+    },
+  });
+
+</script>
 
 </html>
