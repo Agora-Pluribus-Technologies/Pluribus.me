@@ -67,7 +67,6 @@ async function netlifyApiRequest(url, body) {
   }
 
   const data = await response.json();
-  console.log(data);
   return data;
 }
 
@@ -82,6 +81,24 @@ async function createPluribusSiteNetlify() {
     },
   };
   const data = await netlifyApiRequest(netlifySitesUrl, payload);
+  
+  return data;
+}
+
+async function deploySite(siteId, zipBlob) {
+  const netlifySitesUrl = `https://api.netlify.com/api/v1/sites/${siteId}/deploys`;
+  const payload = {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${sessionStorage.getItem(
+        STORAGE_KEY_OAUTH_TOKEN_NETLIFY
+      )}`,
+    },
+    body: zipBlob,
+  };
+  const data = await netlifyApiRequest(netlifySitesUrl, payload);
+  
+  return data;
 }
 
 function displayLoginButton() {

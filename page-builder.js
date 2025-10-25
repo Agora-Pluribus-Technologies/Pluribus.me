@@ -6,39 +6,30 @@ document.addEventListener("DOMContentLoaded", async function () {
 });
 
 async function loadZipLogic() {
-  document.getElementById("makeZip").addEventListener("click", async () => {
-    const editorContent = editor.getMarkdown();
-    console.log("Markdown: " + editorContent);
-
-    const owoHomepageHtml = document.getElementById("owo-homepage-template");
-    const indexHtml = `<!DOCTYPE html>\n${owoHomepageHtml.innerHTML}`;
-    console.log("Index: " + indexHtml);
-
-    // Example inputs (mix of text files and a generated Blob):
-    const files = [
-      { path: "index.md", data: editorContent },
-      { path: "index.html", data: indexHtml },
-    ];
-
+  document.getElementById("deploySite").addEventListener("click", async () => {
     console.log("Building zip blob");
-    const zipBlob = await buildZipBlob(files);
+    const zipBlob = await buildZipBlob();
 
-    const name = `site-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
-
-    console.log("Creating link");
-    const url = URL.createObjectURL(zipBlob);
-    const a = Object.assign(document.createElement("a"), {
-      href: url,
-      download: name,
-    });
-    document.body.appendChild(a);
-    a.click();
+    const resp0 = createPluribusSiteNetlify();
+    const siteId = resp0.site_id;
+    
+    const resp1 = deploySite(siteId, zipBlob);
+    console.log(resp1);
   });
 }
 
 /* ---------- Create a ZIP from multiple files ---------- */
-async function buildZipBlob(files) {
-  // files: array of {path, data, type?: 'text'|'blob'}
+async function buildZipBlob() {
+  const editorContent = editor.getMarkdown();
+
+  const owoHomepageHtml = document.getElementById("owo-homepage-template");
+  const indexHtml = `<!DOCTYPE html>\n${owoHomepageHtml.innerHTML}`;
+
+  const files = [
+    { path: "index.md", data: editorContent },
+    { path: "index.html", data: indexHtml },
+  ];
+
   const zip = new JSZip();
 
   for (const f of files) {
@@ -52,7 +43,7 @@ async function buildZipBlob(files) {
   // Example: folders are implicit via paths like 'images/banner.webp'
   // You can also do: const folder = zip.folder('images'); folder.file(...)
 
-  // Generate as a Blob (best for IndexedDB)
+  // Generate as a Blob
   return await zip.generateAsync({
     type: "blob",
     compression: "DEFLATE",
