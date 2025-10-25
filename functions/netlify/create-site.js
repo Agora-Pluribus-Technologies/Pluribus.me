@@ -5,8 +5,7 @@ export async function onRequestPost(context) {
   const resp = await fetch(netlifySitesUrl, {
     method: "POST",
     headers: {
-      Authorization: authorization,
-      "Content-Type": "application/zip",
+      Authorization: authorization
     }
   });
 

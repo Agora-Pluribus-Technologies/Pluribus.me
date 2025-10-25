@@ -50,7 +50,7 @@ async function netlifyApiRequest(url, body) {
   return data;
 }
 
-async function createPluribusSiteNetlify() {
+async function createSite() {
   const netlifySitesUrl = `${location.origin}/netlify/create-site`;
   const payload = {
     method: "POST",

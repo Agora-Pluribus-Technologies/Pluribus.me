@@ -10,7 +10,7 @@ async function loadZipLogic() {
     console.log("Building zip blob");
     const zipBlob = await buildZipBlob();
 
-    const resp0 = await createPluribusSiteNetlify();
+    const resp0 = await createSite();
     console.log(resp0);
     const siteId = resp0.site_id;
     console.log(siteId);
