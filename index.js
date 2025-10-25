@@ -8,18 +8,18 @@ if (window.location.hash) {
   const params = new URLSearchParams(window.location.hash.substring(1));
   const accessToken = params.get("access_token");
   if (accessToken) {
-    sessionStorage.setItem("token", accessToken);
+    sessionStorage.setItem("pluribus.me.oauth_token.netlify", accessToken);
     // Clear the hash from URL
     window.history.replaceState(null, null, window.location.pathname);
   }
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
-  const token = sessionStorage.getItem("token");
+  const oauthTokenNetlify = sessionStorage.getItem("pluribus.me.oauth_token.netlify");
   const response = await fetch("https://api.netlify.com/api/v1/user", {
     method: "HEAD",
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${oauthTokenNetlify}`,
     },
   });
   if (!response.ok) {
@@ -27,13 +27,27 @@ document.addEventListener("DOMContentLoaded", async function () {
     displayLoginButton();
   } else {
     console.log("Netlify access token present and valid");
-    
-    const sitesList = await getNetlifySites();
-    for (let i=0; i < sitesList.length; i++) {
-      console.log("Site found: ", sitesList[i]);
-    }
+
+    await fetchNetlifySites(oauthTokenNetlify);
   }
 });
+
+async function fetchNetlifySites(oauthToken) {
+  const netlifySitesUrl = "https://api.netlify.com/api/v1/sites";
+  const payload = {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${oauthToken}`,
+    },
+  };
+  const sitesList = await netlifyApiRequest(netlifySitesUrl, payload);
+  var siteIdList = [];
+  for (let i = 0; i < sitesList.length; i++) {
+    const idDomain = sitesList[i].id_domain;
+    siteIdList.push(idDomain);
+  }
+  sessionStorage.setItem("pluribus.me.siteIdList", siteIdList);
+}
 
 async function netlifyApiRequest(url, body) {
   const accessToken = sessionStorage.getItem("token");
@@ -49,18 +63,6 @@ async function netlifyApiRequest(url, body) {
 
   const data = await response.json();
   console.log(data);
-  return data;
-}
-
-async function getNetlifySites() {
-  const netlifySitesUrl = "https://api.netlify.com/api/v1/sites";
-  const payload = {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${sessionStorage.getItem("token")}`,
-    },
-  };
-  const data = await netlifyApiRequest(netlifySitesUrl, payload);
   return data;
 }
 
