@@ -20,7 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@editorjs/embed@2.7.6"></script>
   <script src="https://cdn.jsdelivr.net/npm/@editorjs/image@2.10.3"></script>
   <script src="https://cdn.jsdelivr.net/npm/@editorjs/paragraph@2.11.7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@editorjs/link@2.6.2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@weekwood/editorjs-hyperlink@1.0.9"></script>
   <script src="index.js"></script>
 </head>
 
@@ -107,11 +107,16 @@
           field: 'file'
         }
       },
-      linkTool: {
-        class: LinkTool,
+      hyperlink: {
+        class: Hyperlink,
         config: {
-          endpoint: '/fetchUrlMetadata', // your backend endpoint
-        },
+          shortcut: 'CMD+L',
+          target: '_blank',
+          rel: 'nofollow',
+          availableTargets: ['_blank', '_self'],
+          availableRels: ['author', 'noreferrer'],
+          validate: false,
+        }
       },
     },
 
