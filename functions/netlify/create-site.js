@@ -1,15 +1,13 @@
 export async function onRequestPost(context) {
   const request = context.request;
   const authorization = request.headers.get("Authorization");
-  const zipFile = await request.arrayBuffer();
   const netlifySitesUrl = `https://api.netlify.com/api/v1/sites`;
   const resp = await fetch(netlifySitesUrl, {
     method: "POST",
     headers: {
       Authorization: authorization,
       "Content-Type": "application/zip",
-    },
-    body: zipFile,
+    }
   });
 
   if (!resp.ok) {
