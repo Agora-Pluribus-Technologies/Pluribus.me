@@ -10,13 +10,13 @@ async function loadZipLogic() {
     console.log("Building zip blob");
     const zipBlob = await buildZipBlob();
 
-    const resp0 = createPluribusSiteNetlify();
+    const resp0 = await createPluribusSiteNetlify();
     console.log(resp0);
     const siteId = resp0.site_id;
     console.log(siteId);
 
     
-    const resp1 = deploySite(siteId, zipBlob);
+    const resp1 = await deploySite(siteId, zipBlob);
     console.log(resp1);
   });
 }
