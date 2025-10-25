@@ -1,10 +1,5 @@
 let editor; // Global variable to store editor instance
 
-document.addEventListener("DOMContentLoaded", async function () {
-  loadToastEditor();
-  loadZipLogic();
-});
-
 async function loadZipLogic() {
   document.getElementById("deploySite").addEventListener("click", async () => {
     console.log("Building zip blob");
