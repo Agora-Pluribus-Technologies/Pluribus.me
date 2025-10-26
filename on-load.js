@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       "Authorization": `Bearer ${oauthTokenNetlify}`,
     },
   });
-  if (!response.ok) {
+  if (!response.ok && document.location.origin !== "file://") {
     console.log("Netlify access token missing or expired");
     displayLoginButton();
   } else {
