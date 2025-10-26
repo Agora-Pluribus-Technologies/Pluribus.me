@@ -35,13 +35,13 @@
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>OWO test</title>
+      <script src="https://cdn.jsdelivr.net/npm/marked@latest/marked.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js"></script>
     </head>
 
     <body>
       <script>
         document.addEventListener("DOMContentLoaded", async function () {
-          await import("https://cdn.jsdelivr.net/npm/marked@latest/marked.min.js");
-          await import("https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js");
           await fetchPageContent();
         });
 
