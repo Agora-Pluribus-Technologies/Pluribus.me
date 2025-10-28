@@ -2,7 +2,7 @@ const NETLIFY_CLIENT_ID = "YrSXJx6H250qmnq5dgb4rlRdynecY16jGKhNcJJx60E";
 const NETLIFY_AUTH_URL = "https://app.netlify.com/authorize";
 
 const GITLAB_CLIENT_ID = "YrSXJx6H250qmnq5dgb4rlRdynecY16jGKhNcJJx60E";
-const GITLAB_AUTH_URL = "https://gitlab.com/authorize";
+const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
 const GITLAB_CLIENT_SCOPE = "api read_repository write_repository";
 
 const REDIRECT_URI = "https://pluribus-me.pages.dev/oauth/callback";
