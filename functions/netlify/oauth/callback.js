@@ -10,8 +10,8 @@ export async function onRequestGet(context) {
 
   // Prepare the token exchange request
   const tokenParams = new URLSearchParams({
-    client_id: env.CLIENT_ID,
-    client_secret: env.CLIENT_SECRET,
+    client_id: env.NETLIFY_CLIENT_ID,
+    client_secret: env.NETLIFY_CLIENT_SECRET,
     code,
     grant_type: "authorization_code",
     redirect_uri: `${url.origin}/netlify/oauth/callback`
