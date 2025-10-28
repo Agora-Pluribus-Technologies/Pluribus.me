@@ -14,7 +14,7 @@ export async function onRequestGet(context) {
     client_secret: env.GITLAB_CLIENT_SECRET,
     code,
     grant_type: "authorization_code",
-    redirect_uri: `${url.origin}/oauth/gitlab/callback`
+    redirect_uri: `${url.origin}/gitlab/oauth/callback`
   });
 
   // Exchange the code for an access token
