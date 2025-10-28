@@ -5,6 +5,10 @@ async function loadZipLogic() {
   var deploySiteButton = document.createElement("button");
   main.appendChild(deploySiteButton);
 
+  const linkDiv = document.createElement("div");
+  linkDiv.id = "deployed-link";
+  main.appendChild(linkDiv);
+
   deploySiteButton.innerText = "Deploy Site";
   deploySiteButton.addEventListener("click", async () => {
     console.log("Building zip blob");
@@ -17,6 +21,7 @@ async function loadZipLogic() {
     
     const resp1 = await deploySite(siteId, zipBlob);
     console.log(resp1);
+    linkDiv.innerHTML = `Site deployed: <a href="${resp1.url}" target="_blank">${resp1.url}</a>`;
   });
 }
 
