@@ -1,17 +1,30 @@
 const NETLIFY_CLIENT_ID = "YrSXJx6H250qmnq5dgb4rlRdynecY16jGKhNcJJx60E";
-const REDIRECT_URI = "https://pluribus-me.pages.dev/oauth/callback";
-// const SCOPE = "api read_repository write_repository";
-const AUTH_URL = "https://app.netlify.com/authorize";
+const NETLIFY_AUTH_URL = "https://app.netlify.com/authorize";
 
-const STORAGE_KEY_OAUTH_TOKEN_NETLIFY = "pluribus.me.oauth_token.netlify";
-const STORAGE_KEY_SITE_ID_LIST = "pluribus.me.siteIdList";
+const GITLAB_CLIENT_ID = "YrSXJx6H250qmnq5dgb4rlRdynecY16jGKhNcJJx60E";
+const GITLAB_AUTH_URL = "https://app.netlify.com/authorize";
+const GITLAB_CLIENT_SCOPE = "api read_repository write_repository";
+
+const REDIRECT_URI = "https://pluribus-me.pages.dev/oauth/callback";
+
+const STORAGE_KEY_NETLIFY_OAUTH_TOKEN = "pluribus.me.netlify.oauth_token";
+const STORAGE_KEY_NETLIFY_SITE_ID_LIST = "pluribus.me.netlify.site_id_list";
+const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "pluribus.me.gitlab.oauth_token";
+const STORAGE_KEY_GITLAB_SITE_ID_LIST = "pluribus.me.gitlab.site_id_list";
 
 // Check if we have a token in the URL hash (from OAuth callback redirect)
 if (window.location.hash) {
   const params = new URLSearchParams(window.location.hash.substring(1));
-  const accessToken = params.get("access_token");
+  let accessToken;
+  if (window.location.hash.startsWith("#netlify")) {
+    accessToken = params.get("netlify_access_token");
+    sessionStorage.setItem(STORAGE_KEY_NETLIFY_OAUTH_TOKEN, accessToken);
+  } else if (window.location.hash.startsWith("#gitlab")) {
+    accessToken = params.get("gitlab_access_token");
+    sessionStorage.setItem(STORAGE_KEY_GITLAB_OAUTH_TOKEN, accessToken);
+  }
+
   if (accessToken) {
-    sessionStorage.setItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY, accessToken);
     // Clear the hash from URL
     window.history.replaceState(null, null, window.location.pathname);
   }
@@ -31,11 +44,11 @@ async function fetchNetlifySites(oauthToken) {
     const idDomain = sitesList[i].id_domain;
     siteIdList.push(idDomain);
   }
-  sessionStorage.setItem(STORAGE_KEY_SITE_ID_LIST, siteIdList);
+  sessionStorage.setItem(STORAGE_KEY_NETLIFY_SITE_ID_LIST, siteIdList);
 }
 
 async function netlifyApiRequest(url, body) {
-  const accessToken = sessionStorage.getItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY);
+  const accessToken = sessionStorage.getItem(STORAGE_KEY_NETLIFY_OAUTH_TOKEN);
   if (!accessToken) {
     console.warn("⚠️ No token found. Redirect user to log in.");
     return;
@@ -79,9 +92,33 @@ async function deploySite(siteId, zipBlob) {
   return data;
 }
 
-function displayLoginButton() {
+function displayGitlabLoginButton() {
   var loginButton = document.createElement("button");
-  loginButton.id = "login-button";
+  loginButton.classList.add("login-button");
+  loginButton.innerText = "Sign into GitLab";
+  loginButton.style.padding = "10px 18px";
+  loginButton.style.cursor = "pointer";
+
+  loginButton.addEventListener("click", () => {
+    // Build the authorization URL
+    const params = new URLSearchParams({
+      client_id: GITLAB_CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      scope: GITLAB_CLIENT_SCOPE,
+      response_type: "code",
+    });
+
+    // Redirect user to login page
+    window.location.href = `${GITLAB_AUTH_URL}?${params.toString()}`;
+  });
+
+  const mainDiv = document.getElementById("main");
+  mainDiv.appendChild(loginButton);
+}
+
+function displayNetlifyLoginButton() {
+  var loginButton = document.createElement("button");
+  loginButton.classList.add("login-button");
   loginButton.innerText = "Sign into Netlify";
   loginButton.style.padding = "10px 18px";
   loginButton.style.cursor = "pointer";
@@ -92,11 +129,10 @@ function displayLoginButton() {
       client_id: NETLIFY_CLIENT_ID,
       redirect_uri: REDIRECT_URI,
       response_type: "code",
-      // scope: SCOPE,
     });
 
     // Redirect user to login page
-    window.location.href = `${AUTH_URL}?${params.toString()}`;
+    window.location.href = `${NETLIFY_AUTH_URL}?${params.toString()}`;
   });
 
   const mainDiv = document.getElementById("main");
@@ -104,5 +140,5 @@ function displayLoginButton() {
 }
 
 function getOauthTokenNetlify() {
-  return sessionStorage.getItem(STORAGE_KEY_OAUTH_TOKEN_NETLIFY);
+  return sessionStorage.getItem(STORAGE_KEY_NETLIFY_OAUTH_TOKEN);
 }
