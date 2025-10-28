@@ -20,6 +20,9 @@ async function checkLoginGitlab() {
   const oauthToken = sessionStorage.getItem(
     STORAGE_KEY_GITLAB_OAUTH_TOKEN
   );
+
+  if (!oauthToken) return false;
+  
   const response = await fetch("https://api.gitlab3.com/api/v1/user", {
     method: "HEAD",
     headers: {
@@ -34,6 +37,9 @@ async function checkLoginNetlify() {
   const oauthToken = sessionStorage.getItem(
     STORAGE_KEY_NETLIFY_OAUTH_TOKEN
   );
+
+  if (!oauthToken) return false;
+
   const response = await fetch("https://api.netlify.com/api/v1/user", {
     method: "HEAD",
     headers: {
