@@ -1,7 +1,7 @@
 const NETLIFY_CLIENT_ID = "YrSXJx6H250qmnq5dgb4rlRdynecY16jGKhNcJJx60E";
 const NETLIFY_AUTH_URL = "https://app.netlify.com/authorize";
 
-const GITLAB_CLIENT_ID = "YrSXJx6H250qmnq5dgb4rlRdynecY16jGKhNcJJx60E";
+const GITLAB_CLIENT_ID = "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf07e8800656";
 const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
 const GITLAB_CLIENT_SCOPE = "api read_repository write_repository";
 
