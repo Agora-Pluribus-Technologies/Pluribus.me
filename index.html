@@ -37,13 +37,23 @@
       <title>OWO test</title>
       <script defer src="https://cdn.jsdelivr.net/npm/marked@latest/marked.min.js"></script>
       <script defer src="https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js"></script>
+      <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
     </head>
 
     <body>
       <script>
         document.addEventListener("DOMContentLoaded", async function () {
           await fetchPageContent();
+          generateQRCode();
         });
+
+        function generateQRCode() {
+          new QRCode(document.getElementById("qr-code"), {
+            text: window.location.href,
+            width: 128,
+            height: 128,
+          });
+        }
 
         function loadScript(url, callback) {
           const script = document.createElement("script");
@@ -79,6 +89,7 @@
           document.body.appendChild(panel);
         }
       </script>
+      <div id="qr-code" style="margin-top: 20px;"></div>
     </body>
 
     </html>
