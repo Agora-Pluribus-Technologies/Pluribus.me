@@ -64,7 +64,7 @@ async function netlifyApiRequest(url, body) {
 }
 
 async function createSite() {
-  const netlifySitesUrl = `${location.origin}/netlify/create-site`;
+  const netlifySitesUrl = `${location.origin}/netlify/site/create`;
   const payload = {
     method: "POST",
     headers: {
@@ -77,7 +77,7 @@ async function createSite() {
 }
 
 async function deploySite(siteId, zipBlob) {
-  const netlifySitesUrl = `${location.origin}/netlify/deploy-site`;
+  const netlifySitesUrl = `${location.origin}/netlify/site/deploy`;
   const payload = {
     method: "POST",
     headers: {
