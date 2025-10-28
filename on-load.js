@@ -1,5 +1,7 @@
 document.addEventListener("DOMContentLoaded", async function () {
-  if (!checkLoginNetlify()) {
+  const isLoggedInNetlify = await checkLoginNetlify();
+  const isLoggedInGitlab = await checkLoginGitlab();
+  if (!isLoggedInNetlify) {
     console.log("Netlify access token missing or expired");
     displayNetlifyLoginButton();
   } else {
@@ -8,7 +10,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     loadZipLogic();
   }
 
-  if (!checkLoginGitlab()) {
+  if (!isLoggedInGitlab) {
     console.log("GitLab access token missing or expired");
     displayGitlabLoginButton();
   } else {
@@ -22,8 +24,8 @@ async function checkLoginGitlab() {
   );
 
   if (!oauthToken) return false;
-  
-  const response = await fetch("https://api.gitlab3.com/api/v1/user", {
+
+  const response = await fetch("https://gitlab.com/api/v4/projects", {
     method: "HEAD",
     headers: {
       Authorization: `Bearer ${oauthToken}`,
