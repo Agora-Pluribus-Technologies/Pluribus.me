@@ -12,10 +12,11 @@
 
 ### **Overview**
 
-The **Pluribus OpenWeb Object (OWO)** format is a proposed open specification for a decentralized, static-first, modular web publishing framework.
-Its purpose is to make it radically simple for anyone to create, host, and share portable websites — without relying on centralized platforms, databases, or proprietary formats.
+The **Pluribus OpenWeb Object (OWO)** format is a proposed open specification for a decentralized, static-first, modular web publishing framework. Its purpose is to make it radically simple for anyone to create, host, and share portable websites without relying on centralized platforms, databases, or proprietary formats.
 
 The OWO specification defines a lightweight, machine-readable structure for representing a website as a **single, portable object** that can be freely copied, forked, mirrored, or rendered by any compliant reader.
+
+Each OWO site is made of plaintext, images, and a lightweight manifest that describes how to render the content. The text and images themselves aren't stored directly in the page; they're linked and loaded on demand, allowing smarter use of CDN caching and faster load times. The purpose is to cleanly separate a website's content from its presentation.
 
 ***
 
@@ -45,7 +46,7 @@ A `.owo` file represents a compressed website archive:
 
 Compliant readers or tools should be able to:
 
-* Parse and render `.owo` packages,
+* Parse and render OWO packages,
 * Export them as plain static sites,
 * Or re-import them for editing and remixing.
 
@@ -53,7 +54,6 @@ Compliant readers or tools should be able to:
 
 ### **Implementation Notes**
 
-* Reference implementation will be written in **Python (for desktop)** and **vanilla JavaScript (for browser)**.
 * The **Service Worker** may be used to decompress and render `.cbor` files dynamically.
 * OWO sites should support optional verification via **GPG-signed commits** or **Git repositories** for provenance.
 * Recommended image formats: **AVIF**, fallback **WebP**.
