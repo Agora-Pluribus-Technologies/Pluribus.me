@@ -1,8 +1,11 @@
 ## **Pluribus OpenWeb Object (OWO) Specification — v0.1 (Work in Progress)**
 
 **Author:** Michael Yee (Agora Pluribus Technologies)
+
 **Status:** Early draft – conceptual specification
+
 **License:** *Public Domain / CC0 1.0 Universal Dedication*
+
 **Website:** [pluribus.me](https://pluribus.me/)
 
 ***
@@ -11,6 +14,7 @@
 
 The **Pluribus OpenWeb Object (OWO)** format is a proposed open specification for a decentralized, static-first, modular web publishing framework.
 Its purpose is to make it radically simple for anyone to create, host, and share portable websites — without relying on centralized platforms, databases, or proprietary formats.
+
 The OWO specification defines a lightweight, machine-readable structure for representing a website as a **single, portable object** that can be freely copied, forked, mirrored, or rendered by any compliant reader.
 
 ***
@@ -60,6 +64,7 @@ Compliant readers or tools should be able to:
 ### **Legal Status**
 
 This specification is released under the **CC0 1.0 Universal Public Domain Dedication**.
+
 Anyone is free to use, modify, or redistribute it without restriction.
 Reference implementations (e.g. editors, readers) may be licensed separately under the **AGPL-3.0-only** license to preserve freedom and transparency.
 
