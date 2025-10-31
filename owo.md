@@ -1,4 +1,4 @@
-## **Pluribus OpenWeb Object (OWO) Specification — v0.1 (Work in Progress)**
+## **Pluribus Openweb Object (OwO) Specification — v0.1 (Work in Progress)**
 
 **Author:** Michael Yee (Agora Pluribus Technologies)
 
@@ -12,9 +12,9 @@
 
 ### **Overview**
 
-The **Pluribus OpenWeb Object (OWO)** format is a proposed open specification for a lightweight, decentralized, static-first, modular web publishing framework. Its purpose is to make it radically simple for anyone to create, host, and share portable websites without relying on centralized platforms, databases, or proprietary formats.
+The **Pluribus Openweb Object (OwO)** format is a proposed open specification for a lightweight, decentralized, static-first, modular web publishing framework. Its purpose is to make it radically simple for anyone to create, host, and share portable websites without relying on centralized platforms, databases, or proprietary formats.
 
-Each OWO site is made of plaintext, images, and a lightweight manifest that describes how to render the content. The text and images themselves aren't stored directly in the page; they're linked and loaded on demand, allowing smarter use of CDN caching and faster load times. The purpose is to cleanly separate a website's content from its presentation.
+Each OwO site is made of plaintext, images, and a lightweight manifest that describes how to render the content. The text and images themselves aren't stored directly in the page; they're linked and loaded on demand, allowing smarter use of CDN caching and faster load times. The purpose is to cleanly separate a website's content from its presentation.
 
 Overall, the file structure for representing a website can be zipped into a **single, portable object** that can be freely copied, forked, mirrored, or rendered by any compliant reader.
 
@@ -33,7 +33,7 @@ Overall, the file structure for representing a website can be zipped into a **si
 
 ### **Core Structure**
 
-A `.owo` file represents a compressed website archive:
+A `.OwO` file represents a compressed website archive:
 
 ```
 /index.cbor         ← CBOR-encoded HTML document
@@ -46,7 +46,7 @@ A `.owo` file represents a compressed website archive:
 
 Compliant readers or tools should be able to:
 
-* Parse and render OWO packages,
+* Parse and render OwO packages,
 * Export them as plain static sites,
 * Or re-import them for editing and remixing.
 
@@ -55,7 +55,7 @@ Compliant readers or tools should be able to:
 ### **Implementation Notes**
 
 * The **Service Worker** may be used to decompress and render `.cbor` files dynamically.
-* OWO sites should support optional verification via **GPG-signed commits** or **Git repositories** for provenance.
+* OwO sites should support optional verification via **GPG-signed commits** or **Git repositories** for provenance.
 * Recommended image formats: **AVIF**, fallback **WebP**.
 * Recommended checksum: **SHA-256** or **BLAKE3** for archive integrity.
 
@@ -73,4 +73,4 @@ Reference implementations (e.g. editors, readers) may be licensed separately und
 ### **Current Stage**
 
 ⚙️ *Work in progress.*
-The goal of this first publication is to reserve the name **“Pluribus OpenWeb Object (OWO)”** and establish the specification’s authorship and intent for future collaborative development.
+The goal of this first publication is to reserve the name **“Pluribus Openweb Object (OwO)”** and establish the specification’s authorship and intent for future collaborative development.
