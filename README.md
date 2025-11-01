@@ -4,6 +4,25 @@ Web-based simple all-in-one website building and publishing tool
 
 Let's democratize and de-Googlify the internet!
 
+Static website generator
+
+Oauth2 login to various static site hosting services such as
+* Neocities
+* GitLab Pages
+* GitHub Pages
+* Cloudflare Pages
+* Netlify
+
+This repo is to be deployed on Cloudflare Pages.
+
+The users site(s) are created, edited, and generated entirely in-browser and deployed to one or more services for redundancy.
+
+See the OwO specification for more details on the file format.
+
+Neocities is a community where people make their own websites.
+It acts like a bridging algorithm, since no one can comment on the pages directly,
+and people can link each other's pages.
+
 Website: [https://pluribus.me](https://pluribus.me)
 
 ## Mirrors:
