@@ -17,7 +17,7 @@ This repo is to be deployed on Cloudflare Pages.
 
 The users site(s) are created, edited, and generated entirely in-browser and deployed to one or more services for redundancy.
 
-See the OwO specification for more details on the file format.
+See the OwO specification for more details on the file format: [owo.md](owo.md)
 
 Neocities is a community where people make their own websites.
 It acts like a bridging algorithm, since no one can comment on the pages directly,
