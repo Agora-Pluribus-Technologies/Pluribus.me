@@ -23,6 +23,7 @@ Neocities is a community where people make their own websites.
 It acts like a bridging algorithm, since no one can comment on the pages directly,
 and people can link each other's pages.
 
+(Site not live yet, but will be deployed here)
 Website: [https://pluribus.me](https://pluribus.me)
 
 ## Mirrors:
