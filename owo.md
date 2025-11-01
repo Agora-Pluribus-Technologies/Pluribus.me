@@ -36,7 +36,7 @@ Overall, the file structure for representing a website can be zipped into a **si
 A `.OwO` file represents a compressed website archive:
 
 ```
-/index.cbor         ← CBOR-encoded HTML document
+/index.html.cbor         ← CBOR-encoded HTML document
 /manifest.json      ← Content and metadata manifest (title, description, assets)
 /assets/*.avif      ← Images (AVIF or WebP)
 /content/*.md       ← Text content (Markdown)
@@ -73,4 +73,4 @@ Reference implementations (e.g. editors, readers) may be licensed separately und
 ### **Current Stage**
 
 ⚙️ *Work in progress.*
-The goal of this first publication is to reserve the name **“Pluribus Openweb Object (OwO)”** and establish the specification’s authorship and intent for future collaborative development.
+The goal of this first publication is to establish the specification’s authorship and intent for future collaborative development.
