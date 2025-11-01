@@ -14,7 +14,7 @@
 
 The **Pluribus Openweb Object (OwO)** format is a proposed open specification for a lightweight, decentralized, static-first, modular web publishing framework. Its purpose is to make it radically simple for anyone to create, host, and share portable websites without relying on centralized platforms, databases, or proprietary formats.
 
-Each OwO site is made of plaintext, images, and a lightweight manifest that describes how to render the content. The text and images themselves aren't stored directly in the page; they're linked and loaded on demand, allowing smarter use of CDN caching and faster load times. The purpose is to cleanly separate a website's content from its presentation.
+Each OwO site is made of plaintext, images, and a lightweight manifest that describes how to render the content. **The text and images themselves aren't stored directly in the page; they're linked and loaded on demand**, allowing smarter use of CDN caching and faster load times. The purpose is to cleanly separate a website's content from its presentation.
 
 Overall, the file structure for representing a website can be zipped into a **single, portable object** that can be freely copied, forked, mirrored, or rendered by any compliant reader.
 
