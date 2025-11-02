@@ -41,14 +41,14 @@ async function fetchMarkdownFromSite(siteName) {
 
   if (!oauthToken) return null;
 
-  const response = await fetch(`${siteName}.netlify.app/index.md`, {
+  const response = await fetch(`https://${siteName}.netlify.app/index.md`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${oauthToken}`,
     },
   });
 
-  const data = await response.json();
+  const data = await response.text();
 
   return data;
 }
