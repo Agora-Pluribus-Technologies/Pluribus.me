@@ -17,7 +17,7 @@ async function getSiteListNetlify() {
   if (!oauthToken) return false;
 
   const response = await fetch("https://api.netlify.com/api/v1/sites", {
-    method: "HEAD",
+    method: "GET",
     headers: {
       Authorization: `Bearer ${oauthToken}`,
     },
