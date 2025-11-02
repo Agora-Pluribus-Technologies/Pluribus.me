@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     siteButton.innerHTML = site.name;
     siteButton.addEventListener("click", () => {
       console.log(`Selected site: ${site.name} (ID: ${site.id})`);
+      sessionStorage.setItem("selectedSiteId", site.id);
       const markdown = fetchMarkdownFromSite(site.name);
       markdown.then((data) => {
         editor.setMarkdown(data);
@@ -32,6 +33,9 @@ async function getSiteListNetlify() {
   });
 
   const data = await response.json();
+
+  const siteIds = data.map(site => site.id);
+  sessionStorage.setItem(STORAGE_KEY_NETLIFY_SITE_ID_LIST, siteIds);
 
   return data;
 }

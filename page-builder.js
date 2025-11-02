@@ -14,9 +14,13 @@ async function loadZipLogic() {
     console.log("Building zip blob");
     const zipBlob = await buildZipBlob();
 
-    const resp0 = await createSite();
-    console.log(resp0);
-    const siteId = resp0.id;
+    const siteId = sessionStorage.getItem("selectedSiteId");
+    if (!siteId) {
+      const resp0 = await createSite();
+      console.log(resp0);
+      siteId = resp0.id;
+    }
+
     console.log(siteId);
     
     const resp1 = await deploySite(siteId, zipBlob);
