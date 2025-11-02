@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 async function getSiteListNetlify() {
   const oauthToken = sessionStorage.getItem(STORAGE_KEY_NETLIFY_OAUTH_TOKEN);
 
-  if (!oauthToken) return false;
+  if (!oauthToken) return null;
 
   const response = await fetch("https://api.netlify.com/api/v1/sites", {
     method: "GET",
@@ -37,6 +37,10 @@ async function getSiteListNetlify() {
 }
 
 async function fetchMarkdownFromSite(siteName) {
+  const oauthToken = sessionStorage.getItem(STORAGE_KEY_NETLIFY_OAUTH_TOKEN);
+
+  if (!oauthToken) return null;
+
   const response = await fetch(`${siteName}.netlify.app/index.md`, {
     method: "GET",
     headers: {
