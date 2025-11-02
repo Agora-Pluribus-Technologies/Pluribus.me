@@ -37,14 +37,10 @@ async function getSiteListNetlify() {
 }
 
 async function fetchMarkdownFromSite(siteName) {
-  const oauthToken = sessionStorage.getItem(STORAGE_KEY_NETLIFY_OAUTH_TOKEN);
-
-  if (!oauthToken) return null;
-
   const response = await fetch(`https://${siteName}.netlify.app/index.md`, {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${oauthToken}`,
+      "Access-Control-Allow-Origin": "*",
     },
   });
 
