@@ -37,14 +37,14 @@ async function getSiteListNetlify() {
 }
 
 async function fetchMarkdownFromSite(siteName) {
-  const response = await fetch(`https://${siteName}.netlify.app/index.md`, {
+  // Use CORS proxy to bypass CORS restrictions
+  const targetUrl = `https://${siteName}.netlify.app/index.md`;
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+
+  const response = await fetch(proxyUrl, {
     method: "GET",
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-    },
   });
 
   const data = await response.text();
-
   return data;
 }
