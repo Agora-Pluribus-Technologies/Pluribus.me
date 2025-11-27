@@ -12,7 +12,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   if (!isLoggedInGitlab) {
     console.log("GitLab access token missing or expired");
-    // displayGitlabLoginButton();
+    displayGitlabLoginButton();
   } else {
     console.log("GitLab access token present and valid");
   }

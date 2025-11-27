@@ -63,8 +63,9 @@ async function netlifyApiRequest(url, body) {
   return data;
 }
 
-async function createSite() {
+async function createSiteNetlify() {
   const netlifySitesUrl = `${location.origin}/netlify/site/create`;
+  console.log("Creating site on Netlify");
   const payload = {
     method: "POST",
     headers: {
@@ -72,6 +73,19 @@ async function createSite() {
     },
   };
   const data = await netlifyApiRequest(netlifySitesUrl, payload);
+  
+  return data;
+}
+
+async function createSiteGitLab() {
+  const gitlabSitesUrl = `${location.origin}/gitlab/site/create`;
+  const payload = {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${getOauthTokenGitlab()}`,
+    },
+  };
+  const data = await netlifyApiRequest(gitlabSitesUrl, payload);
   
   return data;
 }
@@ -141,4 +155,8 @@ function displayNetlifyLoginButton() {
 
 function getOauthTokenNetlify() {
   return sessionStorage.getItem(STORAGE_KEY_NETLIFY_OAUTH_TOKEN);
+}
+
+function getOauthTokenGitlab() {
+  return sessionStorage.getItem(STORAGE_KEY_GITLAB_OAUTH_TOKEN);
 }

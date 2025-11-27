@@ -16,7 +16,7 @@ async function loadZipLogic() {
 
     const siteId = sessionStorage.getItem("selectedSiteId");
     if (!siteId) {
-      const resp0 = await createSite();
+      const resp0 = await createSiteNetlify();
       console.log(resp0);
       siteId = resp0.id;
     }
