@@ -168,21 +168,11 @@ nav {
   background-color: #101010;
   color: #fff;
   display: block;
-  cursor: pointer;
 }
 
-.hamburger-btn {
-  background: transparent;
-  border: none;
-  font-size: 24px;
+.btn:hover {
+  background-color: #333;
   cursor: pointer;
-  padding: 5px 10px;
-  color: #333;
-}
-
-.hamburger-btn:hover {
-  background-color: #101010;
-  border-radius: 4px;
 }
 
 .sidebar-file-item {
