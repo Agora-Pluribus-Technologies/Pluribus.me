@@ -208,6 +208,10 @@ nav {
   margin-left: 20px;
 }
 
+.footer p {
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .menu-link {
     font-size: 14pt;

@@ -48,8 +48,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Refresh the sites list
       const sites = await getSitesGitLab();
-      document.getElementById("sitesListPanel").innerHTML =
-        '<button id="createSiteButton" class="btn btn-primary" data-toggle="modal" data-target="#createSiteModal">Create New Site</button>';
       populateSitesList(sites);
     });
 
@@ -187,7 +185,7 @@ function populateSitesList(sites) {
     siteDiv.classList.add("site-item", "btn", "btn-default");
     siteDiv.innerHTML = `<h4 style="margin: 0 0 5px 0;">${
       site.name
-    }</h4><p style="margin: 0;">${site.description || ""}</p>`;
+    }</h4>`;
     siteDiv.id = site.id;
     siteDiv.addEventListener("click", async function () {
       console.log(`Loading site: ${site.name} (ID: ${site.id})`);
