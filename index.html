@@ -9,14 +9,14 @@
   <link href="https://fonts.googleapis.com/css?family=Montserrat:400,700" rel="stylesheet" type="text/css" />
   <link href="https://fonts.googleapis.com/css?family=Crimson+Text:400,400italic" rel="stylesheet" type="text/css" />
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
+  <link rel="stylesheet" href="editor.css" />
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
   <script src="api.js"></script>
-  <script src="page-builder.js"></script>
+  <script src="site-builder.js"></script>
   <script src="on-load.js"></script>
-  <script src="page-list.js"></script>
 </head>
 
 <body>
@@ -25,78 +25,54 @@
       <h1>Pluribus.me Website Builder</h1>
       <h2>(This tool is under development and is not yet ready to use)</h2>
     </header>
-    <div style="margin: 0 20% 0 20%;">
-      <div id="sitesListPanel"></div>
-      <div id="editor"></div>
+    <div style="margin: 0 20% 0 20%; display: flex;">
+      <div id="sidebar" style="display: none; width: 250px; margin-right: 20px; border-right: 1px solid #ccc; padding-right: 20px;">
+        <h3>Site Files</h3>
+        <div id="sidebarContent"></div>
+      </div>
+      <div style="flex: 1;">
+        <div id="sitesListPanel">
+          <button id="createSiteButton" class="btn btn-primary" data-toggle="modal" data-target="#createSiteModal">Create New Site</button>
+        </div>
+        <div id="editorContainer" hidden="true">
+          <div id="editor">
+          </div>
+          <a id="visitSiteButton" href="#" target="_blank" class="btn btn-info" style="width: 100%; margin-bottom: 10px; display: block; text-align: center; text-decoration: none;">Visit Site</a>
+          <button id="deployButton" class="btn btn-success" style="width: 100%; margin-bottom: 15px;">Deploy Site</button>
+        </div>
+      </div>
     </div>
   </main>
 
-  <template id="owo-homepage-template">
-    <html>
-
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>OwO test</title>
-      <script defer src="https://cdn.jsdelivr.net/npm/marked@latest/marked.min.js"></script>
-      <script defer src="https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js"></script>
-      <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
-    </head>
-
-    <body>
-      <script>
-        document.addEventListener("DOMContentLoaded", async function () {
-          await fetchPageContent();
-          generateQRCode();
-        });
-
-        function generateQRCode() {
-          new QRCode(document.getElementById("qr-code"), {
-            text: window.location.href,
-            width: 128,
-            height: 128,
-          });
-        }
-
-        function loadScript(url, callback) {
-          const script = document.createElement("script");
-          script.src = url;
-          script.onload = callback;
-          document.head.appendChild(script);
-        }
-
-        async function fetchPageContent() {
-          var pathname = window.location.pathname.substring(1);
-          if (!pathname) {
-            pathname = "index";
-          }
-
-          var panel = document.createElement("div");
-          const errorMessage = "Could not fetch page content<br><br>O_o";
-          try {
-            const content = await fetch(`${pathname}.md`, {
-              method: "GET",
-            });
-            if (content.ok) {
-              const text = await content.text();
-              const parsedMarkdown = await marked.parse(text);
-              const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
-              panel.innerHTML = sanitizedMarkdown;
-            } else {
-              throw new RuntimeException(errorMessage);
-            }
-          } catch (error) {
-            panel.innerHTML = errorMessage;
-          }
-
-          document.body.appendChild(panel);
-        }
-      </script>
-      <div id="qr-code" style="margin-top: 20px;"></div>
-    </body>
-
-    </html>
-  </template>
+  <!-- Create Site Modal -->
+  <div class="modal fade" id="createSiteModal" tabindex="-1" role="dialog" aria-labelledby="createSiteModalLabel">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="createSiteModalLabel">Create New Site</h4>
+        </div>
+        <div class="modal-body">
+          <form id="createSiteForm">
+            <div class="form-group">
+              <label for="siteName">Site Name</label>
+              <input type="text" class="form-control" id="siteName" placeholder="Enter site name" required>
+            </div>
+            <div class="form-group">
+              <label for="siteDescription">Description</label>
+              <textarea class="form-control" id="siteDescription" rows="3" placeholder="Enter site description"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="submit" form="createSiteForm" class="btn btn-primary">Create Site</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div>
     This code is licensed under AGPLv3.0 (<a href="LICENSE.txt" target="_blank">license text</a>).
     <br>

@@ -1,0 +1,11 @@
+image: busybox:latest
+
+pages:
+  stage: deploy
+  script:
+    - echo "Build"
+  artifacts:
+    paths:
+      - public
+  only:
+    - main

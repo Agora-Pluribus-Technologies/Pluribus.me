@@ -11,7 +11,6 @@ Oauth2 login to various static site hosting services such as
 * GitLab Pages
 * GitHub Pages
 * Cloudflare Pages
-* Netlify
 
 This repo is to be deployed on Cloudflare Pages.
 
