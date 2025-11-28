@@ -31,7 +31,7 @@ function getOauthTokenGitlab() {
 
 function displayGitlabLoginButton() {
   var loginButton = document.createElement("button");
-  loginButton.classList.add("login-button");
+  loginButton.classList.add("btn");
   loginButton.innerText = "Sign into GitLab";
   loginButton.style.padding = "10px 18px";
   loginButton.style.cursor = "pointer";
@@ -150,7 +150,7 @@ async function initialCommitGitlab(siteId) {
   });
   const owoTemplate = await owoTemplateResp.text();
 
-  const gitlabCiTemplateResp = await fetch(".gitlab-ci.yml", {
+  const gitlabCiTemplateResp = await fetch(".gitlab-ci-template.yml", {
     method: "GET",
     headers: {
       "Cache-Control": "no-cache, must-revalidate",
@@ -334,7 +334,7 @@ async function deployChangesGitlab(siteId) {
   });
   const owoTemplate = await owoTemplateResp.text();
 
-  const gitlabCiTemplateResp = await fetch(".gitlab-ci.yml", {
+  const gitlabCiTemplateResp = await fetch(".gitlab-ci-template.yml", {
     method: "GET",
     headers: {
       "Cache-Control": "no-cache, must-revalidate",
