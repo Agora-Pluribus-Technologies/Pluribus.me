@@ -4,13 +4,6 @@ let currentFilePath = null;
 let currentSiteId = null;
 
 document.addEventListener("DOMContentLoaded", async function () {
-  if (window.location.href.includes("localhost")) {
-    sessionStorage.setItem(
-      STORAGE_KEY_GITLAB_OAUTH_TOKEN,
-      "53621ef6b42a27680e0e81e347d6534c90dea16a54f4293fc1dfc816a801f76b"
-    );
-  }
-  console.log("Set dummy GitLab OAuth token for localhost 2");
 
   const gitlabUserId = await getGitlabUserId();
   if (!gitlabUserId) {
