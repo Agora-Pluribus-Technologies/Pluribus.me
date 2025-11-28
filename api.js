@@ -270,7 +270,7 @@ async function isPipelineRunningGitlab(siteId) {
 
   const responseJson = await response.json();
 
-  return responseJson.finished_at != null;
+  return responseJson.finished_at == null;
 }
 
 async function getPagesUrlGitlab(siteId) {
