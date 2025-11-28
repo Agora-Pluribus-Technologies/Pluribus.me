@@ -27,7 +27,7 @@
       text-decoration: underline;
       cursor: pointer;
     }
-    
+
     nav {
       background-color: #303030;
       padding: 0;
@@ -53,6 +53,7 @@
 
     .menu-link:active {
       background-color: #1890ff;
+      text-decoration: none;
     }
 
     .h-entry {
@@ -74,7 +75,10 @@
       font-size: 20pt;
     }
 
-    .h-entry h3, .h-entry h4, .h-entry h5, .h-entry h6 {
+    .h-entry h3,
+    .h-entry h4,
+    .h-entry h5,
+    .h-entry h6 {
       text-align: center;
       font-size: 18pt;
     }
@@ -83,6 +87,30 @@
       font-size: 16pt;
     }
 
+    @media (max-width: 768px) {
+      .menu-link {
+        font-size: 14pt;
+      }
+
+      .h-entry h1 {
+        font-size: 16pt;
+      }
+
+      .h-entry h2 {
+        font-size: 14pt;
+      }
+
+      .h-entry h3,
+      .h-entry h4,
+      .h-entry h5,
+      .h-entry h6 {
+        font-size: 12pt;
+      }
+
+      .h-entry p {
+        font-size: 10pt;
+      }
+    }
   </style>
 </head>
 

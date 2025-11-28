@@ -73,27 +73,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
 
-  // Handle sidebar toggle button click
-  document.getElementById("sidebarToggle").addEventListener("click", function () {
-    const sidebarContentWrapper = document.getElementById("sidebarContentWrapper");
-    const sidebar = document.getElementById("sidebar");
-    const editorSection = document.getElementById("editorSection");
-
-    if (sidebarContentWrapper.style.display === "none") {
-      sidebarContentWrapper.style.display = "block";
-      sidebar.style.width = "20%";
-      editorSection.style.width = "80%";
-      editorSection.style.flex = "none";
-      console.log("Sidebar content shown");
-    } else {
-      sidebarContentWrapper.style.display = "none";
-      sidebar.style.width = "fit-content";
-      editorSection.style.width = "100%";
-      editorSection.style.flex = "none";
-      console.log("Sidebar content hidden");
-    }
-  });
-
   // Handle add new page button click
   document
     .getElementById("addNewPageButton")
@@ -258,7 +237,8 @@ function populateSitesList(sites) {
       const editorSection = document.getElementById("editorSection");
       sidebar.style.display = "flex";
       sidebar.style.width = "20%";
-      editorSection.style.width = "80%";
+      editorSection.style.maxWidth = "80%";
+      editorSection.style.minWidth = "40%";
       editorSection.style.flex = "none";
 
       // Set up Visit Site button
@@ -362,7 +342,7 @@ async function populateSidebar(siteId) {
       renameButton.textContent = "✎";
       renameButton.style.background = "transparent";
       renameButton.style.border = "none";
-      renameButton.style.color = "black";
+      renameButton.style.color = "white";
       renameButton.style.fontSize = "16px";
       renameButton.style.cursor = "pointer";
       renameButton.style.padding = "0 5px";

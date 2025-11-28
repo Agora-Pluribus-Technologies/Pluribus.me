@@ -8,7 +8,7 @@ function loadToastEditor() {
     theme: "dark",
   });
 
-  editorDiv = document.getElementById("editor");
-  editorDiv.height = "100%";
-  editorDiv.width = "80%";
+  const editorDiv = document.getElementById("editor");
+  editorDiv.style.height = "100%";
+  editorDiv.style.maxWidth = "100%";
 }
