@@ -49,8 +49,8 @@ function displayGitlabLoginButton() {
     window.location.href = `${GITLAB_AUTH_URL}?${params.toString()}`;
   });
 
-  const mainDiv = document.getElementById("main");
-  mainDiv.appendChild(loginButton);
+  const sitesListPanel = document.getElementById("sitesListPanel");
+  sitesListPanel.appendChild(loginButton);
 }
 
 async function getGitlabUserId() {

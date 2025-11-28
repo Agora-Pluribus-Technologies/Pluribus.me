@@ -12,6 +12,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     displayGitlabLoginButton();
   } else {
     console.log("GitLab access token present and valid");
+    const sitesListPanel = document.getElementById("sitesListPanel");
+    sitesListPanel.innerHTML = "<h2>Available Sites</h2>";
+
     const createSiteButton = document.getElementById("createSiteButton");
     createSiteButton.style.display = "block";
 
