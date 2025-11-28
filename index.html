@@ -14,6 +14,7 @@
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+  <script src="local-dev.js"></script>
   <script src="api.js"></script>
   <script src="site-builder.js"></script>
   <script src="on-load.js"></script>
@@ -29,16 +30,20 @@
       <div id="sidebar" style="display: none; width: 250px; margin-right: 20px; border-right: 1px solid #ccc; padding-right: 20px;">
         <h3>Site Files</h3>
         <div id="sidebarContent"></div>
+        <button id="addNewPageButton" class="btn btn-primary" style="width: fit-content; text-align: center; margin-right: auto; margin-left: auto; margin-bottom: 15px;">+</button>
       </div>
       <div style="flex: 1;">
         <div id="sitesListPanel">
           <button id="createSiteButton" class="btn btn-primary" data-toggle="modal" data-target="#createSiteModal">Create New Site</button>
         </div>
         <div id="editorContainer" hidden="true">
+          <div id="editor-topbar">
+            <span id="last-updated-time-label"></span>
+            <a id="visitSiteButton" href="#" target="_blank" class="btn btn-info" style="width: 150px; margin-bottom: 10px; display: inline-block; text-align: center; text-decoration: none;">Visit Site</a>
+            <button id="deployButton" class="btn btn-success" style="width: 150px; margin-bottom: 15px; display: inline-block">Deploy Site</button>
+          </div>
           <div id="editor">
           </div>
-          <a id="visitSiteButton" href="#" target="_blank" class="btn btn-info" style="width: 100%; margin-bottom: 10px; display: block; text-align: center; text-decoration: none;">Visit Site</a>
-          <button id="deployButton" class="btn btn-success" style="width: 100%; margin-bottom: 15px;">Deploy Site</button>
         </div>
       </div>
     </div>
@@ -67,13 +72,15 @@
           </form>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
           <button type="submit" form="createSiteForm" class="btn btn-primary">Create Site</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
         </div>
       </div>
     </div>
   </div>
   <div>
+    This site builder adheres to the Pluribus OwO specification: <a href="owo-spec.html" target="_blank">owo-spec.html</a>
+    <br>
     This code is licensed under AGPLv3.0 (<a href="LICENSE.txt" target="_blank">license text</a>).
     <br>
     &copy; 2025 Agora Pluribus Technologies

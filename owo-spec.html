@@ -12,23 +12,20 @@
 <body>
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
+      marked.setOptions({
+        gfm: true,
+        breaks: true,
+      });
       await fetchPageContent();
     });
 
-    function loadScript(url, callback) {
-      const script = document.createElement("script");
-      script.src = url;
-      script.onload = callback;
-      document.head.appendChild(script);
-    }
-
     async function fetchPageContent() {
-      var pathname = window.location.pathname.substring(1);
+      var pathname = window.location.pathname.substring(1).replace(".html", "");
       if (!pathname) {
         pathname = "index";
       }
 
-      var panel = document.createElement("div");
+      var panel = document.createElement("main");
       const errorMessage = "Could not fetch page content<br><br>O_o";
       try {
         const content = await fetch(`${pathname}.md`, {
@@ -41,6 +38,18 @@
           const text = await content.text();
           const parsedMarkdown = await marked.parse(text, breaks=true);
           const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
+
+          const markdownSections = sanitizedMarkdown.split('<hr>');
+          for (let i = 0; i < markdownSections.length; i++) {
+            const section = markdownSections[i].trim();
+            if (section) {
+              const sectionArticle = document.createElement('article');
+              sectionArticle.classList.add('h-entry');
+              sectionArticle.innerHTML = section;
+              panel.appendChild(sectionArticle);
+            }
+          }
+
           panel.innerHTML = sanitizedMarkdown;
         } else {
           throw new RuntimeException(errorMessage);

@@ -192,6 +192,11 @@ async function initialCommitGitlab(siteId) {
           file_path: ".gitlab-ci.yml",
           content: gitlabCiTemplate,
         },
+        {
+          action: "create",
+          file_path: "public/pages.json",
+          content: '["index"]',
+        },
       ],
     }),
   };
@@ -293,7 +298,34 @@ async function getPagesUrlGitlab(siteId) {
   return responseJson.url;
 }
 
-async function deployChanges(siteId) {
+async function getLatestPagesDeployTimeGitlab(siteId) {
+  const gitlabPagesUrl = `https://gitlab.com/api/v4/projects/${siteId}/pages`;
+  const payload = {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+    },
+  };
+
+  const response = await fetch(gitlabPagesUrl, payload);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const responseJson = await response.json();
+
+  const timestamp = responseJson.deployments[0].created_at;
+
+  return new Date(timestamp);
+}
+
+async function deployChangesGitlab(siteId) {
+  const markdownCacheCopy = { ...markdownCache };
+  markdownCache = {};
+  console.log("Markdown cache copied for deployment:", markdownCacheCopy);
+  updateDeployButtonState();
+
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
   var owoTemplateResp = await fetch("owo-template.html", {
@@ -319,19 +351,13 @@ async function deployChanges(siteId) {
   console.log("Site Tree:", siteTree);
 
   var commitActions = [];
-  for (filePath in markdownCache) {
+  for (filePath in markdownCacheCopy) {
     console.log("Preparing to update file:", filePath);
 
     // Update or create markdown file
     var crudAction = null;
     if (siteTree.map((f) => f.path).includes(filePath)) {
       crudAction = "update";
-
-      commitActions.push({
-        action: "update",
-        file_path: filePath.replace(".md", ".html"),
-        content: owoTemplate,
-      });
     } else {
       crudAction = "create";
 
@@ -344,11 +370,21 @@ async function deployChanges(siteId) {
     commitActions.push({
       action: crudAction,
       file_path: filePath,
-      content: markdownCache[filePath],
+      content: markdownCacheCopy[filePath],
     });
   }
 
   if (commitActions.length > 0) {
+    const pages = siteTree
+      .map((f) => f.name)
+      .filter((n) => n.endsWith(".md"))
+      .map((n) => n.replace(".md", ""));
+    commitActions.push({
+      action: "update",
+      file_path: "public/pages.json",
+      content: JSON.stringify(pages),
+    });
+
     const payload = {
       method: "POST",
       headers: {
@@ -366,12 +402,125 @@ async function deployChanges(siteId) {
 
     if (response.ok) {
       console.log("Deployed changes to GitLab");
-      markdownCache = {};
     } else {
+      markdownCache = { ...markdownCacheCopy };
       console.error("Failed to deploy changes to GitLab");
     }
+    updateDeployButtonState();
     return response.ok;
   }
 
   return true;
+}
+
+async function createNewPageGitlab(siteId, pageName) {
+  const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
+
+  var owoTemplateResp = await fetch("owo-template.html", {
+    method: "GET",
+    headers: {
+      "Cache-Control": "no-cache, must-revalidate",
+    },
+  });
+  const owoTemplate = await owoTemplateResp.text();
+
+  console.log(owoTemplate);
+
+  commitActions = [
+    {
+      action: "create",
+      file_path: `public/${pageName}.html`,
+      content: owoTemplate,
+    },
+    {
+      action: "create",
+      file_path: `public/${pageName}.md`,
+      content: `# ${pageName}\n\nThis is your new page.`,
+    },
+  ];
+
+  const payload = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+    },
+    body: JSON.stringify({
+      branch: "main",
+      commit_message: `Create new page: ${pageName}`,
+      actions: commitActions,
+    }),
+  };
+
+  const response = await fetch(gitlabCreateFileUrl, payload);
+
+  return response.ok;
+}
+
+async function deletePageGitlab(siteId, pageName) {
+  const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
+
+  commitActions = [
+    {
+      action: "delete",
+      file_path: `public/${pageName}.html`,
+    },
+    {
+      action: "delete",
+      file_path: `public/${pageName}.md`,
+    },
+  ];
+
+  const payload = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+    },
+    body: JSON.stringify({
+      branch: "main",
+      commit_message: `Delete page: ${pageName}`,
+      actions: commitActions,
+    }),
+  };
+
+  const response = await fetch(gitlabCreateFileUrl, payload);
+
+  return response.ok;
+}
+
+
+
+async function renamePageGitlab(siteId, pageName, newPageName) {
+  const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
+
+  commitActions = [
+    {
+      action: "move",
+      previous_path: `public/${pageName}.html`,
+      file_path: `public/${newPageName}.html`,
+    },
+    {
+      action: "move",
+      previous_path: `public/${pageName}.md`,
+      file_path: `public/${newPageName}.md`,
+    },
+  ];
+
+  const payload = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+    },
+    body: JSON.stringify({
+      branch: "main",
+      commit_message: `Rename page: ${pageName} --> ${newPageName}`,
+      actions: commitActions,
+    }),
+  };
+
+  const response = await fetch(gitlabCreateFileUrl, payload);
+
+  return response.ok;
 }

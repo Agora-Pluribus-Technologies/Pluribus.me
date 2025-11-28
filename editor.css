@@ -28,19 +28,3 @@
   color: white;
   border-color: #1890ff;
 }
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 0.5;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.02);
-  }
-}
-
-.btn-deploying {
-  animation: pulse 1.5s ease-in-out infinite;
-  cursor: not-allowed !important;
-}
