@@ -49,7 +49,7 @@ function displayGitlabLoginButton() {
     window.location.href = `${GITLAB_AUTH_URL}?${params.toString()}`;
   });
 
-  const sitesListPanel = document.getElementById("sitesListPanel");
+  const sitesListPanel = document.getElementById("sites-list-panel");
   sitesListPanel.appendChild(loginButton);
 }
 
@@ -118,7 +118,7 @@ async function createSiteGitlab(siteName, siteDescription) {
       Authorization: `Bearer ${getOauthTokenGitlab()}`,
     },
     body: JSON.stringify({
-      name: `${siteName} - Pluribus OwO Site`,
+      name: `${siteName}`,
       path: `${siteName.toLowerCase().replace(/\s+/g, "-")}-pluribus-owo-site`,
       description: `${siteName}\n${siteDescription}\n\nA Pluribus OwO site created with the Pluribus.me site builder`,
       visibility: "private",

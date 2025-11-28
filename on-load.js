@@ -12,13 +12,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     displayGitlabLoginButton();
   } else {
     console.log("GitLab access token present and valid");
-    const sitesListPanel = document.getElementById("sitesListPanel");
-    sitesListPanel.innerHTML = "<h2>Available Sites</h2>";
-
-    const createSiteButton = document.getElementById("createSiteButton");
-    createSiteButton.style.display = "block";
-
     const sites = await getSitesGitLab();
+
+    const sitesListHeader = document.getElementById("sites-list-header");
+    sitesListHeader.style.display = "block";
 
     console.log("GitLab Sites:", sites);
     populateSitesList(sites);
@@ -183,12 +180,11 @@ function updateDeployButtonState() {
 }
 
 function populateSitesList(sites) {
+  document.getElementById("sites-list").innerHTML = ""; // Clear existing list
   for (const site of sites) {
     var siteDiv = document.createElement("div");
-    siteDiv.classList.add("site-item", "btn", "btn-default");
-    siteDiv.innerHTML = `<h4 style="margin: 0 0 5px 0;">${
-      site.name
-    }</h4>`;
+    siteDiv.classList.add("site-button", "site-item", "btn", "btn-default");
+    siteDiv.innerText = site.name;
     siteDiv.id = site.id;
     siteDiv.addEventListener("click", async function () {
       console.log(`Loading site: ${site.name} (ID: ${site.id})`);
@@ -207,7 +203,7 @@ function populateSitesList(sites) {
       updateDeployButtonState();
 
       // Hide sites list panel
-      const sitesListPanel = document.getElementById("sitesListPanel");
+      const sitesListPanel = document.getElementById("sites-list-panel");
       sitesListPanel.style.display = "none";
 
       // Show editor panel
@@ -240,6 +236,7 @@ function populateSitesList(sites) {
       sidebar.style.width = "20%";
       editorSection.style.maxWidth = "80%";
       editorSection.style.minWidth = "40%";
+      editorSection.style.width = "100%";
       editorSection.style.flex = "none";
 
       // Set up Visit Site button
@@ -289,7 +286,7 @@ function populateSitesList(sites) {
         }
       }, 100);
     });
-    document.getElementById("sitesListPanel").appendChild(siteDiv);
+    document.getElementById("sites-list").appendChild(siteDiv);
   }
 }
 

@@ -29,6 +29,20 @@ body {
   overflow: hidden;
 }
 
+#sites-list-panel {
+  text-align: center;
+  min-width: 40%;
+  max-width: 80%;
+  width: 100%;
+  margin: 0 auto 0 auto;
+  padding: 20px;
+}
+
+.site-button {
+  width: 100%;
+  height: auto;
+}
+
 a {
   color: #1890ff;
   text-decoration: none;
@@ -155,8 +169,6 @@ nav {
   color: #fff;
   display: block;
   cursor: pointer;
-  height: fit-content;
-  width: fit-content;
 }
 
 .hamburger-btn {

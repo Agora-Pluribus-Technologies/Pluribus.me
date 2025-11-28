@@ -29,14 +29,17 @@
     <div id="mainContent" style="display: flex; flex: 1; overflow: hidden;">
       <div id="sidebar" style="display: none;">
         <div id="sidebarContentWrapper">
-          <h3>Site Files</h3>
           <div id="sidebarContent"></div>
           <button id="addNewPageButton" class="btn btn-primary" style="width: fit-content; text-align: center; margin-right: auto; margin-left: auto; margin-bottom: 15px;">+</button>
         </div>
       </div>
       <div id="editorSection" style="flex: 1;">
-        <div id="sitesListPanel">
-          <button id="createSiteButton" class="btn btn-primary" data-toggle="modal" data-target="#createSiteModal" style="display: none">Create New Site</button>
+        <div id="sites-list-panel">
+          <div id="sites-list-header" style="display: none">
+            <h2>Available Sites</h2>
+            <button id="createSiteButton" class="site-button btn btn-primary" data-toggle="modal" data-target="#createSiteModal">Create New Site</button>
+          </div>
+          <div id="sites-list"></div>
         </div>
         <div id="editorContainer" style="display: none">
           <div id="editor-topbar">
