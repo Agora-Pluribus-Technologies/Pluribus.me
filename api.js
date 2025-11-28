@@ -321,9 +321,7 @@ async function getLatestPagesDeployTimeGitlab(siteId) {
 }
 
 async function deployChangesGitlab(siteId) {
-  const markdownCacheCopy = { ...markdownCache };
-  markdownCache = {};
-  console.log("Markdown cache copied for deployment:", markdownCacheCopy);
+  modified = false;
   updateDeployButtonState();
 
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
@@ -351,34 +349,62 @@ async function deployChangesGitlab(siteId) {
   console.log("Site Tree:", siteTree);
 
   var commitActions = [];
-  for (filePath in markdownCacheCopy) {
+
+  // Get list of markdown files in GitLab
+  const gitlabMarkdownFiles = siteTree
+    .filter((item) => item.type === "blob" && item.path.endsWith(".md") && item.path.startsWith("public/"))
+    .map((item) => item.path);
+
+  // Get list of markdown files in cache
+  const cacheMarkdownFiles = Object.keys(markdownCache).filter(path => path.endsWith(".md"));
+
+  // Handle deletions: files in GitLab but not in cache
+  for (const gitlabFile of gitlabMarkdownFiles) {
+    if (!cacheMarkdownFiles.includes(gitlabFile)) {
+      console.log("Preparing to delete file:", gitlabFile);
+
+      // Delete both .md and .html files
+      commitActions.push({
+        action: "delete",
+        file_path: gitlabFile.replace(".md", ".html"),
+      });
+      commitActions.push({
+        action: "delete",
+        file_path: gitlabFile,
+      });
+    }
+  }
+
+  // Handle creates and updates: files in cache
+  for (filePath in markdownCache) {
     console.log("Preparing to update file:", filePath);
 
-    // Update or create markdown file
     var crudAction = null;
     if (siteTree.map((f) => f.path).includes(filePath)) {
       crudAction = "update";
     } else {
       crudAction = "create";
 
+      // Create the corresponding .html file
       commitActions.push({
         action: "create",
         file_path: filePath.replace(".md", ".html"),
         content: owoTemplate,
       });
     }
+
+    // Create or update the .md file
     commitActions.push({
       action: crudAction,
       file_path: filePath,
-      content: markdownCacheCopy[filePath],
+      content: markdownCache[filePath],
     });
   }
 
   if (commitActions.length > 0) {
-    const pages = siteTree
-      .map((f) => f.name)
-      .filter((n) => n.endsWith(".md"))
-      .map((n) => n.replace(".md", ""));
+    // Update pages.json based on cache (final state)
+    const pages = cacheMarkdownFiles
+      .map((path) => path.replace("public/", "").replace(".md", ""));
     commitActions.push({
       action: "update",
       file_path: "public/pages.json",
@@ -403,7 +429,7 @@ async function deployChangesGitlab(siteId) {
     if (response.ok) {
       console.log("Deployed changes to GitLab");
     } else {
-      markdownCache = { ...markdownCacheCopy };
+      modified = true;
       console.error("Failed to deploy changes to GitLab");
     }
     updateDeployButtonState();
@@ -413,7 +439,7 @@ async function deployChangesGitlab(siteId) {
   return true;
 }
 
-async function createNewPageGitlab(siteId, pageName) {
+async function createPageGitlab(siteId, pageName) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
   var owoTemplateResp = await fetch("owo-template.html", {

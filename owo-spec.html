@@ -7,19 +7,122 @@
   <title>OwO test</title>
   <script defer src="https://cdn.jsdelivr.net/npm/marked@latest/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js"></script>
+  <style>
+    body {
+      background-color: #181818;
+      margin: 0;
+      color: #fff;
+      font-size: 14px;
+      line-height: 1.6;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    a {
+      color: #1890ff;
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: #1890ff;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    
+    nav {
+      background-color: #303030;
+      padding: 0;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .menu-link {
+      display: inline-block;
+      color: #fff;
+      text-decoration: none;
+      padding: 15px 20px;
+      font-size: 20pt;
+      transition: background-color 0.3s ease;
+    }
+
+    .menu-link:hover {
+      background-color: #555;
+    }
+
+    .menu-link:active {
+      background-color: #1890ff;
+    }
+
+    .h-entry {
+      margin-left: 10%;
+      margin-right: 10%;
+      margin-bottom: 20px;
+      background-color: #303030;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .h-entry h1 {
+      text-align: center;
+      font-size: 24pt;
+    }
+
+    .h-entry h2 {
+      text-align: center;
+      font-size: 20pt;
+    }
+
+    .h-entry h3, .h-entry h4, .h-entry h5, .h-entry h6 {
+      text-align: center;
+      font-size: 18pt;
+    }
+
+    .h-entry p {
+      font-size: 16pt;
+    }
+
+  </style>
 </head>
 
 <body>
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
+      await createMenubar();
+      await fetchPageContent();
+    });
+
+    async function createMenubar() {
+      const menubar = document.createElement("nav");
+      menubar.style.width = "100%";
+      const pagesJsonLink = `${document.location.origin}/pages.json`;
+
+      const content = await fetch(pagesJsonLink, {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache, must-revalidate",
+        },
+      });
+      if (content.ok) {
+        const pagesJson = await content.json();
+        for (const page of pagesJson) {
+          const pageLink = document.createElement("a");
+          pageLink.classList.add("menu-link");
+          pageLink.href = `${document.location.origin}/${page}.html`;
+          pageLink.textContent = page;
+          menubar.appendChild(pageLink);
+        }
+        document.body.appendChild(menubar);
+      }
+    }
+
+    async function fetchPageContent() {
       marked.setOptions({
         gfm: true,
         breaks: true,
       });
-      await fetchPageContent();
-    });
 
-    async function fetchPageContent() {
       var pathname = window.location.pathname.substring(1).replace(".html", "");
       if (!pathname) {
         pathname = "index";
@@ -36,7 +139,7 @@
         });
         if (content.ok) {
           const text = await content.text();
-          const parsedMarkdown = await marked.parse(text, breaks=true);
+          const parsedMarkdown = await marked.parse(text, breaks = true);
           const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
 
           const markdownSections = sanitizedMarkdown.split('<hr>');
@@ -49,8 +152,6 @@
               panel.appendChild(sectionArticle);
             }
           }
-
-          panel.innerHTML = sanitizedMarkdown;
         } else {
           throw new RuntimeException(errorMessage);
         }

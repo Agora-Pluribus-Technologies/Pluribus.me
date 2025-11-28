@@ -12,6 +12,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     displayGitlabLoginButton();
   } else {
     console.log("GitLab access token present and valid");
+    const createSiteButton = document.getElementById("createSiteButton");
+    createSiteButton.style.display = "block";
+
     const sites = await getSitesGitLab();
 
     console.log("GitLab Sites:", sites);
@@ -69,6 +72,27 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.error("No site selected");
       }
     });
+
+  // Handle sidebar toggle button click
+  document.getElementById("sidebarToggle").addEventListener("click", function () {
+    const sidebarContentWrapper = document.getElementById("sidebarContentWrapper");
+    const sidebar = document.getElementById("sidebar");
+    const editorSection = document.getElementById("editorSection");
+
+    if (sidebarContentWrapper.style.display === "none") {
+      sidebarContentWrapper.style.display = "block";
+      sidebar.style.width = "20%";
+      editorSection.style.width = "80%";
+      editorSection.style.flex = "none";
+      console.log("Sidebar content shown");
+    } else {
+      sidebarContentWrapper.style.display = "none";
+      sidebar.style.width = "fit-content";
+      editorSection.style.width = "100%";
+      editorSection.style.flex = "none";
+      console.log("Sidebar content hidden");
+    }
+  });
 
   // Handle add new page button click
   document
@@ -208,7 +232,7 @@ function populateSitesList(sites) {
 
       // Show editor panel
       const editorContainer = document.getElementById("editorContainer");
-      editorContainer.style.display = "block";
+      editorContainer.style.display = "flex";
 
       // Fetch site tree from GitLab
       const siteTree = await getSiteTreeGitLab(site.id);
@@ -229,8 +253,13 @@ function populateSitesList(sites) {
       // Populate sidebar from cache
       await populateSidebar(site.id);
 
-      // Show sidebar
-      document.getElementById("sidebar").style.display = "block";
+      // Show sidebar with initial width
+      const sidebar = document.getElementById("sidebar");
+      const editorSection = document.getElementById("editorSection");
+      sidebar.style.display = "flex";
+      sidebar.style.width = "20%";
+      editorSection.style.width = "80%";
+      editorSection.style.flex = "none";
 
       // Set up Visit Site button
       const pagesUrl = await getPagesUrlGitlab(site.id);
