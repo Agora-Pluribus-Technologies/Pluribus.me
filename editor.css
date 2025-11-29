@@ -289,8 +289,8 @@ nav {
   margin-left: 20px;
 }
 
-.footer p {
-  margin: 0;
+#footer p {
+  margin: 0 !important;
 }
 
 @media (max-width: 768px) {
