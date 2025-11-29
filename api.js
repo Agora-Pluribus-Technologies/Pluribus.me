@@ -173,29 +173,13 @@ async function initialCommitGitlab(siteId) {
       actions: [
         {
           action: "create",
-          file_path: "public/.headers",
-          content: "/*.md\n  Cache-Control: no-cache, must-revalidate\n",
-        },
-        {
-          action: "create",
-          file_path: "public/index.html",
-          content: owoTemplate,
-        },
-        {
-          action: "create",
-          file_path: "public/index.md",
-          content:
-            "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site.",
-        },
-        {
-          action: "create",
           file_path: ".gitlab-ci.yml",
           content: gitlabCiTemplate,
         },
         {
           action: "create",
           file_path: "public/pages.json",
-          content: '["index"]',
+          content: '[]',
         },
       ],
     }),
@@ -250,7 +234,7 @@ async function getSiteTreeGitLab(siteId) {
   const response = await fetch(gitlabSiteTreeUrl, payload);
 
   if (!response.ok) {
-    return null;
+    return [];
   }
 
   const responseJson = await response.json();
@@ -315,9 +299,9 @@ async function getLatestPagesDeployTimeGitlab(siteId) {
 
   const responseJson = await response.json();
 
-  const timestamp = responseJson.deployments[0].created_at;
+  const deployment = responseJson.deployments[0];
 
-  return new Date(timestamp);
+  return deployment ? new Date(deployment.created_at) : null;
 }
 
 async function deployChangesGitlab(siteId) {

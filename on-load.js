@@ -61,21 +61,23 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
 
   // Handle back button click
-  document
-    .getElementById("backButton")
-    .addEventListener("click", function () {
-      console.log("Back button clicked");
+  document.getElementById("backButton").addEventListener("click", function () {
+    console.log("Back button clicked");
 
-      if (modified) {
-        if (confirm("You have unsaved changes. Are you sure you want to go back? All unsaved changes will be lost.")) {
-          goBackToSiteSelection();
-        } else {
-          document.getElementById("backButton").blur();
-        }
-      } else {
+    if (modified) {
+      if (
+        confirm(
+          "You have unsaved changes. Are you sure you want to go back? All unsaved changes will be lost."
+        )
+      ) {
         goBackToSiteSelection();
+      } else {
+        document.getElementById("backButton").blur();
       }
-    });
+    } else {
+      goBackToSiteSelection();
+    }
+  });
 
   // Handle deploy button click
   document
@@ -272,11 +274,17 @@ function populateSitesList(sites) {
         (item) => item.type === "blob" && item.name.endsWith(".md")
       );
       console.log("Markdown files:", markdownFiles);
-
-      // Load all markdown files into cache
-      for (const file of markdownFiles) {
-        const content = await getFileContentGitlab(site.id, file.path);
-        markdownCache[file.path] = content;
+      if (markdownFiles.length === 0) {
+        // No markdown files found - create a dummy index.md
+        console.log("Site is empty - created dummy index.md");
+        markdownCache["public/index.md"] =
+          "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site.";
+      } else {
+        // Load all markdown files into cache
+        for (const file of markdownFiles) {
+          const content = await getFileContentGitlab(site.id, file.path);
+          markdownCache[file.path] = content;
+        }
       }
 
       // Populate menubar from cache
@@ -285,9 +293,9 @@ function populateSitesList(sites) {
       // Set up Visit Site button
       const pagesUrl = await getPagesUrlGitlab(site.id);
       const visitSiteButton = document.getElementById("visitSiteButton");
-      visitSiteButton.onclick = function() {
+      visitSiteButton.onclick = function () {
         if (pagesUrl) {
-          window.open(pagesUrl, '_blank');
+          window.open(pagesUrl, "_blank");
         }
       };
       if (pagesUrl) {
@@ -350,8 +358,12 @@ async function populateMenubar(siteId) {
   }
 
   // Move index to the front, keep other files in original order
-  const indexFile = markdownFiles.find(f => f.path.replace("public/", "").replace(".md", "") === "index");
-  const otherFiles = markdownFiles.filter(f => f.path.replace("public/", "").replace(".md", "") !== "index");
+  const indexFile = markdownFiles.find(
+    (f) => f.path.replace("public/", "").replace(".md", "") === "index"
+  );
+  const otherFiles = markdownFiles.filter(
+    (f) => f.path.replace("public/", "").replace(".md", "") !== "index"
+  );
   const sortedFiles = indexFile ? [indexFile, ...otherFiles] : otherFiles;
   markdownFiles.length = 0;
   markdownFiles.push(...sortedFiles);
@@ -403,6 +415,8 @@ async function populateMenubar(siteId) {
         input.style.border = "1px solid #1890ff";
         input.style.padding = "4px";
         input.style.fontSize = "14px";
+        input.style.backgroundColor = "#1e1e1e";
+        input.style.color = "#fff";
 
         fileItem.insertBefore(input, fileItem.firstChild);
         input.focus();
@@ -546,15 +560,16 @@ async function populateMenubar(siteId) {
         // Use cached version
         console.log(`Using cached content for ${file.path}`);
         fileContent = markdownCache[file.path];
+        modified = true;
       } else {
         // Fetch from GitLab
         console.log(`Fetching content for ${file.path}`);
         fileContent = await getFileContentGitlab(siteId, file.path);
         markdownCache[file.path] = fileContent;
-
-        // Update deploy button state since cache was updated
-        updateDeployButtonState();
+        modified = false;
       }
+      // Update deploy button state since cache was updated
+      updateDeployButtonState();
 
       // Update current file path
       currentFilePath = file.path;
