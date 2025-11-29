@@ -210,10 +210,20 @@ async function updateLastDeployTime() {
     const oldText = lastUpdatedLabel.textContent;
     const newText = `Last updated: ${lastDeployTime.toLocaleString()}`;
     if (oldText != newText) {
+      // Enable the Visit Site button
+      const visitSiteButton = document.getElementById("visitSiteButton");
+      visitSiteButton.disabled = false;
+
+      // Update only if changed
       lastUpdatedLabel.textContent = newText;
       console.log("Updated last deploy time:", lastDeployTime);
     }
   } else {
+    // Disable the Visit Site button if no deploys yet
+    const visitSiteButton = document.getElementById("visitSiteButton");
+    visitSiteButton.disabled = true;
+
+    // Clear last updated label
     lastUpdatedLabel.textContent = "";
   }
 }
@@ -249,10 +259,8 @@ function populateSitesList(sites) {
       markdownCache = {};
       modified = false;
 
-      // Clear existing interval if any
-      if (lastDeployTimeInterval) {
-        clearInterval(lastDeployTimeInterval);
-      }
+      await updateLastDeployTime();
+      lastDeployTimeInterval = setInterval(updateLastDeployTime, 5000);
 
       // Update deploy button state (should be disabled since not modified)
       updateDeployButtonState();

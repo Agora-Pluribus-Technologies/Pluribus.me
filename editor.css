@@ -245,7 +245,6 @@ nav {
 .btn:hover {
   background-color: #333;
   color: #fff;
-  cursor: pointer;
 }
 
 .sidebar-file-item {

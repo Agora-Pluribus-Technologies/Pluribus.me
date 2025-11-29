@@ -142,25 +142,6 @@ async function createSiteGitlab(siteName, siteDescription) {
 async function initialCommitGitlab(siteId) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
-  var owoTemplateResp = await fetch("owo-template.html", {
-    method: "GET",
-    headers: {
-      "Cache-Control": "no-cache, must-revalidate",
-    },
-  });
-  const owoTemplate = await owoTemplateResp.text();
-
-  const gitlabCiTemplateResp = await fetch(".gitlab-ci-template.yml", {
-    method: "GET",
-    headers: {
-      "Cache-Control": "no-cache, must-revalidate",
-    },
-  });
-  const gitlabCiTemplate = await gitlabCiTemplateResp.text();
-
-  console.log(owoTemplate);
-  console.log(gitlabCiTemplate);
-
   const payload = {
     method: "POST",
     headers: {
@@ -171,11 +152,6 @@ async function initialCommitGitlab(siteId) {
       branch: "main",
       commit_message: "Initial GitLab Pages setup",
       actions: [
-        {
-          action: "create",
-          file_path: ".gitlab-ci.yml",
-          content: gitlabCiTemplate,
-        },
         {
           action: "create",
           file_path: "public/pages.json",
@@ -338,6 +314,15 @@ async function deployChangesGitlab(siteId) {
   const gitlabMarkdownFiles = siteTree
     .filter((item) => item.type === "blob" && item.path.endsWith(".md") && item.path.startsWith("public/"))
     .map((item) => item.path);
+
+  if (gitlabMarkdownFiles.length === 0) {
+    // Initial commit with .gitlab-ci.yml
+    commitActions.push({
+      action: "create",
+      file_path: ".gitlab-ci.yml",
+      content: gitlabCiTemplate,
+    });
+  }
 
   // Get list of markdown files in cache
   const cacheMarkdownFiles = Object.keys(markdownCache).filter(path => path.endsWith(".md"));
