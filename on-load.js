@@ -51,6 +51,23 @@ document.addEventListener("DOMContentLoaded", async function () {
       populateSitesList(sites);
     });
 
+  // Handle back button click
+  document
+    .getElementById("backButton")
+    .addEventListener("click", function () {
+      console.log("Back button clicked");
+
+      if (modified) {
+        if (confirm("You have unsaved changes. Are you sure you want to go back? All unsaved changes will be lost.")) {
+          goBackToSiteSelection();
+        } else {
+          document.getElementById("backButton").blur();
+        }
+      } else {
+        goBackToSiteSelection();
+      }
+    });
+
   // Handle deploy button click
   document
     .getElementById("deployButton")
@@ -120,6 +137,32 @@ document.addEventListener("DOMContentLoaded", async function () {
       });
     });
 });
+
+function goBackToSiteSelection() {
+  console.log("Returning to site selection");
+
+  // Clear existing interval if any
+  if (lastDeployTimeInterval) {
+    clearInterval(lastDeployTimeInterval);
+    lastDeployTimeInterval = null;
+  }
+
+  // Reset state
+  currentSiteId = null;
+  currentFilePath = null;
+  markdownCache = {};
+  modified = false;
+
+  // Hide editor container
+  const editorContainer = document.getElementById("editorContainer");
+  editorContainer.style.display = "none";
+
+  // Show sites list panel
+  const sitesListPanel = document.getElementById("sites-list-panel");
+  sitesListPanel.style.display = "block";
+
+  console.log("Back to site selection complete");
+}
 
 async function triggerCreateNewSiteGitlab(pageName) {
   if (pageName) {
