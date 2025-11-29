@@ -21,6 +21,15 @@ document.addEventListener("DOMContentLoaded", async function () {
     populateSitesList(sites);
   }
 
+  // Warn user before leaving page with unsaved changes
+  window.addEventListener("beforeunload", function (event) {
+    if (modified) {
+      event.preventDefault();
+      event.returnValue = ""; // Required for Chrome
+      return ""; // Required for some browsers
+    }
+  });
+
   // Handle create site form submission
   document
     .getElementById("createSiteForm")
