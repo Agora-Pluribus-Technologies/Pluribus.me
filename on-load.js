@@ -154,7 +154,7 @@ async function updateLastDeployTime() {
   const lastUpdatedLabel = document.getElementById("last-updated-time-label");
   if (lastDeployTime) {
     const oldText = lastUpdatedLabel.textContent;
-    const newText = `Last deployed: ${lastDeployTime.toLocaleString()}`;
+    const newText = `Last updated: ${lastDeployTime.toLocaleString()}`;
     if (oldText != newText) {
       lastUpdatedLabel.textContent = newText;
       console.log("Updated last deploy time:", lastDeployTime);
