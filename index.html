@@ -27,12 +27,6 @@
       <h1>Pluribus.me Website Builder</h1>
     </header>
     <div id="mainContent" style="display: flex; flex: 1; overflow: hidden;">
-      <div id="sidebar" style="display: none;">
-        <div id="sidebarContentWrapper">
-          <div id="sidebarContent"></div>
-          <button id="addNewPageButton" class="btn btn-primary" style="width: fit-content; text-align: center; margin-right: auto; margin-left: auto; margin-bottom: 15px;">+</button>
-        </div>
-      </div>
       <div id="editorSection" style="flex: 1;">
         <div id="sites-list-panel">
           <div id="sites-list-header" style="display: none">
@@ -43,9 +37,13 @@
         </div>
         <div id="editorContainer" style="display: none">
           <div id="editor-topbar">
+            <button id="visitSiteButton" class="btn btn-info">Visit Site</button>
+            <button id="deployButton" class="btn btn-success">Deploy Site</button>
             <span id="last-updated-time-label"></span>
-            <a id="visitSiteButton" href="#" target="_blank" class="btn btn-info" style="width: 150px; margin-bottom: 10px; display: inline-block; text-align: center; text-decoration: none;">Visit Site</a>
-            <button id="deployButton" class="btn btn-success" style="width: 150px; margin-bottom: 15px; display: inline-block">Deploy Site</button>
+          </div>
+          <div id="pageMenubar">
+            <div id="pageMenubarContent"></div>
+            <button id="addNewPageButton" class="menubar-item">+</button>
           </div>
           <div id="editor">
           </div>

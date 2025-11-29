@@ -154,6 +154,74 @@ nav {
   overflow: hidden;
 }
 
+#pageMenubar {
+  display: flex;
+  align-items: center;
+  background-color: #0a0a0a;
+  border-top: 1px solid #333;
+  border-bottom: 1px solid #333;
+  padding: 5px 10px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  gap: 5px;
+}
+
+#pageMenubarContent {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.menubar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px;
+  border-radius: 3px;
+  background-color: #303030;
+  border: 1px solid #555;
+  color: #fff;
+  font-size: 14px;
+  height: 50px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.menubar-item:hover {
+  background-color: #1890ff;
+  border-color: #68c0ff;
+}
+
+.menubar-item.active {
+  background-color: #1890ff;
+  color: white;
+  border-color: #68c0ff;
+}
+
+.menubar-item-text {
+  cursor: pointer;
+}
+
+.menubar-item button {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 5px;
+  margin: 0;
+}
+
+.menubar-item button:hover {
+  background: transparent;
+  color: #68c0ff;
+  margin: 0;
+  padding: 0 5px;
+}
+
 #footer {
   padding: 10px 20px;
   background-color: #0a0a0a;
@@ -167,7 +235,7 @@ nav {
   margin: 10px;
   background-color: #101010;
   color: #fff;
-  display: block;
+  display: inline-block;
 }
 
 .btn:hover {
@@ -197,6 +265,12 @@ nav {
   background-color: #1890ff;
   color: white;
   border-color: #68c0ff;
+}
+
+.sidebar-file-text {
+  flex: 1;
+  cursor: pointer;
+  padding: 5px 10px;
 }
 
 #sidebar {

@@ -82,23 +82,24 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
       }
 
-      const sidebarContent = document.getElementById("sidebarContent");
+      const menubarContent = document.getElementById("pageMenubarContent");
 
       // Create input element for new page name
       const inputContainer = document.createElement("div");
-      inputContainer.classList.add("sidebar-file-item");
+      inputContainer.classList.add("menubar-item");
       inputContainer.style.padding = "4px";
 
       const input = document.createElement("input");
       input.type = "text";
       input.placeholder = "Page name...";
-      input.style.width = "100%";
       input.style.border = "1px solid #1890ff";
       input.style.padding = "4px";
       input.style.fontSize = "14px";
+      input.style.backgroundColor = "#1e1e1e";
+      input.style.color = "#fff";
 
       inputContainer.appendChild(input);
-      sidebarContent.insertBefore(inputContainer, sidebarContent.firstChild);
+      menubarContent.insertBefore(inputContainer, menubarContent.firstChild);
 
       // Focus on the input
       input.focus();
@@ -115,7 +116,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         inputContainer.remove();
         const pageName = input.value.trim();
         await triggerCreateNewSiteGitlab(pageName);
-        await populateSidebar(currentSiteId);
+        await populateMenubar(currentSiteId);
       });
     });
 });
@@ -135,8 +136,8 @@ async function triggerCreateNewSiteGitlab(pageName) {
     modified = true;
     updateDeployButtonState();
 
-    // Refresh the sidebar
-    await populateSidebar(currentSiteId);
+    // Refresh the menubar
+    await populateMenubar(currentSiteId);
 
     // Open the new page in the editor
     currentFilePath = newFilePath;
@@ -226,27 +227,20 @@ function populateSitesList(sites) {
         markdownCache[file.path] = content;
       }
 
-      // Populate sidebar from cache
-      await populateSidebar(site.id);
-
-      // Show sidebar with initial width
-      const sidebar = document.getElementById("sidebar");
-      const editorSection = document.getElementById("editorSection");
-      sidebar.style.display = "flex";
-      sidebar.style.width = "20%";
-      editorSection.style.maxWidth = "80%";
-      editorSection.style.minWidth = "40%";
-      editorSection.style.width = "100%";
-      editorSection.style.flex = "none";
+      // Populate menubar from cache
+      await populateMenubar(site.id);
 
       // Set up Visit Site button
       const pagesUrl = await getPagesUrlGitlab(site.id);
       const visitSiteButton = document.getElementById("visitSiteButton");
+      visitSiteButton.onclick = function() {
+        if (pagesUrl) {
+          window.open(pagesUrl, '_blank');
+        }
+      };
       if (pagesUrl) {
-        visitSiteButton.href = pagesUrl;
         console.log("Pages URL:", pagesUrl);
       } else {
-        visitSiteButton.href = "#";
         console.log("Pages URL not available yet");
       }
 
@@ -260,10 +254,10 @@ function populateSitesList(sites) {
       // Load the editor
       loadToastEditor();
 
-      // Click the index sidebar item to load it
+      // Click the index menubar item to load it
       setTimeout(() => {
-        const sidebarItems = document.querySelectorAll(".sidebar-file-item");
-        for (const item of sidebarItems) {
+        const menubarItems = document.querySelectorAll(".menubar-item");
+        for (const item of menubarItems) {
           const text = item.querySelector("span");
           if (text && text.textContent === "index") {
             text.click();
@@ -290,7 +284,7 @@ function populateSitesList(sites) {
   }
 }
 
-async function populateSidebar(siteId) {
+async function populateMenubar(siteId) {
   // Use markdownCache as source of truth
   const markdownFiles = [];
   for (const cachePath in markdownCache) {
@@ -310,23 +304,19 @@ async function populateSidebar(siteId) {
   markdownFiles.length = 0;
   markdownFiles.push(...sortedFiles);
 
-  const sidebarContent = document.getElementById("sidebarContent");
-  sidebarContent.innerHTML = ""; // Clear existing content
+  const menubarContent = document.getElementById("pageMenubarContent");
+  menubarContent.innerHTML = ""; // Clear existing content
 
   for (const file of markdownFiles) {
     const fileItem = document.createElement("div");
-    fileItem.classList.add("sidebar-file-item");
-    fileItem.style.display = "flex";
-    fileItem.style.justifyContent = "space-between";
-    fileItem.style.alignItems = "center";
+    fileItem.classList.add("menubar-item");
 
     // Create text span for file path
     const fileText = document.createElement("span");
     // Display only the page name (remove "public/" and ".md")
     const displayName = file.path.replace("public/", "").replace(".md", "");
     fileText.textContent = displayName;
-    fileText.style.flex = "1";
-    fileText.style.cursor = "pointer";
+    fileText.classList.add("menubar-item-text");
 
     // Create button container
     const buttonContainer = document.createElement("div");
@@ -415,15 +405,15 @@ async function populateSidebar(siteId) {
             modified = true;
             updateDeployButtonState();
 
-            // Refresh the sidebar
-            await populateSidebar(siteId);
+            // Refresh the menubar
+            await populateMenubar(siteId);
 
             console.log("Page renamed in cache:", sanitizedNewName);
 
-            // Click the renamed item in the sidebar to load it
+            // Click the renamed item in the menubar to load it
             setTimeout(() => {
-              const sidebarItems = document.querySelectorAll(".sidebar-file-item");
-              for (const item of sidebarItems) {
+              const menubarItems = document.querySelectorAll(".menubar-item");
+              for (const item of menubarItems) {
                 const text = item.querySelector("span");
                 if (text && text.textContent === sanitizedNewName) {
                   text.click();
@@ -471,8 +461,8 @@ async function populateSidebar(siteId) {
           modified = true;
           updateDeployButtonState();
 
-          // Refresh the sidebar
-          await populateSidebar(siteId);
+          // Refresh the menubar
+          await populateMenubar(siteId);
 
           console.log("Page deleted from cache:", displayName);
         }
@@ -491,7 +481,7 @@ async function populateSidebar(siteId) {
       console.log(`Loading file: ${file.path}`);
 
       // Remove active class from all items
-      document.querySelectorAll(".sidebar-file-item").forEach((item) => {
+      document.querySelectorAll(".menubar-item").forEach((item) => {
         item.classList.remove("active");
       });
 
@@ -520,6 +510,6 @@ async function populateSidebar(siteId) {
       // Set editor content
       editor.setMarkdown(fileContent);
     });
-    sidebarContent.appendChild(fileItem);
+    menubarContent.appendChild(fileItem);
   }
 }

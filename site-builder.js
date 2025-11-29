@@ -7,8 +7,4 @@ function loadToastEditor() {
     previewStyle: "vertical",
     theme: "dark",
   });
-
-  const editorDiv = document.getElementById("editor");
-  editorDiv.style.height = "100%";
-  editorDiv.style.maxWidth = "100%";
 }
