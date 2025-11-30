@@ -7,10 +7,12 @@ let modified = false;
 
 document.addEventListener("DOMContentLoaded", async function () {
   window.alert("This application is in early development and is not yet operational.");
-  const gitlabUserId = await getGitlabUserId();
-  if (!gitlabUserId) {
-    console.log("GitLab access token missing or expired");
+  if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null) {
+    console.log("Access tokens missing or expired");
     displayLoginButtons();
+  } else if (getOauthTokenGithub() !== null) {
+    console.log("GitHub access token present - GitHub flow not implemented yet");
+    alert("GitHub OAuth flow is not yet implemented. Please use GitLab OAuth for now.");
   } else {
     console.log("GitLab access token present and valid");
     const sites = await getSitesGitLab();
