@@ -6,10 +6,11 @@ let lastDeployTimeInterval = null;
 let modified = false;
 
 document.addEventListener("DOMContentLoaded", async function () {
+  window.alert("This application is in early development and is not yet operational.");
   const gitlabUserId = await getGitlabUserId();
   if (!gitlabUserId) {
     console.log("GitLab access token missing or expired");
-    displayGitlabLoginButton();
+    displayLoginButtons();
   } else {
     console.log("GitLab access token present and valid");
     const sites = await getSitesGitLab();

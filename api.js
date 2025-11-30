@@ -5,10 +5,17 @@ const GITLAB_CLIENT_SCOPE = "api";
 const GITLAB_REDIRECT_URI =
   "https://pluribus-me.pages.dev/gitlab/oauth/callback";
 
+const GITHUB_CLIENT_ID = "Ov23liqELtwrv29MS9Wc";
+const GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize";
+const GITHUB_CLIENT_SCOPE = "repo user";
+const GITHUB_REDIRECT_URI =
+  "https://pluribus-me.pages.dev/github/oauth/callback";
+
 var GITLAB_USER_ID = null;
+var GITHUB_USER_ID = null;
 
 const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "pluribus.me.gitlab.oauth_token";
-const STORAGE_KEY_GITLAB_SITE_ID_LIST = "pluribus.me.gitlab.site_id_list";
+const STORAGE_KEY_GITHUB_OAUTH_TOKEN = "pluribus.me.github.oauth_token";
 
 // Check if we have a token in the URL hash (from OAuth callback redirect)
 if (window.location.hash) {
@@ -17,6 +24,9 @@ if (window.location.hash) {
   if (window.location.hash.startsWith("#gitlab")) {
     accessToken = params.get("gitlab_access_token");
     sessionStorage.setItem(STORAGE_KEY_GITLAB_OAUTH_TOKEN, accessToken);
+  } else if (window.location.hash.startsWith("#github")) {
+    accessToken = params.get("github_access_token");
+    sessionStorage.setItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN, accessToken);
   }
 
   if (accessToken) {
@@ -29,14 +39,45 @@ function getOauthTokenGitlab() {
   return sessionStorage.getItem(STORAGE_KEY_GITLAB_OAUTH_TOKEN);
 }
 
-function displayGitlabLoginButton() {
-  var loginButton = document.createElement("button");
-  loginButton.classList.add("btn");
-  loginButton.innerText = "Sign into GitLab";
-  loginButton.style.padding = "10px 18px";
-  loginButton.style.cursor = "pointer";
+function getOauthTokenGithub() {
+  return sessionStorage.getItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN);
+}
 
-  loginButton.addEventListener("click", () => {
+function displayLoginButtons() {
+  // Create container for both buttons
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.display = "flex";
+  buttonContainer.style.gap = "10px";
+  buttonContainer.style.justifyContent = "center";
+  buttonContainer.style.flexWrap = "wrap";
+
+  // GitHub login button
+  var githubLoginButton = document.createElement("button");
+  githubLoginButton.classList.add("btn");
+  githubLoginButton.innerText = "Sign in with GitHub";
+  githubLoginButton.style.padding = "10px 18px";
+  githubLoginButton.style.cursor = "pointer";
+
+  githubLoginButton.addEventListener("click", () => {
+    // Build the authorization URL
+    const params = new URLSearchParams({
+      client_id: GITHUB_CLIENT_ID,
+      redirect_uri: GITHUB_REDIRECT_URI,
+      scope: GITHUB_CLIENT_SCOPE,
+    });
+
+    // Redirect user to login page
+    window.location.href = `${GITHUB_AUTH_URL}?${params.toString()}`;
+  });
+
+  // GitLab login button
+  var gitlabLoginButton = document.createElement("button");
+  gitlabLoginButton.classList.add("btn");
+  gitlabLoginButton.innerText = "Sign in with GitLab";
+  gitlabLoginButton.style.padding = "10px 18px";
+  gitlabLoginButton.style.cursor = "pointer";
+
+  gitlabLoginButton.addEventListener("click", () => {
     // Build the authorization URL
     const params = new URLSearchParams({
       client_id: GITLAB_CLIENT_ID,
@@ -49,8 +90,11 @@ function displayGitlabLoginButton() {
     window.location.href = `${GITLAB_AUTH_URL}?${params.toString()}`;
   });
 
+  buttonContainer.appendChild(githubLoginButton);
+  buttonContainer.appendChild(gitlabLoginButton);
+
   const sitesListPanel = document.getElementById("sites-list-panel");
-  sitesListPanel.appendChild(loginButton);
+  sitesListPanel.appendChild(buttonContainer);
 }
 
 async function getGitlabUserId() {
@@ -76,6 +120,34 @@ async function getGitlabUserId() {
   GITLAB_USER_ID = data.id;
 
   console.log("GitLab User ID:", data.id);
+
+  return data.id;
+}
+
+async function getGithubUserId() {
+  if (GITHUB_USER_ID) {
+    return GITHUB_USER_ID;
+  }
+
+  const oauthToken = sessionStorage.getItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN);
+
+  if (!oauthToken) return null;
+
+  const response = await fetch("https://api.github.com/user", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${oauthToken}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+
+  GITHUB_USER_ID = data.id;
+
+  console.log("GitHub User ID:", data.id);
 
   return data.id;
 }
