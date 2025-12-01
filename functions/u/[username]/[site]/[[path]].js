@@ -24,7 +24,7 @@ export async function onRequest(context) {
   // Compute the path inside the site, after /s/:siteId/
   // e.g. /u/alice/about/team.html -> "about/team.html"
   const segments = url.pathname.split("/").filter(Boolean); // ["u","alice","about","team.html"]
-  const restSegments = segments.slice(2); // skip "u" and siteId
+  const restSegments = segments.slice(3); // skip "u", username, and siteId
   let filePath = restSegments.join("/");
 
   // Default to index.html if no specific file
