@@ -382,7 +382,7 @@ function populateSitesList(sites) {
           if (getOauthTokenGitlab() !== null) {
             content = await getFileContentGitlab(site.id, file.path);
           } else if (getOauthTokenGithub() !== null) {
-            content = await getFileContentGithub(site.id, file.path);
+            content = await getFileContentGithub(site.full_name, file.path);
           }
           markdownCache[file.path] = content;
         }
