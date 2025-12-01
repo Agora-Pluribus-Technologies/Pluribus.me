@@ -91,8 +91,12 @@ export async function onRequest(context) {
   const upstreamRes = await fetch(upstreamUrl, {
     method: "GET",
     headers: {
-      "Cache-Control": "no-cache, must-revalidate",
+      "Cache-Control": "no-cache"
     },
+    cf: {
+      cacheTtl: 0,
+      cacheEverything: false
+    }
   });
 
   if (!upstreamRes.ok) {
