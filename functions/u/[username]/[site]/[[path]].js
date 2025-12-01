@@ -7,7 +7,9 @@ export async function onRequest(context) {
   const { request, env, params } = context;
   const url = new URL(request.url);
 
-  const siteId = params && params.site ? String(params.site) : null;
+  const username = params && params.username ? String(params.username) : null;
+  const site = params && params.site ? String(params.site) : null;
+  const siteId = username && site ? `${username}/${site}` : null;
   if (!siteId) {
     return new Response("Missing site id", { status: 400 });
   }
