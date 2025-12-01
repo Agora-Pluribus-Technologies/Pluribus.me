@@ -22,9 +22,9 @@ export async function onRequest(context) {
   console.log("Site id:", siteId);
 
   // Compute the path inside the site, after /s/:siteId/
-  // e.g. /u/alice/about/team.html -> "about/team.html"
-  const segments = url.pathname.split("/").filter(Boolean); // ["u","alice","about","team.html"]
-  const restSegments = segments.slice(3); // skip "u", username, and siteId
+  // e.g. /s/alice/about/team.html -> "about/team.html"
+  const segments = url.pathname.split("/").filter(Boolean); // ["s","alice","about","team.html"]
+  const restSegments = segments.slice(3); // skip "s", username, and siteId
   let filePath = restSegments.join("/");
 
   // Default to index.html if no specific file

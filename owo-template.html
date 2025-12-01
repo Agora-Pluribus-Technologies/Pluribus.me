@@ -117,35 +117,34 @@
 <body>
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
-      const upstreamBaseUrlDiv = document.getElementById("upstream-base-url");
-      let upstreamBaseUrl;
-      if (upstreamBaseUrlDiv) {
-        upstreamBaseUrl = upstreamBaseUrlDiv.getAttribute("data-upstream-base-url");
-        console.log("Upstream Base URL:", upstreamBaseUrl);
-      } else {
-        upstreamBaseUrl = "";
-      }
-      await createMenubar(upstreamBaseUrl);
-      await fetchPageContent(upstreamBaseUrl);
+      await createMenubar();
+      await fetchPageContent();
     });
 
     async function createMenubar() {
       const menubar = document.createElement("nav");
       menubar.style.width = "100%";
-      const pagesJsonLink = `${upstreamBaseUrl}/pages.json`;
+      const pagesJsonLink = `${document.location.origin}${document.location.pathname}/pages.json`;
 
       const content = await fetch(pagesJsonLink, {
         method: "GET",
         headers: {
+          "Access-Control-Allow-Origin": "*",
           "Cache-Control": "no-cache, must-revalidate",
         },
       });
       if (content.ok) {
         const pagesJson = await content.json();
         for (const page of pagesJson) {
+          let relPage;
+          if (page === "index") {
+            relPage = "";
+          } else {
+             relPage = `${page}.html`
+          }
           const pageLink = document.createElement("a");
           pageLink.classList.add("menu-link");
-          pageLink.href = `/${page}.html`;
+          pageLink.href = `${document.location.origin}${document.location.pathname}/${relPage}`;
           pageLink.textContent = page;
           menubar.appendChild(pageLink);
         }
@@ -159,7 +158,8 @@
         breaks: true,
       });
 
-      var pathname = window.location.pathname.substring(1).replace(".html", "");
+      // https://pluribus.me/s/username/sitename/path/to/page.html --> path/to/page
+      var pathname = window.location.pathname.split('/').slice(4).join("/").replace(".html", "");
       if (!pathname) {
         pathname = "index";
       }
@@ -167,13 +167,11 @@
       var panel = document.createElement("main");
       const errorMessage = "Could not fetch page content<br><br>O_o";
       try {
-        let fetchPathName = `${pathname}.md`;
-        if (upstreamBaseUrl && upstreamBaseUrl !== "") {
-          fetchPathName = `${upstreamBaseUrl}/${pathname}.md`;
-        }
+        let fetchPathName = `${document.location.origin}${document.location.pathname}/${pathname}.md`;
         const content = await fetch(fetchPathName, {
           method: "GET",
           headers: {
+            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache, must-revalidate",
           },
         });
