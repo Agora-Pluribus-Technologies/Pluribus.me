@@ -19,7 +19,7 @@ export async function onRequestPost(context) {
   }
 
   // You can add your own validation rules here if needed
-  if (!/^[a-zA-Z0-9-]+$/.test(siteId)) {
+  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
 

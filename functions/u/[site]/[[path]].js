@@ -13,7 +13,7 @@ export async function onRequest(context) {
   }
 
   // Basic validation for siteId (avoid weird characters / traversal tricks)
-  if (!/^[a-zA-Z0-9-]+$/.test(siteId)) {
+  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
     return new Response("Invalid site id", { status: 400 });
   }
 
