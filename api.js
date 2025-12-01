@@ -216,7 +216,7 @@ async function createSiteGitlab(siteName, siteDescription) {
       name: `${siteName}`,
       path: `${siteName.toLowerCase().replace(/\s+/g, "-")}-pluribus-owo-site`,
       description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`,
-      visibility: "private",
+      visibility: "public",
       pages_access_level: "disabled",
     }),
   };

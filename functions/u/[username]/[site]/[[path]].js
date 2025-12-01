@@ -105,6 +105,10 @@ export async function onRequest(context) {
   const headers = new Headers(upstreamRes.headers);
   // Basic cache: adjust as you like
   headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+  if (filePath.endsWith(".html") || filePath.endsWith(".htm")) {
+    // No caching for HTML files to ensure freshness
+    headers.set("Content-Type", "text/html; charset=utf-8");
+  }
 
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
