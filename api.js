@@ -424,29 +424,12 @@ async function deployChangesGitlab(siteId) {
   });
   const owoTemplate = await owoTemplateResp.text();
 
-  const gitlabCiTemplateResp = await fetch(".gitlab-ci-template.yml", {
-    method: "GET",
-    headers: {
-      "Cache-Control": "no-cache, must-revalidate",
-    },
-  });
-  const gitlabCiTemplate = await gitlabCiTemplateResp.text();
-
   console.log(owoTemplate);
   console.log(gitlabCiTemplate);
 
   const gitlabMarkdownFiles = await getPublicFilesGitLab(siteId);
 
   var commitActions = [];
-
-  if (gitlabMarkdownFiles.length === 0) {
-    // Initial commit with .gitlab-ci.yml
-    commitActions.push({
-      action: "create",
-      file_path: ".gitlab-ci.yml",
-      content: gitlabCiTemplate,
-    });
-  }
 
   // Get list of markdown files in cache
   const cacheMarkdownFiles = Object.keys(markdownCache).filter(path => path.endsWith(".md"));

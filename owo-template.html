@@ -117,14 +117,22 @@
 <body>
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
-      await createMenubar();
-      await fetchPageContent();
+      const upstreamBaseUrlDiv = document.getElementById("upstream-base-url");
+      let upstreamBaseUrl;
+      if (upstreamBaseUrlDiv) {
+        upstreamBaseUrl = upstreamBaseUrlDiv.getAttribute("data-upstream-base-url");
+        console.log("Upstream Base URL:", upstreamBaseUrl);
+      } else {
+        upstreamBaseUrl = "";
+      }
+      await createMenubar(upstreamBaseUrl);
+      await fetchPageContent(upstreamBaseUrl);
     });
 
     async function createMenubar() {
       const menubar = document.createElement("nav");
       menubar.style.width = "100%";
-      const pagesJsonLink = `${document.location.origin}/pages.json`;
+      const pagesJsonLink = `${upstreamBaseUrl}/pages.json`;
 
       const content = await fetch(pagesJsonLink, {
         method: "GET",
@@ -137,7 +145,7 @@
         for (const page of pagesJson) {
           const pageLink = document.createElement("a");
           pageLink.classList.add("menu-link");
-          pageLink.href = `${document.location.origin}/${page}.html`;
+          pageLink.href = `/${page}.html`;
           pageLink.textContent = page;
           menubar.appendChild(pageLink);
         }
@@ -159,7 +167,11 @@
       var panel = document.createElement("main");
       const errorMessage = "Could not fetch page content<br><br>O_o";
       try {
-        const content = await fetch(`${pathname}.md`, {
+        let fetchPathName = `${pathname}.md`;
+        if (upstreamBaseUrl && upstreamBaseUrl !== "") {
+          fetchPathName = `${upstreamBaseUrl}/${pathname}.md`;
+        }
+        const content = await fetch(fetchPathName, {
           method: "GET",
           headers: {
             "Cache-Control": "no-cache, must-revalidate",

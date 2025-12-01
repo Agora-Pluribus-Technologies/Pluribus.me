@@ -84,7 +84,7 @@ export async function onRequest(context) {
     return new Response("Unsupported provider", { status: 500 });
   }
 
-  upstreamUrl += filePath;
+  let upstreamUrl = upstreamBaseUrl + filePath;
 
   console.log("Upstream URL:", upstreamUrl);
 
