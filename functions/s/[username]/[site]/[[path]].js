@@ -86,6 +86,7 @@ export async function onRequest(context) {
 
   let upstreamUrl = upstreamBaseUrl + filePath;
 
+  upstreamUrl += `?t=${Date.now()}`; // prevent caching
   console.log("Upstream URL:", upstreamUrl);
 
   const upstreamRes = await fetch(upstreamUrl, {
