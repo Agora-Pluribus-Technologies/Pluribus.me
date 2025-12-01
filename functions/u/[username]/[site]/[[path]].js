@@ -102,11 +102,11 @@ export async function onRequest(context) {
   }
 
   // Copy upstream headers (content-type, etc.) and add cache control
-  const headers = new Headers(upstreamRes.headers);
+  const headers = new Headers();
   // Basic cache: adjust as you like
-  headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+  headers.set("Cache-Control", "no-cache, must-revalidate");
   if (filePath.endsWith(".html") || filePath.endsWith(".htm")) {
-    // No caching for HTML files to ensure freshness
+    // Serve HTML files as webpages
     headers.set("Content-Type", "text/html; charset=utf-8");
   }
 
