@@ -86,15 +86,7 @@ export async function onRequest(context) {
 
   console.log("Upstream URL:", upstreamUrl);
 
-  const upstreamRes = await fetch(upstreamUrl, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.5",
-      "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
-    },
-  });
+  const upstreamRes = await fetch(upstreamUrl);
 
   if (!upstreamRes.ok) {
     // You could get fancy here (e.g. SPA routing), but 404 is fine for now.
@@ -109,6 +101,11 @@ export async function onRequest(context) {
     // Serve HTML files as webpages
     headers.set("Content-Type", "text/html; charset=utf-8");
   }
+
+  const basePathEncoded = encodeURIComponent(basePath);
+
+  // Add query param for basePath to help client-side routing if needed
+  document.location.url.hash = `?basePath=${basePathEncoded}`;
 
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
