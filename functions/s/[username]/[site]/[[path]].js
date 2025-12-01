@@ -88,7 +88,12 @@ export async function onRequest(context) {
 
   console.log("Upstream URL:", upstreamUrl);
 
-  const upstreamRes = await fetch(upstreamUrl);
+  const upstreamRes = await fetch(upstreamUrl, {
+    method: "GET",
+    headers: {
+      "Cache-Control": "no-cache, must-revalidate",
+    },
+  });
 
   if (!upstreamRes.ok) {
     // You could get fancy here (e.g. SPA routing), but 404 is fine for now.
@@ -99,18 +104,8 @@ export async function onRequest(context) {
   const headers = new Headers();
   // Basic cache: adjust as you like
   headers.set("Cache-Control", "no-cache, must-revalidate");
-  let updatedBody;
-  if (filePath.endsWith(".html") || filePath.endsWith(".htm")) {
-    // Serve HTML files as webpages
-    headers.set("Content-Type", "text/html; charset=utf-8");
-    updatedBody = await upstreamRes.text();
-    updatedBody = updatedBody.replace("<body>", `<body><div id="upstream-base-url" data-upstream-base-url="${upstreamBaseUrl}";</div>`);
-  } else {
-    updatedBody = upstreamRes.body;
-  }
 
-
-  return new Response(updatedBody, {
+  return new Response(upstreamRes.body, {
     status: upstreamRes.status,
     headers
   });

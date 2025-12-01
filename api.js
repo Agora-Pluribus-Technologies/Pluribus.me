@@ -151,6 +151,7 @@ async function getSitesGitLab() {
     method: "GET",
     headers: {
       Authorization: `Bearer ${getOauthTokenGitlab()}`,
+      "Cache-Control": "no-cache",
     },
   };
 
@@ -180,6 +181,7 @@ async function getSitesGitHub() {
     method: "GET",
     headers: {
       Authorization: `Bearer ${getOauthTokenGithub()}`,
+      "Cache-Control": "no-cache",
     },
   };
 
