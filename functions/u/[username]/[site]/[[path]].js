@@ -75,14 +75,16 @@ export async function onRequest(context) {
   console.log("Repo file path:", repoFilePath);
 
   // Build raw URL
-  let upstreamUrl;
+  let upstreamBaseUrl;
   if (provider === "github") {
-    upstreamUrl = githubRawUrl(owner, repo, branch, repoFilePath);
+    upstreamBaseUrl = githubRawUrl(owner, repo, branch, basePath);
   } else if (provider === "gitlab") {
-    upstreamUrl = gitlabRawUrl(owner, repo, branch, repoFilePath);
+    upstreamBaseUrl = gitlabRawUrl(owner, repo, branch, basePath);
   } else {
     return new Response("Unsupported provider", { status: 500 });
   }
+
+  upstreamUrl += filePath;
 
   console.log("Upstream URL:", upstreamUrl);
 
@@ -102,7 +104,7 @@ export async function onRequest(context) {
     // Serve HTML files as webpages
     headers.set("Content-Type", "text/html; charset=utf-8");
     updatedBody = await upstreamRes.text();
-    updatedBody = updatedBody.replace("</head>", `<script>let basePath="${basePath}";</script></head>`);
+    updatedBody = updatedBody.replace("<body>", `<body><div id="upstream-base-url" data-upstream-base-url="${upstreamBaseUrl}";</div>`);
   } else {
     updatedBody = upstreamRes.body;
   }
