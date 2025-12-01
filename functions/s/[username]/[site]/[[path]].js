@@ -107,7 +107,7 @@ export async function onRequest(context) {
   // Copy upstream headers (content-type, etc.) and add cache control
   const headers = new Headers();
   // Basic cache: adjust as you like
-  headers.set("Cache-Control", "no-cache, must-revalidate");
+  headers.set("Cache-Control", "no-store");
 
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
