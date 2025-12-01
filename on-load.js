@@ -275,40 +275,6 @@ async function triggerCreateNewSiteGitlab(pageName) {
   }
 }
 
-async function updateLastDeployTime() {
-  if (!currentSiteId) {
-    return;
-  }
-
-  let lastDeployTime;
-  if (getOauthTokenGitlab() !== null) {
-    lastDeployTime = await getLatestPagesDeployTimeGitlab(currentSiteId);
-  } else if (getOauthTokenGithub() !== null) {
-    lastDeployTime = await getLatestPagesDeployTimeGithub(currentSiteId);
-  }
-  const lastUpdatedLabel = document.getElementById("last-updated-time-label");
-  if (lastDeployTime) {
-    const oldText = lastUpdatedLabel.textContent;
-    const newText = `Last updated: ${lastDeployTime.toLocaleString()}`;
-    if (oldText != newText) {
-      // Enable the Visit Site button
-      const visitSiteButton = document.getElementById("visitSiteButton");
-      visitSiteButton.disabled = false;
-
-      // Update only if changed
-      lastUpdatedLabel.textContent = newText;
-      console.log("Updated last deploy time:", lastDeployTime);
-    }
-  } else {
-    // Disable the Visit Site button if no deploys yet
-    const visitSiteButton = document.getElementById("visitSiteButton");
-    visitSiteButton.disabled = true;
-
-    // Clear last updated label
-    lastUpdatedLabel.textContent = "";
-  }
-}
-
 function updateDeployButtonState() {
   const deployButton = document.getElementById("deployButton");
 
@@ -343,7 +309,18 @@ function populateSitesList(sites) {
         currentSiteId = site.full_name;
         currentSitePathFull = site.full_name;
       }
-      
+
+      // Update Visit Site button URL
+      const visitSiteButton = document.getElementById("visitSiteButton");
+      if (visitSiteButton && currentSitePathFull) {
+        const pluribusSiteUrl = `/s/${currentSitePathFull}`;
+        visitSiteButton.onclick = function () {
+          window.open(pluribusSiteUrl, "_blank");
+        };
+        visitSiteButton.disabled = false;
+        console.log("Visit Site button updated to:", pluribusSiteUrl);
+      }
+
       markdownCache = {};
       modified = false;
 
