@@ -120,14 +120,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (currentSitePathFull) {
           try {
             // First, check if site exists
-            const checkResponse = await fetch("/api/sites", {
+            const checkResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(currentSitePathFull)}`, {
               method: "GET",
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-                siteId: currentSitePathFull,
-              }),
             });
 
             if (checkResponse.status === 404) {
@@ -378,13 +375,14 @@ function populateSitesList(sites) {
       } else {
         // Load all markdown files into cache
         for (const file of markdownFiles) {
+          console.log("Loading file into cache:", file);
           let content;
           if (getOauthTokenGitlab() !== null) {
-            content = await getFileContentGitlab(site.id, file.path);
+            content = await getFileContentGitlab(site.id, file);
           } else if (getOauthTokenGithub() !== null) {
-            content = await getFileContentGithub(site.full_name, file.path);
+            content = await getFileContentGithub(site.full_name, file);
           }
-          markdownCache[file.path] = content;
+          markdownCache[file] = content;
         }
       }
 

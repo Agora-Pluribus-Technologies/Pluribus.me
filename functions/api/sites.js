@@ -52,20 +52,16 @@ export async function onRequestPost(context) {
 export async function onRequestGet(context) {
   const { request, env } = context;
 
-  let data;
+  // Parse URL to get search params
+  const url = new URL(request.url);
+  const siteIdEncoded = url.searchParams.get("siteId");
 
-  try {
-    data = await request.json();
-  } catch {
-    return new Response("Invalid JSON", { status: 400 });
-  }
-
-  // Validate required fields
-  const { siteId } = data;
-
-  if (!siteId) {
+  if (!siteIdEncoded) {
     return new Response("Missing required fields", { status: 400 });
   }
+
+  // Decode the URL-encoded siteId
+  const siteId = decodeURIComponent(siteIdEncoded);
 
   // Check if site already exists
   const existing = await env.SITES.get(`site:${siteId}`);

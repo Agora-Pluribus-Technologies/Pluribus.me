@@ -352,6 +352,8 @@ async function getFileContentGithub(siteId, filePath) {
   // GitHub returns base64-encoded content, so we need to decode it
   const content = atob(responseJson.content);
 
+  console.log("File content:", content);
+
   return content;
 }
 
@@ -371,8 +373,6 @@ async function getPublicFilesGitLab(siteId) {
   }
 
   const responseJson = await response.json();
-
-  console.log("Site Tree:", siteTree);
 
   // Get list of markdown files in GitLab
   const gitlabMarkdownFiles = responseJson
