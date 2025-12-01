@@ -105,7 +105,7 @@ export async function onRequest(context) {
   const basePathEncoded = encodeURIComponent(basePath);
 
   // Add query param for basePath to help client-side routing if needed
-  document.location.url.hash = `?basePath=${basePathEncoded}`;
+  document.location.hash = `?basePath=${basePathEncoded}`;
 
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
