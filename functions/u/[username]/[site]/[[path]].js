@@ -102,7 +102,7 @@ export async function onRequest(context) {
     // Serve HTML files as webpages
     headers.set("Content-Type", "text/html; charset=utf-8");
     updatedBody = await upstreamRes.text();
-    updatedBody.replace("</head>", `<script>let basePath=${basePath}</script></head>`)
+    updatedBody = updatedBody.replace("</head>", `<script>let basePath="${basePath}";</script></head>`);
   } else {
     updatedBody = upstreamRes.body;
   }
