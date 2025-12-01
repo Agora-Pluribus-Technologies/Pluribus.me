@@ -19,10 +19,12 @@ export async function onRequest(context) {
     return new Response("Invalid site id", { status: 400 });
   }
 
+  console.log("Site id:", siteId);
+
   // Compute the path inside the site, after /s/:siteId/
-  // e.g. /s/alice/about/team.html -> "about/team.html"
-  const segments = url.pathname.split("/").filter(Boolean); // ["s","alice","about","team.html"]
-  const restSegments = segments.slice(2); // skip "s" and siteId
+  // e.g. /u/alice/about/team.html -> "about/team.html"
+  const segments = url.pathname.split("/").filter(Boolean); // ["u","alice","about","team.html"]
+  const restSegments = segments.slice(2); // skip "u" and siteId
   let filePath = restSegments.join("/");
 
   // Default to index.html if no specific file
@@ -40,6 +42,8 @@ export async function onRequest(context) {
     return new Response("Invalid path", { status: 400 });
   }
 
+  console.log("File path:", filePath);
+
   // Look up site configuration in KV: site:<siteId>
   const cfgJson = await env.SITES.get(`site:${siteId}`);
   if (!cfgJson) {
@@ -54,6 +58,8 @@ export async function onRequest(context) {
     return new Response("Invalid site config", { status: 500 });
   }
 
+  console.log("Site config:", cfg);
+
   const provider = cfg.provider;
   const owner = cfg.owner;
   const repo = cfg.repo;
@@ -66,6 +72,8 @@ export async function onRequest(context) {
 
   const repoFilePath = basePath + filePath; // e.g. "/public/index.html"
 
+  console.log("Repo file path:", repoFilePath);
+
   // Build raw URL
   let upstreamUrl;
   if (provider === "github") {
@@ -75,6 +83,8 @@ export async function onRequest(context) {
   } else {
     return new Response("Unsupported provider", { status: 500 });
   }
+
+  console.log("Upstream URL:", upstreamUrl);
 
   const upstreamRes = await fetch(upstreamUrl);
 
