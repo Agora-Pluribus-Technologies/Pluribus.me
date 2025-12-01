@@ -86,7 +86,15 @@ export async function onRequest(context) {
 
   console.log("Upstream URL:", upstreamUrl);
 
-  const upstreamRes = await fetch(upstreamUrl);
+  const upstreamRes = await fetch(upstreamUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+    },
+  });
 
   if (!upstreamRes.ok) {
     // You could get fancy here (e.g. SPA routing), but 404 is fine for now.
