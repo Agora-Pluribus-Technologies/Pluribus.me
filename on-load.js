@@ -1,7 +1,8 @@
 // Global cache for markdown files
 let markdownCache = {};
-let currentFilePath = null;
+let currentSitePath = null;
 let currentSiteId = null;
+let currentSitePathFull = null;
 let lastDeployTimeInterval = null;
 let modified = false;
 
@@ -10,17 +11,21 @@ document.addEventListener("DOMContentLoaded", async function () {
   if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null) {
     console.log("Access tokens missing or expired");
     displayLoginButtons();
-  } else if (getOauthTokenGithub() !== null) {
-    console.log("GitHub access token present - GitHub flow not implemented yet");
-    alert("GitHub OAuth flow is not yet implemented. Please use GitLab OAuth for now.");
   } else {
-    console.log("GitLab access token present and valid");
-    const sites = await getSitesGitLab();
+    let sites;
+    if (getOauthTokenGitlab() !== null) {
+      console.log("GitLab access token present and valid");
+      sites = await getSitesGitLab();
+      console.log("GitLab Sites:", sites);
+    } else if (getOauthTokenGithub() !== null) {
+      console.log("GitHub access token present and valid");
+      sites = await getSitesGitHub();
+      console.log("GitHub Sites:", sites);
+    }
 
     const sitesListHeader = document.getElementById("sites-list-header");
     sitesListHeader.style.display = "block";
 
-    console.log("GitLab Sites:", sites);
     populateSitesList(sites);
   }
 
@@ -44,11 +49,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       console.log("Creating new site:", siteName, siteDescription);
 
-      const siteId = await createSiteGitlab(siteName, siteDescription);
-
-      console.log("New site created with ID:", siteId);
-
-      await initialCommitGitlab(siteId);
+      let siteId;
+      if (getOauthTokenGitlab() !== null) {
+        siteId = await createSiteGitlab(siteName, siteDescription);
+        console.log("New GitLab site created with ID:", siteId);
+        await initialCommitGitlab(siteId);
+      } else if (getOauthTokenGithub() !== null) {
+        siteId = await createSiteGithub(siteName, siteDescription);
+        console.log("New GitHub site created with ID:", siteId);
+        await initialCommitGithub(siteId);
+      }
 
       console.log("Initial commit made for site ID:", siteId);
 
@@ -59,7 +69,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       document.getElementById("createSiteForm").reset();
 
       // Refresh the sites list
-      const sites = await getSitesGitLab();
+      let sites;
+      if (getOauthTokenGitlab() !== null) {
+        sites = await getSitesGitLab();
+      } else if (getOauthTokenGithub() !== null) {
+        sites = await getSitesGitHub();
+      }
       populateSitesList(sites);
     });
 
@@ -92,7 +107,67 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       if (currentSiteId) {
         // Deploy changes
-        await deployChangesGitlab(currentSiteId);
+        if (getOauthTokenGitlab() !== null) {
+          await deployChangesGitlab(currentSiteId);
+        } else if (getOauthTokenGithub() !== null) {
+          await deployChangesGithub(currentSiteId);
+        }
+
+        // Link pluribus site
+        console.log("Current full site path:", currentSitePathFull);
+
+        // Check if site exists in API, create if not
+        if (currentSitePathFull) {
+          try {
+            // First, check if site exists
+            const checkResponse = await fetch("/api/sites", {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                siteId: currentSitePathFull,
+              }),
+            });
+
+            if (checkResponse.status === 404) {
+              // Site doesn't exist, create it
+              console.log("Site not found in API, creating...");
+
+              // Determine provider and parse owner/repo
+              const provider = getOauthTokenGitlab() !== null ? "gitlab" : "github";
+              const [owner, repo] = currentSitePathFull.split("/");
+
+              const createResponse = await fetch("/api/sites", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  siteId: currentSitePathFull,
+                  provider: provider,
+                  owner: owner,
+                  repo: repo,
+                  branch: "main",
+                  basePath: "/public",
+                }),
+              });
+
+              if (createResponse.ok) {
+                console.log("Site created successfully in API");
+              } else {
+                const errorText = await createResponse.text();
+                console.error("Failed to create site in API:", errorText);
+              }
+            } else if (checkResponse.ok) {
+              console.log("Site already exists in API");
+            } else {
+              console.error("Error checking site existence:", checkResponse.status);
+            }
+          } catch (error) {
+            console.error("Error linking pluribus site:", error);
+          }
+        }
 
         // Reset modified flag after successful deployment
         modified = false;
@@ -163,7 +238,8 @@ function goBackToSiteSelection() {
 
   // Reset state
   currentSiteId = null;
-  currentFilePath = null;
+  currentSitePathFull = null;
+  currentSitePath = null;
   markdownCache = {};
   modified = false;
 
@@ -197,7 +273,7 @@ async function triggerCreateNewSiteGitlab(pageName) {
     await populateMenubar(currentSiteId);
 
     // Open the new page in the editor
-    currentFilePath = newFilePath;
+    currentSitePath = newFilePath;
     editor.setMarkdown(markdownCache[newFilePath]);
   }
 }
@@ -207,7 +283,12 @@ async function updateLastDeployTime() {
     return;
   }
 
-  const lastDeployTime = await getLatestPagesDeployTimeGitlab(currentSiteId);
+  let lastDeployTime;
+  if (getOauthTokenGitlab() !== null) {
+    lastDeployTime = await getLatestPagesDeployTimeGitlab(currentSiteId);
+  } else if (getOauthTokenGithub() !== null) {
+    lastDeployTime = await getLatestPagesDeployTimeGithub(currentSiteId);
+  }
   const lastUpdatedLabel = document.getElementById("last-updated-time-label");
   if (lastDeployTime) {
     const oldText = lastUpdatedLabel.textContent;
@@ -258,12 +339,16 @@ function populateSitesList(sites) {
       console.log(`Loading site: ${site.name} (ID: ${site.id})`);
 
       // Set current site ID and clear cache
-      currentSiteId = site.id;
+      if (getOauthTokenGitlab() !== null) {
+        currentSiteId = site.id;
+        currentSitePathFull = site.path_with_namespace;
+      } else if (getOauthTokenGithub() !== null) {
+        currentSiteId = site.full_name;
+        currentSitePathFull = site.full_name;
+      }
+      
       markdownCache = {};
       modified = false;
-
-      await updateLastDeployTime();
-      lastDeployTimeInterval = setInterval(updateLastDeployTime, 5000);
 
       // Update deploy button state (should be disabled since not modified)
       updateDeployButtonState();
@@ -276,14 +361,14 @@ function populateSitesList(sites) {
       const editorContainer = document.getElementById("editorContainer");
       editorContainer.style.display = "flex";
 
-      // Fetch site tree from GitLab
-      const siteTree = await getSiteTreeGitLab(site.id);
-      console.log("Site Tree:", siteTree);
+      // Fetch site tree
+      let markdownFiles;
+      if (getOauthTokenGitlab() !== null) {
+        markdownFiles = await getPublicFilesGitLab(site.id);
+      } else if (getOauthTokenGithub() !== null) {
+        markdownFiles = await getPublicFilesGitHub(site.full_name);
+      }
 
-      // Filter for markdown files and load them into cache
-      const markdownFiles = siteTree.filter(
-        (item) => item.type === "blob" && item.name.endsWith(".md")
-      );
       console.log("Markdown files:", markdownFiles);
       if (markdownFiles.length === 0) {
         // No markdown files found - create a dummy index.md
@@ -293,34 +378,18 @@ function populateSitesList(sites) {
       } else {
         // Load all markdown files into cache
         for (const file of markdownFiles) {
-          const content = await getFileContentGitlab(site.id, file.path);
+          let content;
+          if (getOauthTokenGitlab() !== null) {
+            content = await getFileContentGitlab(site.id, file.path);
+          } else if (getOauthTokenGithub() !== null) {
+            content = await getFileContentGithub(site.id, file.path);
+          }
           markdownCache[file.path] = content;
         }
       }
 
       // Populate menubar from cache
       await populateMenubar(site.id);
-
-      // Set up Visit Site button
-      const pagesUrl = await getPagesUrlGitlab(site.id);
-      const visitSiteButton = document.getElementById("visitSiteButton");
-      visitSiteButton.onclick = function () {
-        if (pagesUrl) {
-          window.open(pagesUrl, "_blank");
-        }
-      };
-      if (pagesUrl) {
-        console.log("Pages URL:", pagesUrl);
-      } else {
-        console.log("Pages URL not available yet");
-      }
-
-      // Update last deployed time immediately
-      await updateLastDeployTime();
-
-      // Set up interval to update every 5 seconds
-      lastDeployTimeInterval = setInterval(updateLastDeployTime, 5000);
-      console.log("Started last deploy time update interval");
 
       // Load the editor
       loadToastEditor();
@@ -336,9 +405,9 @@ function populateSitesList(sites) {
             // Set up editor change listener to update cache
             editor.off("change");
             editor.on("change", function () {
-              if (currentFilePath) {
-                markdownCache[currentFilePath] = editor.getMarkdown();
-                console.log(`Cached content for ${currentFilePath}`);
+              if (currentSitePath) {
+                markdownCache[currentSitePath] = editor.getMarkdown();
+                console.log(`Cached content for ${currentSitePath}`);
                 modified = true;
                 updateDeployButtonState();
               }
@@ -468,13 +537,18 @@ async function populateMenubar(siteId) {
               delete markdownCache[oldFilePath];
             } else {
               // If not in cache yet, fetch it first then rename
-              const content = await getFileContentGitlab(siteId, oldFilePath);
+              let content;
+              if (getOauthTokenGitlab() !== null) {
+                content = await getFileContentGitlab(siteId, oldFilePath);
+              } else if (getOauthTokenGithub() !== null) {
+                content = await getFileContentGithub(siteId, oldFilePath);
+              }
               markdownCache[newFilePath] = content;
             }
 
             // Update current file path if it was the renamed file
-            if (currentFilePath === oldFilePath) {
-              currentFilePath = newFilePath;
+            if (currentSitePath === oldFilePath) {
+              currentSitePath = newFilePath;
               editor.setMarkdown(markdownCache[newFilePath]);
             }
 
@@ -529,9 +603,9 @@ async function populateMenubar(siteId) {
           delete markdownCache[file.path];
 
           // Clear editor if the deleted file was open
-          if (currentFilePath === file.path) {
+          if (currentSitePath === file.path) {
             editor.setMarkdown("");
-            currentFilePath = null;
+            currentSitePath = null;
           }
 
           // Mark as modified
@@ -573,9 +647,13 @@ async function populateMenubar(siteId) {
         fileContent = markdownCache[file.path];
         modified = true;
       } else {
-        // Fetch from GitLab
+        // Fetch from remote
         console.log(`Fetching content for ${file.path}`);
-        fileContent = await getFileContentGitlab(siteId, file.path);
+        if (getOauthTokenGitlab() !== null) {
+          fileContent = await getFileContentGitlab(siteId, file.path);
+        } else if (getOauthTokenGithub() !== null) {
+          fileContent = await getFileContentGithub(siteId, file.path);
+        }
         markdownCache[file.path] = fileContent;
         modified = false;
       }
@@ -583,7 +661,7 @@ async function populateMenubar(siteId) {
       updateDeployButtonState();
 
       // Update current file path
-      currentFilePath = file.path;
+      currentSitePath = file.path;
 
       // Set editor content
       editor.setMarkdown(fileContent);

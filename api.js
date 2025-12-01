@@ -12,7 +12,7 @@ const GITHUB_REDIRECT_URI =
   "https://pluribus-me.pages.dev/github/oauth/callback";
 
 var GITLAB_USER_ID = null;
-var GITHUB_USER_ID = null;
+var GITHUB_USERNAME = null;
 
 const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "pluribus.me.gitlab.oauth_token";
 const STORAGE_KEY_GITHUB_OAUTH_TOKEN = "pluribus.me.github.oauth_token";
@@ -102,14 +102,10 @@ async function getGitlabUserId() {
     return GITLAB_USER_ID;
   }
 
-  const oauthToken = sessionStorage.getItem(STORAGE_KEY_GITLAB_OAUTH_TOKEN);
-
-  if (!oauthToken) return null;
-
   const response = await fetch("https://gitlab.com/api/v4/user", {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${oauthToken}`,
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
     },
   });
 
@@ -124,19 +120,15 @@ async function getGitlabUserId() {
   return data.id;
 }
 
-async function getGithubUserId() {
-  if (GITHUB_USER_ID) {
-    return GITHUB_USER_ID;
+async function getGithubUsername() {
+  if (GITHUB_USERNAME) {
+    return GITHUB_USERNAME;
   }
-
-  const oauthToken = sessionStorage.getItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN);
-
-  if (!oauthToken) return null;
 
   const response = await fetch("https://api.github.com/user", {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${oauthToken}`,
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
       Accept: "application/vnd.github+json",
     },
   });
@@ -145,11 +137,11 @@ async function getGithubUserId() {
 
   const data = await response.json();
 
-  GITHUB_USER_ID = data.id;
+  GITHUB_USERNAME = data.login;
 
-  console.log("GitHub User ID:", data.id);
+  console.log("GitHub User ID:", data.login);
 
-  return data.id;
+  return data.login;
 }
 
 async function getSitesGitLab() {
@@ -181,6 +173,37 @@ async function getSitesGitLab() {
   return sites;
 }
 
+async function getSitesGitHub() {
+  const githubUsername = await getGithubUsername();
+  const githubSitesUrl = `https://api.github.com/users/${githubUsername}/repos`;
+  const payload = {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+    },
+  };
+
+  const response = await fetch(githubSitesUrl, payload);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const responseJson = await response.json();
+
+  console.log("GitHub Repos:", responseJson);
+
+  var sites = [];
+  for (const site of responseJson) {
+    const description = site.description.toLowerCase();
+    if (description.includes("pluribus owo")) {
+      sites.push(site);
+    }
+  }
+
+  return sites;
+}
+
 async function createSiteGitlab(siteName, siteDescription) {
   const gitlabCreateSiteUrl = "https://gitlab.com/api/v4/projects";
   const payload = {
@@ -192,9 +215,9 @@ async function createSiteGitlab(siteName, siteDescription) {
     body: JSON.stringify({
       name: `${siteName}`,
       path: `${siteName.toLowerCase().replace(/\s+/g, "-")}-pluribus-owo-site`,
-      description: `${siteName}\n${siteDescription}\n\nA Pluribus OwO site created with the Pluribus.me site builder`,
+      description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`,
       visibility: "private",
-      pages_access_level: "public",
+      pages_access_level: "disabled",
     }),
   };
 
@@ -207,6 +230,34 @@ async function createSiteGitlab(siteName, siteDescription) {
   const responseJson = await response.json();
 
   const siteId = responseJson.id;
+
+  return siteId;
+}
+
+async function createSiteGithub(siteName, siteDescription) {
+  const gitlabCreateSiteUrl = "https://api.github.com/user/repos";
+  const payload = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+    },
+    body: JSON.stringify({
+      name: `${siteName}`,
+      description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`,
+      private: false
+    }),
+  };
+
+  const response = await fetch(gitlabCreateSiteUrl, payload);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const responseJson = await response.json();
+
+  const siteId = responseJson.full_name;
 
   return siteId;
 }
@@ -238,15 +289,25 @@ async function initialCommitGitlab(siteId) {
   return response.ok;
 }
 
-async function apiRequest(url, body) {
-  const response = await fetch(url, body);
+async function initialCommitGithub(siteId) {
+  const githubCommitUrl = `https://api.github.com/repos/${siteId}/contents/public/pages.json`;
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
+  const payload = {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      message: "Initial GitHub Pages setup",
+      content: btoa('[]'), // Base64 encode the content
+    }),
+  };
 
-  const data = await response.json();
-  return data;
+  const response = await fetch(githubCommitUrl, payload);
+
+  return response.ok;
 }
 
 async function getFileContentGitlab(siteId, filePath) {
@@ -270,7 +331,31 @@ async function getFileContentGitlab(siteId, filePath) {
   return responseText;
 }
 
-async function getSiteTreeGitLab(siteId) {
+async function getFileContentGithub(siteId, filePath) {
+  const githubFileUrl = `https://api.github.com/repos/${siteId}/contents/${filePath}`;
+  const payload = {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  };
+
+  const response = await fetch(githubFileUrl, payload);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const responseJson = await response.json();
+
+  // GitHub returns base64-encoded content, so we need to decode it
+  const content = atob(responseJson.content);
+
+  return content;
+}
+
+async function getPublicFilesGitLab(siteId) {
   const gitlabSiteTreeUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/tree?recursive=true`;
   const payload = {
     method: "GET",
@@ -287,69 +372,42 @@ async function getSiteTreeGitLab(siteId) {
 
   const responseJson = await response.json();
 
-  return responseJson;
+  console.log("Site Tree:", siteTree);
+
+  // Get list of markdown files in GitLab
+  const gitlabMarkdownFiles = responseJson
+    .filter((item) => item.type === "blob" && item.path.endsWith(".md") && item.path.startsWith("public/"))
+    .map((item) => item.path);
+
+  return gitlabMarkdownFiles;
 }
 
-async function isPipelineRunningGitlab(siteId) {
-  const gitlabPipelinesUrl = `https://gitlab.com/api/v4/projects/${siteId}/pipelines/latest`;
+async function getPublicFilesGitHub(siteName) {
+  const githubSiteTreeUrl = `https://api.github.com/repos/${siteName}/git/trees/main?recursive=1`;
   const payload = {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
     },
   };
 
-  const response = await fetch(gitlabPipelinesUrl, payload);
+  const response = await fetch(githubSiteTreeUrl, payload);
 
   if (!response.ok) {
-    return true;
+    return [];
   }
 
   const responseJson = await response.json();
 
-  return responseJson.finished_at == null;
-}
+  console.log("Site Tree:", responseJson.tree);
 
-async function getPagesUrlGitlab(siteId) {
-  const gitlabPagesUrl = `https://gitlab.com/api/v4/projects/${siteId}/pages`;
-  const payload = {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGitlab()}`,
-    },
-  };
+  // Get list of markdown files in GitHub
+  const githubMarkdownFiles = responseJson.tree
+    .filter((item) => item.type === "blob" && item.path.endsWith(".md") && item.path.startsWith("public/"))
+    .map((item) => item.path);
 
-  const response = await fetch(gitlabPagesUrl, payload);
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const responseJson = await response.json();
-
-  return responseJson.url;
-}
-
-async function getLatestPagesDeployTimeGitlab(siteId) {
-  const gitlabPagesUrl = `https://gitlab.com/api/v4/projects/${siteId}/pages`;
-  const payload = {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGitlab()}`,
-    },
-  };
-
-  const response = await fetch(gitlabPagesUrl, payload);
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const responseJson = await response.json();
-
-  const deployment = responseJson.deployments[0];
-
-  return deployment ? new Date(deployment.created_at) : null;
+  return githubMarkdownFiles;
 }
 
 async function deployChangesGitlab(siteId) {
@@ -377,15 +435,9 @@ async function deployChangesGitlab(siteId) {
   console.log(owoTemplate);
   console.log(gitlabCiTemplate);
 
-  const siteTree = await getSiteTreeGitLab(siteId);
-  console.log("Site Tree:", siteTree);
+  const gitlabMarkdownFiles = await getPublicFilesGitLab(siteId);
 
   var commitActions = [];
-
-  // Get list of markdown files in GitLab
-  const gitlabMarkdownFiles = siteTree
-    .filter((item) => item.type === "blob" && item.path.endsWith(".md") && item.path.startsWith("public/"))
-    .map((item) => item.path);
 
   if (gitlabMarkdownFiles.length === 0) {
     // Initial commit with .gitlab-ci.yml
@@ -421,7 +473,7 @@ async function deployChangesGitlab(siteId) {
     console.log("Preparing to update file:", filePath);
 
     var crudAction = null;
-    if (siteTree.map((f) => f.path).includes(filePath)) {
+    if (gitlabMarkdownFiles.map((f) => f.path).includes(filePath)) {
       crudAction = "update";
     } else {
       crudAction = "create";
@@ -480,6 +532,263 @@ async function deployChangesGitlab(siteId) {
   return true;
 }
 
+async function deployChangesGithub(siteId) {
+  modified = false;
+  updateDeployButtonState();
+
+  var owoTemplateResp = await fetch("owo-template.html", {
+    method: "GET",
+    headers: {
+      "Cache-Control": "no-cache, must-revalidate",
+    },
+  });
+  const owoTemplate = await owoTemplateResp.text();
+
+  console.log(owoTemplate);
+
+  const githubMarkdownFiles = await getPublicFilesGitHub(siteId);
+
+  // Get list of markdown files in cache
+  const cacheMarkdownFiles = Object.keys(markdownCache).filter(path => path.endsWith(".md"));
+
+  // Step 1: Get the current commit SHA
+  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!refResponse.ok) {
+    modified = true;
+    updateDeployButtonState();
+    console.error("Failed to get current commit");
+    return false;
+  }
+
+  const refData = await refResponse.json();
+  const currentCommitSha = refData.object.sha;
+
+  // Step 2: Get the current commit to get the tree SHA
+  const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!commitResponse.ok) {
+    modified = true;
+    updateDeployButtonState();
+    console.error("Failed to get commit data");
+    return false;
+  }
+
+  const commitData = await commitResponse.json();
+  const baseTreeSha = commitData.tree.sha;
+
+  // Step 3: Create blobs and build tree items
+  const treeItems = [];
+
+  // Handle deletions: files in GitHub but not in cache
+  for (const githubFile of githubMarkdownFiles) {
+    if (!cacheMarkdownFiles.includes(githubFile)) {
+      console.log("Preparing to delete file:", githubFile);
+
+      // Mark files for deletion (sha: null)
+      treeItems.push({
+        path: githubFile.replace(".md", ".html"),
+        mode: "100644",
+        type: "blob",
+        sha: null,
+      });
+      treeItems.push({
+        path: githubFile,
+        mode: "100644",
+        type: "blob",
+        sha: null,
+      });
+    }
+  }
+
+  // Handle creates and updates: files in cache
+  for (const filePath in markdownCache) {
+    console.log("Preparing to update file:", filePath);
+
+    const isNewFile = !githubMarkdownFiles.map((f) => f.path).includes(filePath);
+
+    if (isNewFile) {
+      // Create blob for .html file
+      const htmlBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getOauthTokenGithub()}`,
+          Accept: "application/vnd.github+json",
+        },
+        body: JSON.stringify({
+          content: btoa(owoTemplate),
+          encoding: "base64",
+        }),
+      });
+
+      if (!htmlBlobResponse.ok) {
+        modified = true;
+        updateDeployButtonState();
+        console.error("Failed to create HTML blob");
+        return false;
+      }
+
+      const htmlBlobData = await htmlBlobResponse.json();
+
+      treeItems.push({
+        path: filePath.replace(".md", ".html"),
+        mode: "100644",
+        type: "blob",
+        sha: htmlBlobData.sha,
+      });
+    }
+
+    // Create blob for .md file
+    const mdBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        content: btoa(markdownCache[filePath]),
+        encoding: "base64",
+      }),
+    });
+
+    if (!mdBlobResponse.ok) {
+      modified = true;
+      updateDeployButtonState();
+      console.error("Failed to create MD blob");
+      return false;
+    }
+
+    const mdBlobData = await mdBlobResponse.json();
+
+    treeItems.push({
+      path: filePath,
+      mode: "100644",
+      type: "blob",
+      sha: mdBlobData.sha,
+    });
+  }
+
+  if (treeItems.length > 0) {
+    // Update pages.json
+    const pages = cacheMarkdownFiles
+      .map((path) => path.replace("public/", "").replace(".md", ""));
+
+    const pagesBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        content: btoa(JSON.stringify(pages)),
+        encoding: "base64",
+      }),
+    });
+
+    if (!pagesBlobResponse.ok) {
+      modified = true;
+      updateDeployButtonState();
+      console.error("Failed to create pages.json blob");
+      return false;
+    }
+
+    const pagesBlobData = await pagesBlobResponse.json();
+
+    treeItems.push({
+      path: "public/pages.json",
+      mode: "100644",
+      type: "blob",
+      sha: pagesBlobData.sha,
+    });
+
+    // Step 4: Create a new tree
+    const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: treeItems,
+      }),
+    });
+
+    if (!treeResponse.ok) {
+      modified = true;
+      updateDeployButtonState();
+      console.error("Failed to create tree");
+      return false;
+    }
+
+    const treeData = await treeResponse.json();
+
+    // Step 5: Create a new commit
+    const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        message: "Update site content",
+        tree: treeData.sha,
+        parents: [currentCommitSha],
+      }),
+    });
+
+    if (!newCommitResponse.ok) {
+      modified = true;
+      updateDeployButtonState();
+      console.error("Failed to create commit");
+      return false;
+    }
+
+    const newCommitData = await newCommitResponse.json();
+
+    // Step 6: Update the reference
+    const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        sha: newCommitData.sha,
+      }),
+    });
+
+    if (updateRefResponse.ok) {
+      console.log("Deployed changes to GitHub");
+    } else {
+      modified = true;
+      console.error("Failed to deploy changes to GitHub");
+    }
+    updateDeployButtonState();
+    return updateRefResponse.ok;
+  }
+
+  return true;
+}
+
 async function createPageGitlab(siteId, pageName) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
@@ -524,6 +833,146 @@ async function createPageGitlab(siteId, pageName) {
   return response.ok;
 }
 
+async function createPageGithub(siteId, pageName) {
+  var owoTemplateResp = await fetch("owo-template.html", {
+    method: "GET",
+    headers: {
+      "Cache-Control": "no-cache, must-revalidate",
+    },
+  });
+  const owoTemplate = await owoTemplateResp.text();
+
+  console.log(owoTemplate);
+
+  // Step 1: Get the current commit SHA
+  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!refResponse.ok) return false;
+
+  const refData = await refResponse.json();
+  const currentCommitSha = refData.object.sha;
+
+  // Step 2: Get the current commit to get the tree SHA
+  const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!commitResponse.ok) return false;
+
+  const commitData = await commitResponse.json();
+  const baseTreeSha = commitData.tree.sha;
+
+  // Step 3: Create blobs for HTML and MD files
+  const htmlBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      content: btoa(owoTemplate),
+      encoding: "base64",
+    }),
+  });
+
+  if (!htmlBlobResponse.ok) return false;
+
+  const htmlBlobData = await htmlBlobResponse.json();
+
+  const mdBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      content: btoa(`# ${pageName}\n\nThis is your new page.`),
+      encoding: "base64",
+    }),
+  });
+
+  if (!mdBlobResponse.ok) return false;
+
+  const mdBlobData = await mdBlobResponse.json();
+
+  // Step 4: Create a new tree
+  const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: [
+        {
+          path: `public/${pageName}.html`,
+          mode: "100644",
+          type: "blob",
+          sha: htmlBlobData.sha,
+        },
+        {
+          path: `public/${pageName}.md`,
+          mode: "100644",
+          type: "blob",
+          sha: mdBlobData.sha,
+        },
+      ],
+    }),
+  });
+
+  if (!treeResponse.ok) return false;
+
+  const treeData = await treeResponse.json();
+
+  // Step 5: Create a new commit
+  const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      message: `Create new page: ${pageName}`,
+      tree: treeData.sha,
+      parents: [currentCommitSha],
+    }),
+  });
+
+  if (!newCommitResponse.ok) return false;
+
+  const newCommitData = await newCommitResponse.json();
+
+  // Step 6: Update the reference
+  const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      sha: newCommitData.sha,
+    }),
+  });
+
+  return updateRefResponse.ok;
+}
+
 async function deletePageGitlab(siteId, pageName) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
@@ -556,7 +1005,100 @@ async function deletePageGitlab(siteId, pageName) {
   return response.ok;
 }
 
+async function deletePageGithub(siteId, pageName) {
+  // Step 1: Get the current commit SHA
+  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
 
+  if (!refResponse.ok) return false;
+
+  const refData = await refResponse.json();
+  const currentCommitSha = refData.object.sha;
+
+  // Step 2: Get the current commit to get the tree SHA
+  const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!commitResponse.ok) return false;
+
+  const commitData = await commitResponse.json();
+  const baseTreeSha = commitData.tree.sha;
+
+  // Step 3: Create a new tree with deleted files (sha: null)
+  const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: [
+        {
+          path: `public/${pageName}.html`,
+          mode: "100644",
+          type: "blob",
+          sha: null,
+        },
+        {
+          path: `public/${pageName}.md`,
+          mode: "100644",
+          type: "blob",
+          sha: null,
+        },
+      ],
+    }),
+  });
+
+  if (!treeResponse.ok) return false;
+
+  const treeData = await treeResponse.json();
+
+  // Step 4: Create a new commit
+  const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      message: `Delete page: ${pageName}`,
+      tree: treeData.sha,
+      parents: [currentCommitSha],
+    }),
+  });
+
+  if (!newCommitResponse.ok) return false;
+
+  const newCommitData = await newCommitResponse.json();
+
+  // Step 5: Update the reference
+  const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      sha: newCommitData.sha,
+    }),
+  });
+
+  return updateRefResponse.ok;
+}
 
 async function renamePageGitlab(siteId, pageName, newPageName) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
@@ -590,4 +1132,173 @@ async function renamePageGitlab(siteId, pageName, newPageName) {
   const response = await fetch(gitlabCreateFileUrl, payload);
 
   return response.ok;
+}
+
+async function renamePageGithub(siteId, pageName, newPageName) {
+  // Step 1: Get the current commit SHA
+  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!refResponse.ok) return false;
+
+  const refData = await refResponse.json();
+  const currentCommitSha = refData.object.sha;
+
+  // Step 2: Get the current commit to get the tree SHA
+  const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!commitResponse.ok) return false;
+
+  const commitData = await commitResponse.json();
+  const baseTreeSha = commitData.tree.sha;
+
+  // Step 3: Get the content of existing files
+  const htmlFileResponse = await fetch(`https://api.github.com/repos/${siteId}/contents/public/${pageName}.html`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!htmlFileResponse.ok) return false;
+
+  const htmlFileData = await htmlFileResponse.json();
+
+  const mdFileResponse = await fetch(`https://api.github.com/repos/${siteId}/contents/public/${pageName}.md`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!mdFileResponse.ok) return false;
+
+  const mdFileData = await mdFileResponse.json();
+
+  // Step 4: Create blobs with the existing content
+  const htmlBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      content: htmlFileData.content,
+      encoding: "base64",
+    }),
+  });
+
+  if (!htmlBlobResponse.ok) return false;
+
+  const htmlBlobData = await htmlBlobResponse.json();
+
+  const mdBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      content: mdFileData.content,
+      encoding: "base64",
+    }),
+  });
+
+  if (!mdBlobResponse.ok) return false;
+
+  const mdBlobData = await mdBlobResponse.json();
+
+  // Step 5: Create a new tree with renamed files
+  const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: [
+        // Add new files with new names
+        {
+          path: `public/${newPageName}.html`,
+          mode: "100644",
+          type: "blob",
+          sha: htmlBlobData.sha,
+        },
+        {
+          path: `public/${newPageName}.md`,
+          mode: "100644",
+          type: "blob",
+          sha: mdBlobData.sha,
+        },
+        // Delete old files
+        {
+          path: `public/${pageName}.html`,
+          mode: "100644",
+          type: "blob",
+          sha: null,
+        },
+        {
+          path: `public/${pageName}.md`,
+          mode: "100644",
+          type: "blob",
+          sha: null,
+        },
+      ],
+    }),
+  });
+
+  if (!treeResponse.ok) return false;
+
+  const treeData = await treeResponse.json();
+
+  // Step 6: Create a new commit
+  const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      message: `Rename page: ${pageName} --> ${newPageName}`,
+      tree: treeData.sha,
+      parents: [currentCommitSha],
+    }),
+  });
+
+  if (!newCommitResponse.ok) return false;
+
+  const newCommitData = await newCommitResponse.json();
+
+  // Step 7: Update the reference
+  const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      sha: newCommitData.sha,
+    }),
+  });
+
+  return updateRefResponse.ok;
 }
