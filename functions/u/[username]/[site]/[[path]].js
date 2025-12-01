@@ -97,17 +97,18 @@ export async function onRequest(context) {
   const headers = new Headers();
   // Basic cache: adjust as you like
   headers.set("Cache-Control", "no-cache, must-revalidate");
+  let updatedBody;
   if (filePath.endsWith(".html") || filePath.endsWith(".htm")) {
     // Serve HTML files as webpages
     headers.set("Content-Type", "text/html; charset=utf-8");
+    updatedBody = await upstreamRes.text();
+    updatedBody.replace("</head>", `<script>let basePath=${basePath}</script></head>`)
+  } else {
+    updatedBody = upstreamRes.body;
   }
 
-  const basePathEncoded = encodeURIComponent(basePath);
 
-  // Add query param for basePath to help client-side routing if needed
-  document.location.hash = `?basePath=${basePathEncoded}`;
-
-  return new Response(upstreamRes.body, {
+  return new Response(updatedBody, {
     status: upstreamRes.status,
     headers
   });
