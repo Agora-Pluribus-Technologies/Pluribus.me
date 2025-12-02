@@ -13,7 +13,7 @@ export async function onRequestGet(context) {
 
   let clientId;
   let clientSecret;
-  if (request.url.origin.includes("develop")) {
+  if (url.origin.includes("develop")) {
     clientId = env.GITHUB_DEV_CLIENT_ID;
     clientSecret = env.GITHUB_DEV_CLIENT_SECRET;
   } else {
