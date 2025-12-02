@@ -61,9 +61,19 @@ function displayLoginButtons() {
 
   githubLoginButton.addEventListener("click", () => {
     // Build the authorization URL
+    let clientId;
+    let redirectUri;
+    if (document.location.origin.includes("develop")) {
+      clientId = GITHUB_DEV_CLIENT_ID;
+      redirectUri = GITHUB_DEV_REDIRECT_URI;
+    } else {
+      clientId = GITHUB_CLIENT_ID;
+      redirectUri = GITHUB_REDIRECT_URI;
+    }
+
     const params = new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
-      redirect_uri: GITHUB_REDIRECT_URI,
+      client_id: clientId,
+      redirect_uri: redirectUri,
       scope: GITHUB_CLIENT_SCOPE,
     });
 
@@ -80,9 +90,20 @@ function displayLoginButtons() {
 
   gitlabLoginButton.addEventListener("click", () => {
     // Build the authorization URL
+    
+    // Build the authorization URL
+    let clientId;
+    let redirectUri;
+    if (document.location.origin.includes("develop")) {
+      clientId = GITLAB_DEV_CLIENT_ID;
+      redirectUri = GITLAB_DEV_REDIRECT_URI;
+    } else {
+      clientId = GITLAB_CLIENT_ID;
+      redirectUri = GITLAB_REDIRECT_URI;
+    }
     const params = new URLSearchParams({
-      client_id: GITLAB_CLIENT_ID,
-      redirect_uri: GITLAB_REDIRECT_URI,
+      client_id: clientId,
+      redirect_uri: redirectUri,
       scope: GITLAB_CLIENT_SCOPE,
       response_type: "code",
     });
