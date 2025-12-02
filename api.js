@@ -10,7 +10,7 @@ const GITHUB_CLIENT_ID = "Ov23liqELtwrv29MS9Wc";
 const GITHUB_REDIRECT_URI = "https://pluribus.me/github/oauth/callback";
 const GITHUB_DEV_CLIENT_ID = "Ov23liwXpCsvFNlZJ0x8";
 const GITHUB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/github/oauth/callback";
-const GITHUB_CLIENT_SCOPE = "repo user";
+const GITHUB_CLIENT_SCOPE = "repo user delete_repo";
 
 var GITLAB_USER_ID = null;
 var GITHUB_USERNAME = null;
@@ -187,8 +187,9 @@ async function getSitesGitLab() {
 
   var sites = [];
   for (const site of responseJson) {
+    const name = site.name.toLowerCase();
     const description = site.description.toLowerCase();
-    if (description.includes("pluribus owo")) {
+    if (description.includes("pluribus owo") && !name.includes("deletion_scheduled")) {
       sites.push(site);
     }
   }
