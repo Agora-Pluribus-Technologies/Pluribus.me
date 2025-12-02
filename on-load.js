@@ -7,7 +7,6 @@ let lastDeployTimeInterval = null;
 let modified = false;
 
 document.addEventListener("DOMContentLoaded", async function () {
-  window.alert("This application is in early development and is not yet operational.");
   if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null) {
     console.log("Access tokens missing or expired");
     displayLoginButtons();
