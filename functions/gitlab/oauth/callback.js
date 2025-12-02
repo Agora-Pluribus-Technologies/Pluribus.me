@@ -14,13 +14,16 @@ export async function onRequestGet(context) {
     client_secret: env.GITLAB_CLIENT_SECRET,
     code,
     grant_type: "authorization_code",
-    redirect_uri: `https://pluribus.me/gitlab/oauth/callback`
+    redirect_uri: "https://pluribus.me/gitlab/oauth/callback"
   });
 
   // Exchange the code for an access token
   const tokenResponse = await fetch("https://gitlab.com/oauth/token", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Cache-Control": "no-cache"
+    },
     body: tokenParams
   });
 

@@ -21,6 +21,7 @@ export async function onRequestGet(context) {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
+      "Cache-Control": "no-cache",
       "Accept": "application/json"
     },
     body: tokenParams
