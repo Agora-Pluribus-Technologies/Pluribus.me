@@ -9,6 +9,9 @@ let modified = false;
 // Global cache for sites list
 let sitesCache = [];
 
+// Interval for checking site availability
+let siteAvailabilityInterval = null;
+
 document.addEventListener("DOMContentLoaded", async function () {
   if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null) {
     console.log("Access tokens missing or expired");
@@ -264,10 +267,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 function goBackToSiteSelection() {
   console.log("Returning to site selection");
 
-  // Clear existing interval if any
+  // Clear existing intervals if any
   if (lastDeployTimeInterval) {
     clearInterval(lastDeployTimeInterval);
     lastDeployTimeInterval = null;
+  }
+
+  if (siteAvailabilityInterval) {
+    clearInterval(siteAvailabilityInterval);
+    siteAvailabilityInterval = null;
+    console.log("Cleared site availability check interval");
   }
 
   // Reset state
@@ -331,13 +340,65 @@ function updateDeployButtonState() {
   }
 }
 
+async function checkSiteAvailability() {
+  if (!currentSitePathFull) {
+    return;
+  }
+
+  const visitSiteButton = document.getElementById("visitSiteButton");
+  const pluribusSiteUrl = `/s/${currentSitePathFull}`;
+
+  try {
+    console.log("Checking site availability:", pluribusSiteUrl);
+    const response = await fetch(pluribusSiteUrl, {
+      method: "HEAD",
+      cache: "no-cache"
+    });
+
+    if (response.status === 404) {
+      // Site not available, disable button
+      visitSiteButton.disabled = true;
+      visitSiteButton.style.opacity = "0.5";
+      visitSiteButton.style.cursor = "not-allowed";
+      console.log("Site not available (404), button disabled");
+    } else {
+      // Site is available, enable button and stop checking
+      visitSiteButton.disabled = false;
+      visitSiteButton.style.opacity = "1";
+      visitSiteButton.style.cursor = "pointer";
+      console.log("Site is available, button enabled, stopping availability check");
+
+      // Stop the interval
+      if (siteAvailabilityInterval) {
+        clearInterval(siteAvailabilityInterval);
+        siteAvailabilityInterval = null;
+      }
+    }
+  } catch (error) {
+    console.error("Error checking site availability:", error);
+    // On error, disable the button
+    visitSiteButton.disabled = true;
+    visitSiteButton.style.opacity = "0.5";
+    visitSiteButton.style.cursor = "not-allowed";
+  }
+}
+
 function populateSitesList(sites) {
   document.getElementById("sites-list").innerHTML = ""; // Clear existing list
   for (const site of sites) {
+    // Create container for site button and delete button
+    var siteContainer = document.createElement("div");
+    siteContainer.style.display = "flex";
+    siteContainer.style.alignItems = "center";
+    siteContainer.style.gap = "8px";
+    siteContainer.style.marginBottom = "8px";
+
+    // Create site button
     var siteDiv = document.createElement("div");
     siteDiv.classList.add("site-button", "site-item", "btn", "btn-default");
     siteDiv.innerText = site.name;
     siteDiv.id = site.id;
+    siteDiv.style.flex = "1";
     siteDiv.addEventListener("click", async function () {
       console.log(`Loading site: ${site.name} (ID: ${site.id})`);
 
@@ -359,6 +420,20 @@ function populateSitesList(sites) {
         };
         visitSiteButton.disabled = false;
         console.log("Visit Site button updated to:", pluribusSiteUrl);
+
+        // Start site availability check
+        // Clear any existing interval first
+        if (siteAvailabilityInterval) {
+          clearInterval(siteAvailabilityInterval);
+          siteAvailabilityInterval = null;
+        }
+
+        // Check immediately
+        checkSiteAvailability();
+
+        // Then check every 5 seconds
+        siteAvailabilityInterval = setInterval(checkSiteAvailability, 5000);
+        console.log("Started site availability check interval");
       }
 
       markdownCache = {};
@@ -435,7 +510,72 @@ function populateSitesList(sites) {
         }
       }, 100);
     });
-    document.getElementById("sites-list").appendChild(siteDiv);
+
+    // Create delete button
+    var deleteButton = document.createElement("button");
+    deleteButton.textContent = "×";
+    deleteButton.classList.add("btn", "btn-danger");
+    deleteButton.style.fontSize = "20px";
+    deleteButton.style.padding = "6px 12px";
+    deleteButton.style.fontWeight = "bold";
+    deleteButton.title = "Delete site";
+    deleteButton.addEventListener("click", async function (event) {
+      event.stopPropagation(); // Prevent triggering site click
+
+      const confirmMessage = `Are you sure you want to delete "${site.name}"? This action cannot be undone and will permanently delete the repository.`;
+      if (confirm(confirmMessage)) {
+        console.log("Deleting site:", site.name);
+
+        // Disable button during deletion
+        deleteButton.disabled = true;
+        deleteButton.textContent = "...";
+        deleteButton.style.opacity = "0.5";
+
+        let success = false;
+        let siteIdToDelete;
+
+        if (getOauthTokenGitlab() !== null) {
+          siteIdToDelete = site.id;
+          success = await deleteSiteGitlab(siteIdToDelete);
+        } else if (getOauthTokenGithub() !== null) {
+          siteIdToDelete = site.full_name;
+          success = await deleteSiteGithub(siteIdToDelete);
+        }
+
+        if (success) {
+          console.log("Site deleted successfully");
+
+          // Remove from cache
+          sitesCache = sitesCache.filter(s => {
+            if (getOauthTokenGitlab() !== null) {
+              return s.id !== siteIdToDelete;
+            } else {
+              return s.full_name !== siteIdToDelete;
+            }
+          });
+
+          // Repopulate the list
+          populateSitesList(sitesCache);
+
+          alert("Site deleted successfully!");
+        } else {
+          console.error("Failed to delete site");
+          alert("Failed to delete site. Please try again.");
+
+          // Re-enable button on failure
+          deleteButton.disabled = false;
+          deleteButton.textContent = "×";
+          deleteButton.style.opacity = "1";
+        }
+      }
+    });
+
+    // Add both buttons to container
+    siteContainer.appendChild(siteDiv);
+    siteContainer.appendChild(deleteButton);
+
+    // Add container to sites list
+    document.getElementById("sites-list").appendChild(siteContainer);
   }
 }
 

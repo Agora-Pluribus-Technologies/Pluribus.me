@@ -285,6 +285,47 @@ async function createSiteGithub(siteName, siteDescription) {
   return siteId;
 }
 
+async function deleteSiteGitlab(siteId) {
+  const gitlabDeleteSiteUrl = `https://gitlab.com/api/v4/projects/${siteId}`;
+  const payload = {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+    },
+  };
+
+  const response = await fetch(gitlabDeleteSiteUrl, payload);
+
+  if (!response.ok) {
+    console.error("Failed to delete GitLab site:", response.status);
+    return false;
+  }
+
+  console.log("GitLab site deleted successfully:", siteId);
+  return true;
+}
+
+async function deleteSiteGithub(siteId) {
+  const githubDeleteSiteUrl = `https://api.github.com/repos/${siteId}`;
+  const payload = {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  };
+
+  const response = await fetch(githubDeleteSiteUrl, payload);
+
+  if (!response.ok) {
+    console.error("Failed to delete GitHub site:", response.status);
+    return false;
+  }
+
+  console.log("GitHub site deleted successfully:", siteId);
+  return true;
+}
+
 async function initialCommitGitlab(siteId) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
