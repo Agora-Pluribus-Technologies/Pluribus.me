@@ -117,14 +117,18 @@
 <body>
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
-      await createMenubar();
-      await fetchPageContent();
+      const origin = document.location.origin;
+      // https://pluribus.me/s/username/sitename/path/to/page.html --> https://pluribus.me/s/username/sitename
+      const basePath = document.location.pathname.split('/').slice(0, 4).join("/");
+      const baseUrl = `${origin}${basePath}`;
+      await createMenubar(baseUrl);
+      await fetchPageContent(baseUrl);
     });
 
-    async function createMenubar() {
+    async function createMenubar(baseUrl) {
       const menubar = document.createElement("nav");
       menubar.style.width = "100%";
-      const pagesJsonLink = `${document.location.origin}${document.location.pathname}/pages.json`;
+      const pagesJsonLink = `${baseUrl}/pages.json`;
 
       const content = await fetch(pagesJsonLink, {
         method: "GET",
@@ -144,7 +148,7 @@
           }
           const pageLink = document.createElement("a");
           pageLink.classList.add("menu-link");
-          pageLink.href = `${document.location.origin}${document.location.pathname}/${relPage}`;
+          pageLink.href = `${baseUrl}/${relPage}`;
           pageLink.textContent = page;
           menubar.appendChild(pageLink);
         }
@@ -152,7 +156,7 @@
       }
     }
 
-    async function fetchPageContent() {
+    async function fetchPageContent(baseUrl) {
       marked.setOptions({
         gfm: true,
         breaks: true,
@@ -167,7 +171,7 @@
       var panel = document.createElement("main");
       const errorMessage = "Could not fetch page content<br><br>O_o";
       try {
-        let fetchPathName = `${document.location.origin}${document.location.pathname}/${pathname}.md`;
+        let fetchPathName = `${baseUrl}/${pathname}.md`;
         const content = await fetch(fetchPathName, {
           method: "GET",
           headers: {

@@ -483,14 +483,13 @@ async function deployChangesGitlab(siteId) {
       crudAction = "update";
     } else {
       crudAction = "create";
-
-      // Create the corresponding .html file
-      commitActions.push({
-        action: "create",
-        file_path: filePath.replace(".md", ".html"),
-        content: owoTemplate,
-      });
     }
+    // Create/update the corresponding .html file
+    commitActions.push({
+      action: crudAction,
+      file_path: filePath.replace(".md", ".html"),
+      content: owoTemplate,
+    });
 
     // Create or update the .md file
     commitActions.push({
@@ -625,37 +624,35 @@ async function deployChangesGithub(siteId) {
 
     const isNewFile = !githubMarkdownFiles.map((f) => f.path).includes(filePath);
 
-    if (isNewFile) {
-      // Create blob for .html file
-      const htmlBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getOauthTokenGithub()}`,
-          Accept: "application/vnd.github+json",
-        },
-        body: JSON.stringify({
-          content: btoa(owoTemplate),
-          encoding: "base64",
-        }),
-      });
+    // Create blob for .html file (for both new and existing files)
+    const htmlBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        content: btoa(owoTemplate),
+        encoding: "base64",
+      }),
+    });
 
-      if (!htmlBlobResponse.ok) {
-        modified = true;
-        updateDeployButtonState();
-        console.error("Failed to create HTML blob");
-        return false;
-      }
-
-      const htmlBlobData = await htmlBlobResponse.json();
-
-      treeItems.push({
-        path: filePath.replace(".md", ".html"),
-        mode: "100644",
-        type: "blob",
-        sha: htmlBlobData.sha,
-      });
+    if (!htmlBlobResponse.ok) {
+      modified = true;
+      updateDeployButtonState();
+      console.error("Failed to create HTML blob");
+      return false;
     }
+
+    const htmlBlobData = await htmlBlobResponse.json();
+
+    treeItems.push({
+      path: filePath.replace(".md", ".html"),
+      mode: "100644",
+      type: "blob",
+      sha: htmlBlobData.sha,
+    });
 
     // Create blob for .md file
     const mdBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
