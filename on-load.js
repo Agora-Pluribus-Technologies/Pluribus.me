@@ -50,10 +50,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       event.preventDefault();
 
       // Disable submit button to prevent double clicking
-      const submitButton = event.target.querySelector('button[type="submit"]');
-      const originalButtonText = submitButton.textContent;
+      const submitButton = document.getElementById("create-site-button");
+      const originalButtonText = submitButton.innerText;
       submitButton.disabled = true;
-      submitButton.textContent = "Creating...";
+      submitButton.innerText = "Creating...";
       submitButton.style.opacity = "0.6";
       submitButton.style.cursor = "not-allowed";
 
@@ -130,7 +130,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       } finally {
         // Re-enable submit button
         submitButton.disabled = false;
-        submitButton.textContent = originalButtonText;
+        submitButton.innerText = originalButtonText;
         submitButton.style.opacity = "1";
         submitButton.style.cursor = "pointer";
       }
