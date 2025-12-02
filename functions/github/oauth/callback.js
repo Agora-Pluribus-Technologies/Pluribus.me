@@ -13,7 +13,7 @@ export async function onRequestGet(context) {
     client_id: env.GITHUB_CLIENT_ID,
     client_secret: env.GITHUB_CLIENT_SECRET,
     code,
-    redirect_uri: `${url.origin}/github/oauth/callback`
+    redirect_uri: "https://pluribus.me/github/oauth/callback"
   });
 
   // Exchange the code for an access token with GitHub

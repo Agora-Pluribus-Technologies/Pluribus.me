@@ -14,7 +14,7 @@ export async function onRequestGet(context) {
     client_secret: env.GITLAB_CLIENT_SECRET,
     code,
     grant_type: "authorization_code",
-    redirect_uri: `${url.origin}/gitlab/oauth/callback`
+    redirect_uri: `https://pluribus.me/gitlab/oauth/callback`
   });
 
   // Exchange the code for an access token
