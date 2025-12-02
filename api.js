@@ -180,8 +180,7 @@ async function getSitesGitHub() {
   const payload = {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${getOauthTokenGithub()}`,
-      "Cache-Control": "no-cache",
+      Authorization: `Bearer ${getOauthTokenGithub()}`
     },
   };
 
