@@ -82,45 +82,24 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Clear the form
         document.getElementById("createSiteForm").reset();
 
-        // Refresh the sites list
-        let sites;
+        // Add new site directly to cache
+        console.log("Adding new site to cache");
+
+        // Create a site object with the minimal required fields
+        const newSite = {
+          name: siteName,
+          description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`
+        };
+
         if (getOauthTokenGitlab() !== null) {
-          sites = await getSitesGitLab();
+          newSite.id = siteId;
+          newSite.path_with_namespace = `${siteName.toLowerCase().replace(/\s+/g, "-")}-pluribus-owo-site`;
         } else if (getOauthTokenGithub() !== null) {
-          sites = await getSitesGitHub();
+          newSite.full_name = siteId;
         }
 
-        // Add new site to cache if not returned by endpoint
-        if (sites && siteId) {
-          let siteExists = false;
-          if (getOauthTokenGitlab() !== null) {
-            siteExists = sites.some(site => site.id === siteId);
-          } else if (getOauthTokenGithub() !== null) {
-            siteExists = sites.some(site => site.full_name === siteId);
-          }
-
-          if (!siteExists) {
-            console.log("New site not in API response, adding to cache manually");
-
-            // Create a site object with the minimal required fields
-            const newSite = {
-              name: siteName,
-              description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`
-            };
-
-            if (getOauthTokenGitlab() !== null) {
-              newSite.id = siteId;
-              newSite.path_with_namespace = `${siteName.toLowerCase().replace(/\s+/g, "-")}-pluribus-owo-site`;
-            } else if (getOauthTokenGithub() !== null) {
-              newSite.full_name = siteId;
-            }
-
-            sites.unshift(newSite); // Add to the beginning of the list
-          }
-        }
-
-        // Update the cache
-        sitesCache = sites || [];
+        // Add to the beginning of the cache
+        sitesCache.unshift(newSite);
 
         // Repopulate sites list
         populateSitesList(sitesCache);
