@@ -3,6 +3,8 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
 
+  console.log("search params:", url.searchParams);
+
   // If GitLab didn't send a code, show an error message
   if (!code) {
     return new Response("Missing OAuth code.", { status: 400 });

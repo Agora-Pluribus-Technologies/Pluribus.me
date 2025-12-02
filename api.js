@@ -1,15 +1,16 @@
-const GITLAB_CLIENT_ID =
-  "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf07e8800656";
 const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
+const GITLAB_CLIENT_ID = "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf07e8800656";
+const GITLAB_REDIRECT_URI = "https://pluribus.me/gitlab/oauth/callback";
+const GITLAB_DEV_CLIENT_ID = "31f7d88be4728aeffa2afa1ec6075b959aadf4e4015cd4afa725815a083ece66";
+const GITLAB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/gitlab/oauth/callback";
 const GITLAB_CLIENT_SCOPE = "api";
-const GITLAB_REDIRECT_URI =
-  "https://pluribus.me/gitlab/oauth/callback";
 
-const GITHUB_CLIENT_ID = "Ov23liqELtwrv29MS9Wc";
 const GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize";
+const GITHUB_CLIENT_ID = "Ov23liqELtwrv29MS9Wc";
+const GITHUB_REDIRECT_URI = "https://pluribus.me/github/oauth/callback";
+const GITHUB_DEV_CLIENT_ID = "Ov23liwXpCsvFNlZJ0x8";
+const GITHUB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/github/oauth/callback";
 const GITHUB_CLIENT_SCOPE = "repo user";
-const GITHUB_REDIRECT_URI =
-  "https://pluribus.me/github/oauth/callback";
 
 var GITLAB_USER_ID = null;
 var GITHUB_USERNAME = null;
