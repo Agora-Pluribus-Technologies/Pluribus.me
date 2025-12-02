@@ -3,6 +3,7 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
 
+  console.log("url:", url);
   console.log("search params:", url.searchParams);
 
   // If GitHub didn't send a code, show an error message
@@ -15,7 +16,7 @@ export async function onRequestGet(context) {
     client_id: env.GITHUB_CLIENT_ID,
     client_secret: env.GITHUB_CLIENT_SECRET,
     code,
-    redirect_uri: "https://pluribus.me/github/oauth/callback"
+    redirect_uri: `${url.origin}/github/oauth/callback`
   });
 
   // Exchange the code for an access token with GitHub
@@ -40,7 +41,7 @@ export async function onRequestGet(context) {
   }
 
   // Pass token info via fragment (#token=...) so it doesn't get logged in server logs
-  const redirectUrl = new URL("https://pluribus.me");
+  const redirectUrl = new URL(url.origin);
   redirectUrl.hash = `github_access_token=${tokenData.access_token}`;
 
   return Response.redirect(redirectUrl.toString(), 302);

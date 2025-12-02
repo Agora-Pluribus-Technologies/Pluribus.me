@@ -3,6 +3,7 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
 
+  console.log("url:", url);
   console.log("search params:", url.searchParams);
 
   // If GitLab didn't send a code, show an error message
@@ -16,7 +17,7 @@ export async function onRequestGet(context) {
     client_secret: env.GITLAB_CLIENT_SECRET,
     code,
     grant_type: "authorization_code",
-    redirect_uri: "https://pluribus.me/gitlab/oauth/callback"
+    redirect_uri: `${url.origin}/gitlab/oauth/callback`
   });
 
   // Exchange the code for an access token
@@ -40,7 +41,7 @@ export async function onRequestGet(context) {
   }
 
   // Pass token info via fragment (#token=...) so it doesn't get logged in server logs
-  const redirectUrl = new URL("https://pluribus.me");
+  const redirectUrl = new URL(url.origin);
   redirectUrl.hash = `gitlab_access_token=${tokenData.access_token}`;
 
   return Response.redirect(redirectUrl.toString(), 302);
