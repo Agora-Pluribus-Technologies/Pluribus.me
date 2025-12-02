@@ -14,9 +14,11 @@ export async function onRequestGet(context) {
   let clientId;
   let clientSecret;
   if (url.origin.includes("develop")) {
+    console.log("Develop endpoint");
     clientId = env.GITHUB_DEV_CLIENT_ID;
     clientSecret = env.GITHUB_DEV_CLIENT_SECRET;
   } else {
+    console.log("Prod endpoint");
     clientId = env.GITHUB_CLIENT_ID;
     clientSecret = env.GITHUB_CLIENT_SECRET;
   }
