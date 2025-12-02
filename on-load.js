@@ -6,6 +6,9 @@ let currentSitePathFull = null;
 let lastDeployTimeInterval = null;
 let modified = false;
 
+// Global cache for sites list
+let sitesCache = [];
+
 document.addEventListener("DOMContentLoaded", async function () {
   if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null) {
     console.log("Access tokens missing or expired");
@@ -22,10 +25,13 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.log("GitHub Sites:", sites);
     }
 
+    // Cache the sites list
+    sitesCache = sites || [];
+
     const sitesListHeader = document.getElementById("sites-list-header");
     sitesListHeader.style.display = "block";
 
-    populateSitesList(sites);
+    populateSitesList(sitesCache);
   }
 
   // Warn user before leaving page with unsaved changes
@@ -43,38 +49,91 @@ document.addEventListener("DOMContentLoaded", async function () {
     .addEventListener("submit", async function (event) {
       event.preventDefault();
 
-      const siteName = document.getElementById("siteName").value;
-      const siteDescription = document.getElementById("siteDescription").value;
+      // Disable submit button to prevent double clicking
+      const submitButton = event.target.querySelector('button[type="submit"]');
+      const originalButtonText = submitButton.textContent;
+      submitButton.disabled = true;
+      submitButton.textContent = "Creating...";
+      submitButton.style.opacity = "0.6";
+      submitButton.style.cursor = "not-allowed";
 
-      console.log("Creating new site:", siteName, siteDescription);
+      try {
+        const siteName = document.getElementById("siteName").value;
+        const siteDescription = document.getElementById("siteDescription").value;
 
-      let siteId;
-      if (getOauthTokenGitlab() !== null) {
-        siteId = await createSiteGitlab(siteName, siteDescription);
-        console.log("New GitLab site created with ID:", siteId);
-        await initialCommitGitlab(siteId);
-      } else if (getOauthTokenGithub() !== null) {
-        siteId = await createSiteGithub(siteName, siteDescription);
-        console.log("New GitHub site created with ID:", siteId);
-        await initialCommitGithub(siteId);
+        console.log("Creating new site:", siteName, siteDescription);
+
+        let siteId;
+        if (getOauthTokenGitlab() !== null) {
+          siteId = await createSiteGitlab(siteName, siteDescription);
+          console.log("New GitLab site created with ID:", siteId);
+          await initialCommitGitlab(siteId);
+        } else if (getOauthTokenGithub() !== null) {
+          siteId = await createSiteGithub(siteName, siteDescription);
+          console.log("New GitHub site created with ID:", siteId);
+          await initialCommitGithub(siteId);
+        }
+
+        console.log("Initial commit made for site ID:", siteId);
+
+        // Close the modal
+        $("#createSiteModal").modal("hide");
+
+        // Clear the form
+        document.getElementById("createSiteForm").reset();
+
+        // Refresh the sites list
+        let sites;
+        if (getOauthTokenGitlab() !== null) {
+          sites = await getSitesGitLab();
+        } else if (getOauthTokenGithub() !== null) {
+          sites = await getSitesGitHub();
+        }
+
+        // Add new site to cache if not returned by endpoint
+        if (sites && siteId) {
+          let siteExists = false;
+          if (getOauthTokenGitlab() !== null) {
+            siteExists = sites.some(site => site.id === siteId);
+          } else if (getOauthTokenGithub() !== null) {
+            siteExists = sites.some(site => site.full_name === siteId);
+          }
+
+          if (!siteExists) {
+            console.log("New site not in API response, adding to cache manually");
+
+            // Create a site object with the minimal required fields
+            const newSite = {
+              name: siteName,
+              description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`
+            };
+
+            if (getOauthTokenGitlab() !== null) {
+              newSite.id = siteId;
+              newSite.path_with_namespace = `${siteName.toLowerCase().replace(/\s+/g, "-")}-pluribus-owo-site`;
+            } else if (getOauthTokenGithub() !== null) {
+              newSite.full_name = siteId;
+            }
+
+            sites.unshift(newSite); // Add to the beginning of the list
+          }
+        }
+
+        // Update the cache
+        sitesCache = sites || [];
+
+        // Repopulate sites list
+        populateSitesList(sitesCache);
+      } catch (error) {
+        console.error("Error creating site:", error);
+        alert("Failed to create site. Please try again.");
+      } finally {
+        // Re-enable submit button
+        submitButton.disabled = false;
+        submitButton.textContent = originalButtonText;
+        submitButton.style.opacity = "1";
+        submitButton.style.cursor = "pointer";
       }
-
-      console.log("Initial commit made for site ID:", siteId);
-
-      // Close the modal
-      $("#createSiteModal").modal("hide");
-
-      // Clear the form
-      document.getElementById("createSiteForm").reset();
-
-      // Refresh the sites list
-      let sites;
-      if (getOauthTokenGitlab() !== null) {
-        sites = await getSitesGitLab();
-      } else if (getOauthTokenGithub() !== null) {
-        sites = await getSitesGitHub();
-      }
-      populateSitesList(sites);
     });
 
   // Handle back button click
@@ -246,6 +305,9 @@ function goBackToSiteSelection() {
   // Show sites list panel
   const sitesListPanel = document.getElementById("sites-list-panel");
   sitesListPanel.style.display = "block";
+
+  // Repopulate sites list from cache
+  populateSitesList(sitesCache);
 
   console.log("Back to site selection complete");
 }
