@@ -760,7 +760,7 @@ async function populateMenubar(siteId) {
             const newFilePath = `public/${sanitizedNewPageName}.md`;
             const existing = getCacheByFileName(oldFilePath);
             if (existing) {
-              existing.displayName = sanitizedNewPageName;
+              existing.displayName = newPageName;
               existing.fileName = newFilePath;
             } else {
               // If not in cache yet, fetch it first then rename
