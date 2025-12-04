@@ -541,6 +541,10 @@ function populateSitesList(sites) {
         } else if (getOauthTokenGithub() !== null) {
           markdownCache = JSON.parse(await getFileContentGithub(site.full_name, "public/pages.json"));
         }
+        for (let i=0; i < markdownCache.length; i++) {
+          const fileName = markdownCache[i].fileName;
+          markdownCache[i].fileName = `public/${fileName}.md`
+        }
 
         // Load all markdown files into cache
         for (const file of markdownFiles) {
