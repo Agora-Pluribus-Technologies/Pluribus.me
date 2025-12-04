@@ -6,6 +6,8 @@ How it works: This Oauth2 application can operate on behalf of a user's GitHub o
 
 Eventually, it will adhere to the below WIP specification.
 
+***
+
 ## **Pluribus Openweb Object (OwO) Specification — v0.1 (Work in Progress)**
 
 **Author:** Michael Yee (Agora Pluribus Technologies)
