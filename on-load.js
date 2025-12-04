@@ -311,18 +311,18 @@ document.addEventListener("DOMContentLoaded", async function () {
       // Handle clicking outside or blur
       input.addEventListener("blur", async function () {
         inputContainer.remove();
-        const pageName = input.value.trim();
+        const displayName = input.value.trim();
 
         // Check if displayName already exists
-        if (pageName) {
-          const existingPage = getCacheByDisplayName(pageName);
+        if (displayName) {
+          const existingPage = getCacheByDisplayName(displayName);
           if (existingPage) {
-            alert(`A page with the name "${pageName}" already exists. Please choose a different name.`);
+            alert(`A page with the name "${displayName}" already exists. Please choose a different name.`);
             return;
           }
         }
 
-        await triggerCreateNewSiteGitlab(pageName);
+        await triggerCreateNewSiteGitlab(displayName);
         await populateMenubar(currentSiteId);
       });
     });
@@ -364,17 +364,17 @@ function goBackToSiteSelection() {
   console.log("Back to site selection complete");
 }
 
-async function triggerCreateNewSiteGitlab(pageName) {
-  if (pageName) {
-    // Sanitize page name: lowercase and replace spaces with hyphens
-    const sanitizedName = pageName.toLowerCase().replace(/\s+/g, "-");
-    console.log("Creating new page:", sanitizedName);
+async function triggerCreateNewSiteGitlab(displayName) {
+  if (displayName) {
+    // Sanitize for file name: lowercase and replace spaces with hyphens
+    const sanitizedFileName = displayName.toLowerCase().replace(/\s+/g, "-");
+    console.log("Creating new page:", displayName, "->", sanitizedFileName);
 
     // Add to markdownCache with default content
-    const fileName = `public/${sanitizedName}.md`;
-    const content = `# ${sanitizedName}\n\nYour content here...`;
-    addOrUpdateCache(sanitizedName, fileName, content);
-    console.log("New page added to cache:", sanitizedName);
+    const fileName = `public/${sanitizedFileName}.md`;
+    const content = `# ${displayName}\n\nYour content here...`;
+    addOrUpdateCache(displayName, fileName, content);
+    console.log("New page added to cache:", displayName);
 
     // Mark as modified
     modified = true;
