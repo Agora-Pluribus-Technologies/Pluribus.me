@@ -487,6 +487,7 @@ function populateSitesList(sites) {
         currentSiteId = site.full_name;
         currentSitePathFull = site.full_name;
       }
+      console.log("Current site path full:", currentSitePathFull);
 
       // Update Visit Site button URL
       const visitSiteButton = document.getElementById("visitSiteButton");
