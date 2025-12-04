@@ -92,11 +92,11 @@ export async function onRequest(context) {
   const upstreamRes = await fetch(upstreamUrl, {
     method: "GET",
     headers: {
-      "Cache-Control": "no-cache"
+      "Cache-Control": "public, max-age=300, stale-while-revalidate=3600"
     },
     cf: {
-      cacheTtl: 0,
-      cacheEverything: false
+      cacheTtl: 300,
+      cacheEverything: true
     }
   });
 
