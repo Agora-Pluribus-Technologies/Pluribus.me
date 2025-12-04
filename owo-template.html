@@ -180,9 +180,9 @@
       });
 
       // https://pluribus.me/s/username/sitename/path/to/page.html --> path/to/page
-      var pathname = window.location.pathname.split('/').slice(4).join("/").replace(".html", "");
-      if (!pathname) {
-        pathname = "index";
+      var pathName = window.location.pathname.split('/').slice(4).join("/").replace(".html", "");
+      if (!pathName) {
+        pathName = "index";
       }
 
       // Set tab title
@@ -202,7 +202,7 @@
       var panel = document.createElement("main");
       const errorMessage = "Could not fetch page content<br><br>O_o";
       try {
-        let fetchPathName = `${origin}${basePath}/${pathname}.md`;
+        let fetchPathName = `${origin}${basePath}/${pathName}.md`;
         const content = await fetch(fetchPathName, {
           method: "GET",
           headers: {
