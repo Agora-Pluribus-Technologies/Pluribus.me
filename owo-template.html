@@ -187,6 +187,12 @@
 
       // Set tab title
       if (pagesJson) {
+        
+        // Convert site name to Title Case
+        const siteName = basePath.split('/')[3];
+        siteName = siteName.replace(/^-*(.)|-+(.)/g, (s, c, d) => c ? c.toUpperCase() : ' ' + d.toUpperCase())
+
+        // Get page displayName from pages.json
         for (const page of pagesJson) {
           const displayName = page.displayName;
           const fileName = page.fileName;
