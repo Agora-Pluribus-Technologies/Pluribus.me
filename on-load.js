@@ -537,9 +537,9 @@ function populateSitesList(sites) {
       } else {
         // Initialize markdownCache to pages.json
         if (getOauthTokenGitlab() !== null) {
-          markdownCache = await getFileContentGitlab(site.id, "public/pages.json");
+          markdownCache = JSON.parse(await getFileContentGitlab(site.id, "public/pages.json"));
         } else if (getOauthTokenGithub() !== null) {
-          markdownCache = await getFileContentGithub(site.full_name, "public/pages.json");
+          markdownCache = JSON.parse(await getFileContentGithub(site.full_name, "public/pages.json"));
         }
 
         // Load all markdown files into cache
