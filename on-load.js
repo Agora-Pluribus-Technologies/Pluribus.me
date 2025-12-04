@@ -252,6 +252,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       const menubarContent = document.getElementById("pageMenubarContent");
+      const addButton = document.getElementById("addNewPageButton");
 
       // Create input element for new page name
       const inputContainer = document.createElement("div");
@@ -268,7 +269,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       input.style.color = "#fff";
 
       inputContainer.appendChild(input);
-      menubarContent.insertBefore(inputContainer, menubarContent.firstChild);
+      // Insert the input just before the add button (at the end of tabs)
+      menubarContent.insertBefore(inputContainer, addButton);
 
       // Focus on the input
       input.focus();
