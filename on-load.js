@@ -535,6 +535,13 @@ function populateSitesList(sites) {
           "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
         );
       } else {
+        // Initialize markdownCache to pages.json
+        if (getOauthTokenGitlab() !== null) {
+          markdownCache = await getFileContentGitlab(site.id, "public/pages.json");
+        } else if (getOauthTokenGithub() !== null) {
+          markdownCache = await getFileContentGithub(site.full_name, "public/pages.json");
+        }
+
         // Load all markdown files into cache
         for (const file of markdownFiles) {
           console.log("Loading file into cache:", file);
