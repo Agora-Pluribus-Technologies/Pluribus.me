@@ -1,3 +1,24 @@
+// Helper functions for base64 encoding/decoding
+function encodeBase64(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  let binary = '';
+  for (let i = 0; i < data.length; i++) {
+    binary += String.fromCharCode(data[i]);
+  }
+  return btoa(binary);
+}
+
+function decodeBase64(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const decoder = new TextDecoder();
+  return decoder.decode(bytes);
+}
+
 const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
 const GITLAB_CLIENT_ID = "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf07e8800656";
 const GITLAB_REDIRECT_URI = "https://pluribus.me/gitlab/oauth/callback";
@@ -366,7 +387,7 @@ async function initialCommitGithub(siteId) {
     },
     body: JSON.stringify({
       message: "Initial GitHub Pages setup",
-      content: btoa('[]'), // Base64 encode the content
+      content: encodeBase64('[]'), // Base64 encode the content
     }),
   };
 
@@ -415,7 +436,7 @@ async function getFileContentGithub(siteId, filePath) {
   const responseJson = await response.json();
 
   // GitHub returns base64-encoded content, so we need to decode it
-  const content = atob(responseJson.content);
+  const content = decodeBase64(responseJson.content);
 
   console.log("File content:", content);
 
@@ -675,7 +696,7 @@ async function deployChangesGithub(siteId) {
         Accept: "application/vnd.github+json",
       },
       body: JSON.stringify({
-        content: btoa(owoTemplate),
+        content: encodeBase64(owoTemplate),
         encoding: "base64",
       }),
     });
@@ -705,7 +726,7 @@ async function deployChangesGithub(siteId) {
         Accept: "application/vnd.github+json",
       },
       body: JSON.stringify({
-        content: btoa(markdownCache[filePath]),
+        content: encodeBase64(markdownCache[filePath]),
         encoding: "base64",
       }),
     });
@@ -740,7 +761,7 @@ async function deployChangesGithub(siteId) {
         Accept: "application/vnd.github+json",
       },
       body: JSON.stringify({
-        content: btoa(JSON.stringify(pages)),
+        content: encodeBase64(JSON.stringify(pages)),
         encoding: "base64",
       }),
     });
@@ -926,7 +947,7 @@ async function createPageGithub(siteId, pageName) {
       Accept: "application/vnd.github+json",
     },
     body: JSON.stringify({
-      content: btoa(owoTemplate),
+      content: encodeBase64(owoTemplate),
       encoding: "base64",
     }),
   });
@@ -943,7 +964,7 @@ async function createPageGithub(siteId, pageName) {
       Accept: "application/vnd.github+json",
     },
     body: JSON.stringify({
-      content: btoa(`# ${pageName}\n\nThis is your new page.`),
+      content: encodeBase64(`# ${pageName}\n\nThis is your new page.`),
       encoding: "base64",
     }),
   });
