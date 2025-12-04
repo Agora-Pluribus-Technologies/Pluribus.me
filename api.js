@@ -511,7 +511,6 @@ async function deployChangesGitlab(siteId) {
   const owoTemplate = await owoTemplateResp.text();
 
   console.log(owoTemplate);
-  console.log(gitlabCiTemplate);
 
   const gitlabMarkdownFiles = await getPublicFilesGitLab(siteId);
 
