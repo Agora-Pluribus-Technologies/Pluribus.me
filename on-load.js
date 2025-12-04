@@ -312,6 +312,16 @@ document.addEventListener("DOMContentLoaded", async function () {
       input.addEventListener("blur", async function () {
         inputContainer.remove();
         const pageName = input.value.trim();
+
+        // Check if displayName already exists
+        if (pageName) {
+          const existingPage = getCacheByDisplayName(pageName);
+          if (existingPage) {
+            alert(`A page with the name "${pageName}" already exists. Please choose a different name.`);
+            return;
+          }
+        }
+
         await triggerCreateNewSiteGitlab(pageName);
         await populateMenubar(currentSiteId);
       });
@@ -503,7 +513,6 @@ function populateSitesList(sites) {
         console.log("Started site availability check interval");
       }
 
-      markdownCache = [];
       modified = false;
 
       // Update deploy button state (should be disabled since not modified)
@@ -530,7 +539,7 @@ function populateSitesList(sites) {
         // No markdown files found - create a dummy index.md
         console.log("Site is empty - created dummy index.md");
         addOrUpdateCache(
-          "index",
+          "Home",
           "public/index.md",
           "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
         );
@@ -545,7 +554,11 @@ function populateSitesList(sites) {
             content = await getFileContentGithub(site.full_name, file);
           }
           // Extract display name from file path (remove "public/" and ".md")
-          const displayName = file.replace("public/", "").replace(".md", "");
+          let displayName = file.replace("public/", "").replace(".md", "");
+          // Hardcode displayName for index to be "Home"
+          if (displayName === "index") {
+            displayName = "Home";
+          }
           addOrUpdateCache(displayName, file, content);
         }
       }
@@ -556,12 +569,12 @@ function populateSitesList(sites) {
       // Load the editor
       loadToastEditor();
 
-      // Click the index menubar item to load it
+      // Click the Home menubar item to load it
       setTimeout(() => {
         const menubarItems = document.querySelectorAll(".menubar-item");
         for (const item of menubarItems) {
           const text = item.querySelector("span");
-          if (text && text.textContent === "index") {
+          if (text && text.textContent === "Home") {
             text.click();
 
             // Set up editor change listener to update cache
@@ -655,20 +668,13 @@ function populateSitesList(sites) {
 }
 
 async function populateMenubar(siteId) {
-  // Use markdownCache as source of truth - sort with index first
-  const sortedCache = [...markdownCache].sort((a, b) => {
-    if (a.displayName === "index") return -1;
-    if (b.displayName === "index") return 1;
-    return 0;
-  });
-
   const menubarContent = document.getElementById("pageMenubarContent");
   const addButton = document.getElementById("addNewPageButton");
 
   // Clear existing content but preserve the add button
   menubarContent.innerHTML = "";
 
-  for (const cacheItem of sortedCache) {
+  for (const cacheItem of markdownCache) {
     const fileItem = document.createElement("div");
     fileItem.classList.add("menubar-item");
 
@@ -683,8 +689,8 @@ async function populateMenubar(siteId) {
     buttonContainer.style.display = "flex";
     buttonContainer.style.gap = "5px";
 
-    // Only add rename and delete buttons if not index page
-    if (displayName !== "index") {
+    // Only add rename and delete buttons if not Home page
+    if (displayName !== "Home") {
       // Create rename button
       const renameButton = document.createElement("button");
       renameButton.textContent = "✎";
@@ -842,7 +848,7 @@ async function populateMenubar(siteId) {
     }
 
     fileItem.appendChild(fileText);
-    if (displayName !== "index") {
+    if (displayName !== "Home") {
       fileItem.appendChild(buttonContainer);
     }
 
@@ -861,7 +867,7 @@ async function populateMenubar(siteId) {
       let fileContent = cacheItem.content;
       console.log(`Using cached content for ${cacheItem.fileName}`);
 
-      // Update deploy button state since cache was updated
+      // Update deploy button state
       updateDeployButtonState();
 
       // Update current file path
