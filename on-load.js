@@ -18,11 +18,19 @@ function getCacheByDisplayName(displayName) {
   return markdownCache.find(item => item.displayName === displayName);
 }
 
-function addOrUpdateCache(displayName, fileName, content) {
+function addOrUpdateCache(fileName, displayName, content) {
   const existing = getCacheByFileName(fileName);
   if (existing) {
-    existing.displayName = displayName;
-    existing.content = content;
+    if (displayName) {
+      existing.displayName = displayName;
+    } else {
+      displayName = existing.displayName
+    }
+    if (content) {
+      existing.content = content;
+    } else {
+      content = existing.content;
+    }
   } else {
     markdownCache.push({ displayName, fileName, content });
   }
@@ -363,7 +371,7 @@ async function triggerCreateNewSiteGitlab(displayName) {
     // Add to markdownCache with default content
     const fileName = `public/${sanitizedFileName}.md`;
     const content = `# ${displayName}\n\nYour content here...`;
-    addOrUpdateCache(displayName, fileName, content);
+    addOrUpdateCache(fileName, displayName, content);
     console.log("New page added to cache:", displayName);
 
     // Mark as modified
@@ -530,8 +538,8 @@ function populateSitesList(sites) {
         // No markdown files found - create a dummy index.md
         console.log("Site is empty - created dummy index.md");
         addOrUpdateCache(
-          "Home",
           "public/index.md",
+          "Home",
           "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
         );
       } else {
@@ -555,13 +563,7 @@ function populateSitesList(sites) {
           } else if (getOauthTokenGithub() !== null) {
             content = await getFileContentGithub(site.full_name, file);
           }
-          // Extract display name from file path (remove "public/" and ".md")
-          let displayName = file.replace("public/", "").replace(".md", "");
-          // Hardcode displayName for index to be "Home"
-          if (displayName === "index") {
-            displayName = "Home";
-          }
-          addOrUpdateCache(displayName, file, content);
+          addOrUpdateCache(file, null, content);
         }
       }
 
@@ -768,7 +770,7 @@ async function populateMenubar(siteId) {
               } else if (getOauthTokenGithub() !== null) {
                 content = await getFileContentGithub(siteId, oldFilePath);
               }
-              addOrUpdateCache(sanitizedNewName, newFilePath, content);
+              addOrUpdateCache(newFilePath, sanitizedNewName, content);
             }
 
             // Update current file path if it was the renamed file
