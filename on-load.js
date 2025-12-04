@@ -146,69 +146,95 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.log("Markdown cache:", markdownCache);
 
       if (currentSiteId) {
-        // Deploy changes
-        if (getOauthTokenGitlab() !== null) {
-          await deployChangesGitlab(currentSiteId);
-        } else if (getOauthTokenGithub() !== null) {
-          await deployChangesGithub(currentSiteId);
-        }
+        const deployButton = document.getElementById("deployButton");
+        const originalButtonText = deployButton.textContent;
 
-        // Link pluribus site
-        console.log("Current full site path:", currentSitePathFull);
+        // Show loading state
+        deployButton.classList.add("loading");
+        deployButton.textContent = "";
+        deployButton.disabled = true;
 
-        // Check if site exists in API, create if not
-        if (currentSitePathFull) {
-          try {
-            // First, check if site exists
-            const checkResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(currentSitePathFull)}`, {
-              method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            });
+        let deploySuccess = false;
 
-            if (checkResponse.status === 404) {
-              // Site doesn't exist, create it
-              console.log("Site not found in API, creating...");
+        try {
+          // Deploy changes
+          if (getOauthTokenGitlab() !== null) {
+            deploySuccess = await deployChangesGitlab(currentSiteId);
+          } else if (getOauthTokenGithub() !== null) {
+            deploySuccess = await deployChangesGithub(currentSiteId);
+          }
 
-              // Determine provider and parse owner/repo
-              const provider = getOauthTokenGitlab() !== null ? "gitlab" : "github";
-              const [owner, repo] = currentSitePathFull.split("/");
+          // Link pluribus site
+          console.log("Current full site path:", currentSitePathFull);
 
-              const createResponse = await fetch("/api/sites", {
-                method: "POST",
+          // Check if site exists in API, create if not
+          if (currentSitePathFull) {
+            try {
+              // First, check if site exists
+              const checkResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(currentSitePathFull)}`, {
+                method: "GET",
                 headers: {
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                  siteId: currentSitePathFull,
-                  provider: provider,
-                  owner: owner,
-                  repo: repo,
-                  branch: "main",
-                  basePath: "/public",
-                }),
               });
 
-              if (createResponse.ok) {
-                console.log("Site created successfully in API");
-              } else {
-                const errorText = await createResponse.text();
-                console.error("Failed to create site in API:", errorText);
-              }
-            } else if (checkResponse.ok) {
-              console.log("Site already exists in API");
-            } else {
-              console.error("Error checking site existence:", checkResponse.status);
-            }
-          } catch (error) {
-            console.error("Error linking pluribus site:", error);
-          }
-        }
+              if (checkResponse.status === 404) {
+                // Site doesn't exist, create it
+                console.log("Site not found in API, creating...");
 
-        // Reset modified flag after successful deployment
-        modified = false;
-        updateDeployButtonState();
+                // Determine provider and parse owner/repo
+                const provider = getOauthTokenGitlab() !== null ? "gitlab" : "github";
+                const [owner, repo] = currentSitePathFull.split("/");
+
+                const createResponse = await fetch("/api/sites", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    siteId: currentSitePathFull,
+                    provider: provider,
+                    owner: owner,
+                    repo: repo,
+                    branch: "main",
+                    basePath: "/public",
+                  }),
+                });
+
+                if (createResponse.ok) {
+                  console.log("Site created successfully in API");
+                } else {
+                  const errorText = await createResponse.text();
+                  console.error("Failed to create site in API:", errorText);
+                }
+              } else if (checkResponse.ok) {
+                console.log("Site already exists in API");
+              } else {
+                console.error("Error checking site existence:", checkResponse.status);
+              }
+            } catch (error) {
+              console.error("Error linking pluribus site:", error);
+            }
+          }
+
+          // Reset modified flag after successful deployment
+          modified = false;
+          updateDeployButtonState();
+
+          // Show success or failure message
+          if (deploySuccess) {
+            showAlertBar("Deploy successful! Your changes will be live in about 5 minutes.", true);
+          } else {
+            showAlertBar("Deploy failed. Please check the console for errors.", false);
+          }
+        } catch (error) {
+          console.error("Deploy error:", error);
+          showAlertBar("Deploy failed. Please check the console for errors.", false);
+        } finally {
+          // Remove loading state
+          deployButton.classList.remove("loading");
+          deployButton.textContent = originalButtonText;
+        }
       } else {
         console.error("No site selected");
       }
@@ -338,6 +364,17 @@ function updateDeployButtonState() {
     deployButton.style.cursor = "pointer";
     console.log("Deploy button enabled - modifications present");
   }
+}
+
+function showAlertBar(message, isSuccess) {
+  const alertBar = document.getElementById("alertBar");
+  alertBar.textContent = message;
+  alertBar.className = "alert-bar show " + (isSuccess ? "success" : "error");
+
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    alertBar.className = "alert-bar";
+  }, 5000);
 }
 
 async function checkSiteAvailability() {
