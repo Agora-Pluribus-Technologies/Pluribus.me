@@ -641,7 +641,10 @@ async function populateMenubar(siteId) {
   markdownFiles.push(...sortedFiles);
 
   const menubarContent = document.getElementById("pageMenubarContent");
-  menubarContent.innerHTML = ""; // Clear existing content
+  const addButton = document.getElementById("addNewPageButton");
+
+  // Clear existing content but preserve the add button
+  menubarContent.innerHTML = "";
 
   for (const file of markdownFiles) {
     const fileItem = document.createElement("div");
@@ -860,4 +863,7 @@ async function populateMenubar(siteId) {
     });
     menubarContent.appendChild(fileItem);
   }
+
+  // Add the "+" button back at the end
+  menubarContent.appendChild(addButton);
 }
