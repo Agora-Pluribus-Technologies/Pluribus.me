@@ -274,9 +274,7 @@ async function createSiteGitlab(siteName, siteDescription) {
 
   const responseJson = await response.json();
 
-  const siteId = responseJson.id;
-
-  return siteId;
+  return responseJson;
 }
 
 async function createSiteGithub(siteName, siteDescription) {
@@ -302,9 +300,7 @@ async function createSiteGithub(siteName, siteDescription) {
 
   const responseJson = await response.json();
 
-  const siteId = responseJson.full_name;
-
-  return siteId;
+  return responseJson;
 }
 
 async function deleteSiteGitlab(siteId) {

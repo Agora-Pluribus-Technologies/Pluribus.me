@@ -92,13 +92,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         console.log("Creating new site:", siteName, siteDescription);
 
+        let site;
         let siteId;
         if (getOauthTokenGitlab() !== null) {
-          siteId = await createSiteGitlab(siteName, siteDescription);
+          site = await createSiteGitlab(siteName, siteDescription);
+          siteId = site.id;
           console.log("New GitLab site created with ID:", siteId);
           await initialCommitGitlab(siteId);
         } else if (getOauthTokenGithub() !== null) {
-          siteId = await createSiteGithub(siteName, siteDescription);
+          site = await createSiteGithub(siteName, siteDescription);
+          siteId = site.full_name;
           console.log("New GitHub site created with ID:", siteId);
           await initialCommitGithub(siteId);
         }
@@ -114,21 +117,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Add new site directly to cache
         console.log("Adding new site to cache");
 
-        // Create a site object with the minimal required fields
-        const newSite = {
-          name: siteName,
-          description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`
-        };
-
-        if (getOauthTokenGitlab() !== null) {
-          newSite.id = siteId;
-          newSite.path_with_namespace = `${siteName.toLowerCase().replace(/\s+/g, "-")}-pluribus-owo-site`;
-        } else if (getOauthTokenGithub() !== null) {
-          newSite.full_name = siteId;
-        }
-
         // Add to the beginning of the cache
-        sitesCache.unshift(newSite);
+        sitesCache.unshift(site);
 
         // Repopulate sites list
         populateSitesList(sitesCache);
