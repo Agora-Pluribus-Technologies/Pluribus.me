@@ -249,7 +249,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           // Show success or failure message
           if (deploySuccess) {
-            showAlertBar("Deploy successful! Your changes will be live in about 5 minutes.", true);
+            showAlertBar("Deploy successful! Your changes will be live within 5 minutes.", true);
           } else {
             showAlertBar("Deploy failed. Please check the console for errors.", false);
           }

@@ -140,17 +140,8 @@
       if (content.ok) {
         const pagesJson = await content.json();
         for (const page of pagesJson) {
-          // Handle both old format (string) and new format (object with displayName and fileName)
-          let displayName, fileName;
-          if (typeof page === 'string') {
-            // Old format: page is just a string
-            displayName = page;
-            fileName = page;
-          } else {
-            // New format: page is an object with displayName and fileName
-            displayName = page.displayName;
-            fileName = page.fileName;
-          }
+          const displayName = page.displayName;
+          const fileName = page.fileName;
 
           let relPage;
           if (fileName === "index") {
