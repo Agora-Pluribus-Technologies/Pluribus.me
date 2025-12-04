@@ -541,7 +541,7 @@ async function deployChangesGitlab(siteId) {
     console.log("Preparing to update file:", filePath);
 
     var crudAction = null;
-    if (gitlabMarkdownFiles.map((f) => f.path).includes(filePath)) {
+    if (gitlabMarkdownFiles.includes(filePath)) {
       crudAction = "update";
     } else {
       crudAction = "create";
