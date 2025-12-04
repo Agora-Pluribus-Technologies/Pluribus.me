@@ -741,7 +741,7 @@ async function populateMenubar(siteId) {
 
           if (newPageName && newPageName !== displayName) {
             // Sanitize page name: lowercase and replace spaces with hyphens
-            const sanitizedNewName = newPageName
+            const sanitizedNewPageName = newPageName
               .toLowerCase()
               .replace(/\s+/g, "-");
             const oldPageName = currentSitePath
@@ -752,15 +752,15 @@ async function populateMenubar(siteId) {
               "Renaming page from:",
               oldPageName,
               "to:",
-              sanitizedNewName
+              sanitizedNewPageName
             );
 
             // Update cache - rename the file in cache
             const oldFilePath = cacheItem.fileName;
-            const newFilePath = `public/${sanitizedNewName}.md`;
+            const newFilePath = `public/${sanitizedNewPageName}.md`;
             const existing = getCacheByFileName(oldFilePath);
             if (existing) {
-              existing.displayName = sanitizedNewName;
+              existing.displayName = sanitizedNewPageName;
               existing.fileName = newFilePath;
             } else {
               // If not in cache yet, fetch it first then rename
@@ -770,7 +770,7 @@ async function populateMenubar(siteId) {
               } else if (getOauthTokenGithub() !== null) {
                 content = await getFileContentGithub(siteId, oldFilePath);
               }
-              addOrUpdateCache(newFilePath, sanitizedNewName, content);
+              addOrUpdateCache(newFilePath, newPageName, content);
             }
 
             // Update current file path if it was the renamed file
@@ -787,14 +787,14 @@ async function populateMenubar(siteId) {
             // Refresh the menubar
             await populateMenubar(siteId);
 
-            console.log("Page renamed in cache:", sanitizedNewName);
+            console.log("Page renamed in cache:", sanitizedNewPageName);
 
             // Click the renamed item in the menubar to load it
             setTimeout(() => {
               const menubarItems = document.querySelectorAll(".menubar-item");
               for (const item of menubarItems) {
                 const text = item.querySelector("span");
-                if (text && text.textContent === sanitizedNewName) {
+                if (text && text.textContent === sanitizedNewPageName) {
                   text.click();
                   break;
                 }
