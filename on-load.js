@@ -744,7 +744,7 @@ async function populateMenubar(siteId) {
             const sanitizedNewName = newPageName
               .toLowerCase()
               .replace(/\s+/g, "-");
-            const oldPageName = file.path
+            const oldPageName = currentSitePath
               .replace("public/", "")
               .replace(".md", "");
 
