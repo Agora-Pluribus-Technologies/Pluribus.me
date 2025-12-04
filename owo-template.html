@@ -117,18 +117,19 @@
 <body>
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
+      // https://pluribus.me
       const origin = document.location.origin;
-      // https://pluribus.me/s/username/sitename/path/to/page.html --> https://pluribus.me/s/username/sitename
+      
+      // /s/username/sitename/path/to/page.html --> /s/username/sitename
       const basePath = document.location.pathname.split('/').slice(0, 4).join("/");
-      const baseUrl = `${origin}${basePath}`;
-      await createMenubar(baseUrl);
-      await fetchPageContent(baseUrl);
+      
+      const pagesJson = await fetchPagesJson(origin, basePath);
+      await createMenubar(origin, basePath, pagesJson);
+      await fetchPageContent(origin, basePath, pagesJson);
     });
 
-    async function createMenubar(baseUrl) {
-      const menubar = document.createElement("nav");
-      menubar.style.width = "100%";
-      const pagesJsonLink = `${baseUrl}/pages.json`;
+    async function fetchPagesJson(origin, basePath) {
+      const pagesJsonLink = `${origin}${basePath}/pages.json`;
 
       const content = await fetch(pagesJsonLink, {
         method: "GET",
@@ -137,8 +138,21 @@
           "Cache-Control": "no-cache, must-revalidate",
         },
       });
+      let pagesJson;
       if (content.ok) {
-        const pagesJson = await content.json();
+        pagesJson = await content.json();
+      } else {
+        pagesJson = null;
+      }
+
+      return pagesJson;
+    }
+
+    async function createMenubar(origin, basePath, pagesJson) {
+      const menubar = document.createElement("nav");
+      menubar.style.width = "100%";
+
+      if (pagesJson) {
         for (const page of pagesJson) {
           const displayName = page.displayName;
           const fileName = page.fileName;
@@ -151,7 +165,7 @@
           }
           const pageLink = document.createElement("a");
           pageLink.classList.add("menu-link");
-          pageLink.href = `${baseUrl}/${relPage}`;
+          pageLink.href = `${origin}${basePath}/${relPage}`;
           pageLink.textContent = displayName;
           menubar.appendChild(pageLink);
         }
@@ -159,7 +173,7 @@
       }
     }
 
-    async function fetchPageContent(baseUrl) {
+    async function fetchPageContent(origin, basePath, pagesJson) {
       marked.setOptions({
         gfm: true,
         breaks: true,
@@ -171,10 +185,24 @@
         pathname = "index";
       }
 
+      // Set tab title
+      if (pagesJson) {
+        for (const page of pagesJson) {
+          const displayName = page.displayName;
+          const fileName = page.fileName;
+
+          let relPage;
+          if (fileName === pathName) {
+            document.head.getElementsByTagName("title")[0].innerText = displayName;
+            break;
+          }
+        }
+      }
+
       var panel = document.createElement("main");
       const errorMessage = "Could not fetch page content<br><br>O_o";
       try {
-        let fetchPathName = `${baseUrl}/${pathname}.md`;
+        let fetchPathName = `${origin}${basePath}/${pathname}.md`;
         const content = await fetch(fetchPathName, {
           method: "GET",
           headers: {
