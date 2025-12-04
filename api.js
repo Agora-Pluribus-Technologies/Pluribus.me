@@ -517,11 +517,11 @@ async function deployChangesGitlab(siteId) {
   var commitActions = [];
 
   // Get list of markdown files in cache
-  const cacheMarkdownFiles = Object.keys(markdownCache).filter(path => path.endsWith(".md"));
+  const cacheFileNames = markdownCache.map(item => item.fileName);
 
   // Handle deletions: files in GitLab but not in cache
   for (const gitlabFile of gitlabMarkdownFiles) {
-    if (!cacheMarkdownFiles.includes(gitlabFile)) {
+    if (!cacheFileNames.includes(gitlabFile)) {
       console.log("Preparing to delete file:", gitlabFile);
 
       // Delete both .md and .html files
@@ -537,11 +537,11 @@ async function deployChangesGitlab(siteId) {
   }
 
   // Handle creates and updates: files in cache
-  for (filePath in markdownCache) {
-    console.log("Preparing to update file:", filePath);
+  for (const cacheItem of markdownCache) {
+    console.log("Preparing to update file:", cacheItem.fileName);
 
     var crudAction = null;
-    if (gitlabMarkdownFiles.includes(filePath)) {
+    if (gitlabMarkdownFiles.includes(cacheItem.fileName)) {
       crudAction = "update";
     } else {
       crudAction = "create";
@@ -549,22 +549,27 @@ async function deployChangesGitlab(siteId) {
     // Create/update the corresponding .html file
     commitActions.push({
       action: crudAction,
-      file_path: filePath.replace(".md", ".html"),
+      file_path: cacheItem.fileName.replace(".md", ".html"),
       content: owoTemplate,
     });
 
     // Create or update the .md file
     commitActions.push({
       action: crudAction,
-      file_path: filePath,
-      content: markdownCache[filePath],
+      file_path: cacheItem.fileName,
+      content: cacheItem.content,
     });
   }
 
   if (commitActions.length > 0) {
     // Update pages.json based on cache (final state)
-    const pages = cacheMarkdownFiles
-      .map((path) => path.replace("public/", "").replace(".md", ""));
+    const pages = markdownCache.map(item => {
+      const fileName = item.fileName.replace("public/", "").replace(".md", "");
+      return {
+        displayName: fileName === "index" ? "Home" : item.displayName,
+        fileName: fileName
+      };
+    });
     commitActions.push({
       action: "update",
       file_path: "public/pages.json",
@@ -616,7 +621,7 @@ async function deployChangesGithub(siteId) {
   const githubMarkdownFiles = await getPublicFilesGitHub(siteId);
 
   // Get list of markdown files in cache
-  const cacheMarkdownFiles = Object.keys(markdownCache).filter(path => path.endsWith(".md"));
+  const cacheFileNames = markdownCache.map(item => item.fileName);
 
   // Step 1: Get the current commit SHA
   const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
@@ -661,7 +666,7 @@ async function deployChangesGithub(siteId) {
 
   // Handle deletions: files in GitHub but not in cache
   for (const githubFile of githubMarkdownFiles) {
-    if (!cacheMarkdownFiles.includes(githubFile)) {
+    if (!cacheFileNames.includes(githubFile)) {
       console.log("Preparing to delete file:", githubFile);
 
       // Mark files for deletion (sha: null)
@@ -681,10 +686,8 @@ async function deployChangesGithub(siteId) {
   }
 
   // Handle creates and updates: files in cache
-  for (const filePath in markdownCache) {
-    console.log("Preparing to update file:", filePath);
-
-    const isNewFile = !githubMarkdownFiles.map((f) => f.path).includes(filePath);
+  for (const cacheItem of markdownCache) {
+    console.log("Preparing to update file:", cacheItem.fileName);
 
     // Create blob for .html file (for both new and existing files)
     const htmlBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
@@ -710,7 +713,7 @@ async function deployChangesGithub(siteId) {
     const htmlBlobData = await htmlBlobResponse.json();
 
     treeItems.push({
-      path: filePath.replace(".md", ".html"),
+      path: cacheItem.fileName.replace(".md", ".html"),
       mode: "100644",
       type: "blob",
       sha: htmlBlobData.sha,
@@ -725,7 +728,7 @@ async function deployChangesGithub(siteId) {
         Accept: "application/vnd.github+json",
       },
       body: JSON.stringify({
-        content: encodeBase64(markdownCache[filePath]),
+        content: encodeBase64(cacheItem.content),
         encoding: "base64",
       }),
     });
@@ -740,7 +743,7 @@ async function deployChangesGithub(siteId) {
     const mdBlobData = await mdBlobResponse.json();
 
     treeItems.push({
-      path: filePath,
+      path: cacheItem.fileName,
       mode: "100644",
       type: "blob",
       sha: mdBlobData.sha,
@@ -749,8 +752,13 @@ async function deployChangesGithub(siteId) {
 
   if (treeItems.length > 0) {
     // Update pages.json
-    const pages = cacheMarkdownFiles
-      .map((path) => path.replace("public/", "").replace(".md", ""));
+    const pages = markdownCache.map(item => {
+      const fileName = item.fileName.replace("public/", "").replace(".md", "");
+      return {
+        displayName: fileName === "index" ? "Home" : item.displayName,
+        fileName: fileName
+      };
+    });
 
     const pagesBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
       method: "POST",

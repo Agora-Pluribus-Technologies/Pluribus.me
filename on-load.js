@@ -1,5 +1,5 @@
-// Global cache for markdown files
-let markdownCache = {};
+// Global cache for markdown files - Array of {displayName, fileName, content}
+let markdownCache = [];
 let currentSitePath = null;
 let currentSiteId = null;
 let currentSitePathFull = null;
@@ -8,6 +8,32 @@ let modified = false;
 
 // Global cache for sites list
 let sitesCache = [];
+
+// Helper functions for markdownCache
+function getCacheByFileName(fileName) {
+  return markdownCache.find(item => item.fileName === fileName);
+}
+
+function getCacheByDisplayName(displayName) {
+  return markdownCache.find(item => item.displayName === displayName);
+}
+
+function addOrUpdateCache(displayName, fileName, content) {
+  const existing = getCacheByFileName(fileName);
+  if (existing) {
+    existing.displayName = displayName;
+    existing.content = content;
+  } else {
+    markdownCache.push({ displayName, fileName, content });
+  }
+}
+
+function removeCacheByFileName(fileName) {
+  const index = markdownCache.findIndex(item => item.fileName === fileName);
+  if (index !== -1) {
+    markdownCache.splice(index, 1);
+  }
+}
 
 // Interval for checking site availability
 let siteAvailabilityInterval = null;
@@ -311,7 +337,7 @@ function goBackToSiteSelection() {
   currentSiteId = null;
   currentSitePathFull = null;
   currentSitePath = null;
-  markdownCache = {};
+  markdownCache = [];
   modified = false;
 
   // Hide editor container
@@ -335,8 +361,9 @@ async function triggerCreateNewSiteGitlab(pageName) {
     console.log("Creating new page:", sanitizedName);
 
     // Add to markdownCache with default content
-    const newFilePath = `public/${sanitizedName}.md`;
-    markdownCache[newFilePath] = `# ${sanitizedName}\n\nYour content here...`;
+    const fileName = `public/${sanitizedName}.md`;
+    const content = `# ${sanitizedName}\n\nYour content here...`;
+    addOrUpdateCache(sanitizedName, fileName, content);
     console.log("New page added to cache:", sanitizedName);
 
     // Mark as modified
@@ -347,8 +374,9 @@ async function triggerCreateNewSiteGitlab(pageName) {
     await populateMenubar(currentSiteId);
 
     // Open the new page in the editor
-    currentSitePath = newFilePath;
-    editor.setMarkdown(markdownCache[newFilePath]);
+    currentSitePath = fileName;
+    const cacheItem = getCacheByFileName(fileName);
+    editor.setMarkdown(cacheItem.content);
   }
 }
 
@@ -475,7 +503,7 @@ function populateSitesList(sites) {
         console.log("Started site availability check interval");
       }
 
-      markdownCache = {};
+      markdownCache = [];
       modified = false;
 
       // Update deploy button state (should be disabled since not modified)
@@ -501,8 +529,11 @@ function populateSitesList(sites) {
       if (markdownFiles.length === 0) {
         // No markdown files found - create a dummy index.md
         console.log("Site is empty - created dummy index.md");
-        markdownCache["public/index.md"] =
-          "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site.";
+        addOrUpdateCache(
+          "index",
+          "public/index.md",
+          "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
+        );
       } else {
         // Load all markdown files into cache
         for (const file of markdownFiles) {
@@ -513,7 +544,9 @@ function populateSitesList(sites) {
           } else if (getOauthTokenGithub() !== null) {
             content = await getFileContentGithub(site.full_name, file);
           }
-          markdownCache[file] = content;
+          // Extract display name from file path (remove "public/" and ".md")
+          const displayName = file.replace("public/", "").replace(".md", "");
+          addOrUpdateCache(displayName, file, content);
         }
       }
 
@@ -535,10 +568,13 @@ function populateSitesList(sites) {
             editor.off("change");
             editor.on("change", function () {
               if (currentSitePath) {
-                markdownCache[currentSitePath] = editor.getMarkdown();
-                console.log(`Cached content for ${currentSitePath}`);
-                modified = true;
-                updateDeployButtonState();
+                const cacheItem = getCacheByFileName(currentSitePath);
+                if (cacheItem) {
+                  cacheItem.content = editor.getMarkdown();
+                  console.log(`Cached content for ${currentSitePath}`);
+                  modified = true;
+                  updateDeployButtonState();
+                }
               }
             });
 
@@ -619,28 +655,12 @@ function populateSitesList(sites) {
 }
 
 async function populateMenubar(siteId) {
-  // Use markdownCache as source of truth
-  const markdownFiles = [];
-  for (const cachePath in markdownCache) {
-    if (cachePath.endsWith(".md") && cachePath.startsWith("public/")) {
-      markdownFiles.push({
-        path: cachePath,
-        type: "blob",
-        name: cachePath.split("/").pop(),
-      });
-    }
-  }
-
-  // Move index to the front, keep other files in original order
-  const indexFile = markdownFiles.find(
-    (f) => f.path.replace("public/", "").replace(".md", "") === "index"
-  );
-  const otherFiles = markdownFiles.filter(
-    (f) => f.path.replace("public/", "").replace(".md", "") !== "index"
-  );
-  const sortedFiles = indexFile ? [indexFile, ...otherFiles] : otherFiles;
-  markdownFiles.length = 0;
-  markdownFiles.push(...sortedFiles);
+  // Use markdownCache as source of truth - sort with index first
+  const sortedCache = [...markdownCache].sort((a, b) => {
+    if (a.displayName === "index") return -1;
+    if (b.displayName === "index") return 1;
+    return 0;
+  });
 
   const menubarContent = document.getElementById("pageMenubarContent");
   const addButton = document.getElementById("addNewPageButton");
@@ -648,14 +668,13 @@ async function populateMenubar(siteId) {
   // Clear existing content but preserve the add button
   menubarContent.innerHTML = "";
 
-  for (const file of markdownFiles) {
+  for (const cacheItem of sortedCache) {
     const fileItem = document.createElement("div");
     fileItem.classList.add("menubar-item");
 
     // Create text span for file path
     const fileText = document.createElement("span");
-    // Display only the page name (remove "public/" and ".md")
-    const displayName = file.path.replace("public/", "").replace(".md", "");
+    const displayName = cacheItem.displayName;
     fileText.textContent = displayName;
     fileText.classList.add("menubar-item-text");
 
@@ -727,11 +746,12 @@ async function populateMenubar(siteId) {
             );
 
             // Update cache - rename the file in cache
-            const oldFilePath = file.path;
+            const oldFilePath = cacheItem.fileName;
             const newFilePath = `public/${sanitizedNewName}.md`;
-            if (markdownCache[oldFilePath]) {
-              markdownCache[newFilePath] = markdownCache[oldFilePath];
-              delete markdownCache[oldFilePath];
+            const existing = getCacheByFileName(oldFilePath);
+            if (existing) {
+              existing.displayName = sanitizedNewName;
+              existing.fileName = newFilePath;
             } else {
               // If not in cache yet, fetch it first then rename
               let content;
@@ -740,13 +760,14 @@ async function populateMenubar(siteId) {
               } else if (getOauthTokenGithub() !== null) {
                 content = await getFileContentGithub(siteId, oldFilePath);
               }
-              markdownCache[newFilePath] = content;
+              addOrUpdateCache(sanitizedNewName, newFilePath, content);
             }
 
             // Update current file path if it was the renamed file
             if (currentSitePath === oldFilePath) {
               currentSitePath = newFilePath;
-              editor.setMarkdown(markdownCache[newFilePath]);
+              const updatedItem = getCacheByFileName(newFilePath);
+              editor.setMarkdown(updatedItem.content);
             }
 
             // Mark as modified
@@ -797,10 +818,10 @@ async function populateMenubar(siteId) {
           console.log("Deleting page:", displayName);
 
           // Remove from cache
-          delete markdownCache[file.path];
+          removeCacheByFileName(cacheItem.fileName);
 
           // Clear editor if the deleted file was open
-          if (currentSitePath === file.path) {
+          if (currentSitePath === cacheItem.fileName) {
             editor.setMarkdown("");
             currentSitePath = null;
           }
@@ -826,7 +847,7 @@ async function populateMenubar(siteId) {
     }
 
     fileText.addEventListener("click", async function () {
-      console.log(`Loading file: ${file.path}`);
+      console.log(`Loading file: ${cacheItem.fileName}`);
 
       // Remove active class from all items
       document.querySelectorAll(".menubar-item").forEach((item) => {
@@ -836,29 +857,15 @@ async function populateMenubar(siteId) {
       // Add active class to clicked item
       fileItem.classList.add("active");
 
-      // Load file content
-      let fileContent;
-      if (markdownCache[file.path]) {
-        // Use cached version
-        console.log(`Using cached content for ${file.path}`);
-        fileContent = markdownCache[file.path];
-        modified = true;
-      } else {
-        // Fetch from remote
-        console.log(`Fetching content for ${file.path}`);
-        if (getOauthTokenGitlab() !== null) {
-          fileContent = await getFileContentGitlab(siteId, file.path);
-        } else if (getOauthTokenGithub() !== null) {
-          fileContent = await getFileContentGithub(siteId, file.path);
-        }
-        markdownCache[file.path] = fileContent;
-        modified = false;
-      }
+      // Load file content - always from cache since we use cache as source of truth
+      let fileContent = cacheItem.content;
+      console.log(`Using cached content for ${cacheItem.fileName}`);
+
       // Update deploy button state since cache was updated
       updateDeployButtonState();
 
       // Update current file path
-      currentSitePath = file.path;
+      currentSitePath = cacheItem.fileName;
 
       // Set editor content
       editor.setMarkdown(fileContent);
