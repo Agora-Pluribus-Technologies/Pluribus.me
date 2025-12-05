@@ -7,18 +7,11 @@ function loadToastEditor() {
     previewStyle: "vertical",
     theme: "dark",
     toolbarItems: [
-    'heading',
-    'bold',
-    'italic',
-    'strike',
-    'hr',
-    'quote',
-    'ul',
-    'ol',
-    'task',
-    'table',
-    'link',
-    'code',
+      ['heading', 'bold', 'italic', 'strike'],
+      ['hr', 'quote'],
+      ['ul', 'ol', 'task', 'indent', 'outdent'],
+      ['table', 'link'],
+      ['code', 'codeblock']
     ]
   });
 }
