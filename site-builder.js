@@ -6,5 +6,19 @@ function loadToastEditor() {
     initialEditType: "wysiwyg",
     previewStyle: "vertical",
     theme: "dark",
+    toolbarItems: [
+    'heading',
+    'bold',
+    'italic',
+    'strike',
+    'hr',
+    'quote',
+    'ul',
+    'ol',
+    'task',
+    'table',
+    'link',
+    'code',
+    ]
   });
 }
