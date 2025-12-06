@@ -17,7 +17,8 @@ function loadQuillEditor() {
         ['bold', 'italic', 'strike'],
         ['blockquote', 'code-block'],
         [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-        ['image', 'link']
+        ['link'],
+        ['clean']
       ]
     }
   });
