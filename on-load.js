@@ -384,7 +384,7 @@ async function triggerCreateNewSiteGitlab(displayName) {
     // Open the new page in the editor
     currentSitePath = fileName;
     const cacheItem = getCacheByFileName(fileName);
-    setMarkdown(cacheItem.content);
+    editor.setMarkdown(cacheItem.content);
   }
 }
 
@@ -571,7 +571,7 @@ function populateSitesList(sites) {
       await populateMenubar(site.id);
 
       // Load the editor
-      loadQuillEditor();
+      loadToastEditor();
 
       // Click the Home menubar item to load it
       setTimeout(() => {
@@ -582,12 +582,12 @@ function populateSitesList(sites) {
             text.click();
 
             // Set up editor change listener to update cache
-            editor.off("text-change");
-            editor.on("text-change", function () {
+            editor.off("change");
+            editor.on("change", function () {
               if (currentSitePath) {
                 const cacheItem = getCacheByFileName(currentSitePath);
                 if (cacheItem) {
-                  cacheItem.content = getMarkdown();
+                  cacheItem.content = editor.getMarkdown();
                   console.log(`Cached content for ${currentSitePath}`);
                   modified = true;
                   updateDeployButtonState();
@@ -777,7 +777,7 @@ async function populateMenubar(siteId) {
             if (currentSitePath === oldFilePath) {
               currentSitePath = newFilePath;
               const updatedItem = getCacheByFileName(newFilePath);
-              setMarkdown(updatedItem.content);
+              editor.setMarkdown(updatedItem.content);
             }
 
             // Mark as modified
@@ -832,7 +832,7 @@ async function populateMenubar(siteId) {
 
           // Clear editor if the deleted file was open
           if (currentSitePath === cacheItem.fileName) {
-            setMarkdown("");
+            editor.setMarkdown("");
             currentSitePath = null;
           }
 
@@ -878,7 +878,7 @@ async function populateMenubar(siteId) {
       currentSitePath = cacheItem.fileName;
 
       // Set editor content
-      setMarkdown(fileContent);
+      editor.setMarkdown(fileContent);
     });
     menubarContent.appendChild(fileItem);
   }
