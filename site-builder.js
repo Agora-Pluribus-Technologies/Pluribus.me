@@ -238,7 +238,7 @@ function populateImageGallery(galleryElement) {
 // Show image upload popup
 function showImageUploadPopup() {
   // Remove existing popup if any
-  const existingPopup = document.querySelector('.toastui-editor-popup');
+  const existingPopup = document.querySelector('.image-upload-popup');
   if (existingPopup) {
     existingPopup.remove();
   }
@@ -398,7 +398,7 @@ async function handleImageUpload(file, popup, progressContainer, imageGallery) {
 // Show HTML embed popup
 function showHtmlEmbedPopup() {
   // Remove existing popup if any
-  const existingPopup = document.querySelector('.toastui-editor-popup');
+  const existingPopup = document.querySelector('.html-embed-popup');
   if (existingPopup) {
     existingPopup.remove();
   }
