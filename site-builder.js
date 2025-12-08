@@ -136,15 +136,7 @@ function loadToastEditor() {
           name: 'customHtmlEmbed'
         }
       ]
-    ],
-    customHTMLRenderer: {
-      // Override soft line breaks ("softbreak")
-      softbreak() {
-        return {
-          html: '' // empty = NO <br>
-        };
-      }
-    }
+    ]
   });
 }
 
@@ -197,9 +189,10 @@ function populateImageGallery(galleryElement) {
 
     // Click image to insert into editor
     img.addEventListener('click', () => {
-      const currentMarkdown = editor.getMarkdown();
+      let currentMarkdown = editor.getMarkdown();
       const imageMarkdown = `![${filename}](${imageUrl})`;
-      editor.setMarkdown(currentMarkdown + '\n' + imageMarkdown);
+
+      editor.setMarkdown(currentMarkdown.replace("<br>", "").trim() + "\n\n" + imageMarkdown + "\n\n");
 
       // Close the popup
       const popup = document.querySelector('.image-upload-popup');
@@ -468,12 +461,10 @@ function showHtmlEmbedPopup() {
 
     // Insert HTML into editor as code-block-enclosed HTML block
     let currentMarkdown = editor.getMarkdown();
+    const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
+    const htmlEmbed = `\`\`\`embed\n${htmlCode}\n\`\`\``;
 
-    while (!currentMarkdown.endsWith("\n\n")) {
-      currentMarkdown = `${currentMarkdown}\n`
-    }
-
-    editor.setMarkdown(`${currentMarkdown}\`\`\`embed\n${htmlCode}\n\`\`\``);
+    editor.setMarkdown(`${cleanMarkdown}\n\n${htmlEmbed}\n\n`);
 
     // Close popup
     popup.remove();
