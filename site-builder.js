@@ -177,7 +177,6 @@ function showImageUploadPopup() {
           <div class="dropzone-content">
             <p class="dropzone-icon">📁</p>
             <p>Click to select an image or drag and drop here</p>
-            <p class="dropzone-hint">Image will be converted to AVIF and resized to max 1080px</p>
           </div>
         </div>
         <div class="image-upload-progress" style="display: none;">
@@ -204,6 +203,15 @@ function showImageUploadPopup() {
   closeButton.addEventListener('click', () => {
     popup.remove();
   });
+
+  // Blur event handler to hide popup when clicking outside
+  popup.addEventListener('blur', () => {
+    popup.style.display = 'none';
+  }, true);
+
+  // Make popup focusable and focus it
+  popup.setAttribute('tabindex', '-1');
+  popup.focus();
 
   // Click to select file
   dropzone.addEventListener('click', () => {
