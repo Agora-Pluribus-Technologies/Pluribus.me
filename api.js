@@ -1231,6 +1231,38 @@ async function createPageGithub(siteId, pageName) {
   return updateRefResponse.ok;
 }
 
+async function deleteImageGitlab(siteId, filename) {
+  const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
+
+  const payload = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+    },
+    body: JSON.stringify({
+      branch: "main",
+      commit_message: `Delete image: ${filename}`,
+      actions: [
+        {
+          action: "delete",
+          file_path: `public/${filename}`,
+        },
+      ],
+    }),
+  };
+
+  const response = await fetch(gitlabCreateFileUrl, payload);
+
+  if (response.ok) {
+    console.log("Image deleted from GitLab successfully:", filename);
+  } else {
+    console.error("Failed to delete image from GitLab");
+  }
+
+  return response.ok;
+}
+
 async function uploadImageGitlab(siteId, filename, base64Content) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
@@ -1424,6 +1456,113 @@ async function renamePageGitlab(siteId, pageName, newPageName) {
   const response = await fetch(gitlabCreateFileUrl, payload);
 
   return response.ok;
+}
+
+async function deleteImageGithub(siteId, filename) {
+  // Step 1: Get the current commit SHA
+  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!refResponse.ok) {
+    console.error("Failed to get current commit");
+    return false;
+  }
+
+  const refData = await refResponse.json();
+  const currentCommitSha = refData.object.sha;
+
+  // Step 2: Get the current commit to get the tree SHA
+  const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!commitResponse.ok) {
+    console.error("Failed to get commit data");
+    return false;
+  }
+
+  const commitData = await commitResponse.json();
+  const baseTreeSha = commitData.tree.sha;
+
+  // Step 3: Create a new tree with the image file deleted (sha: null)
+  const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: [
+        {
+          path: `public/${filename}`,
+          mode: "100644",
+          type: "blob",
+          sha: null,
+        },
+      ],
+    }),
+  });
+
+  if (!treeResponse.ok) {
+    console.error("Failed to create tree");
+    return false;
+  }
+
+  const treeData = await treeResponse.json();
+
+  // Step 4: Create a new commit
+  const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      message: `Delete image: ${filename}`,
+      tree: treeData.sha,
+      parents: [currentCommitSha],
+    }),
+  });
+
+  if (!newCommitResponse.ok) {
+    console.error("Failed to create commit");
+    return false;
+  }
+
+  const newCommitData = await newCommitResponse.json();
+
+  // Step 5: Update the reference
+  const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      sha: newCommitData.sha,
+    }),
+  });
+
+  if (updateRefResponse.ok) {
+    console.log("Image deleted from GitHub successfully:", filename);
+    return true;
+  } else {
+    console.error("Failed to update reference");
+    return false;
+  }
 }
 
 async function uploadImageGithub(siteId, filename, base64Content) {

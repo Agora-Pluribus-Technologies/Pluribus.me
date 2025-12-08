@@ -150,6 +150,73 @@ function createImageButton() {
   return button;
 }
 
+// Populate image gallery
+function populateImageGallery(galleryElement) {
+  galleryElement.innerHTML = '';
+
+  imageCache.forEach(filename => {
+    const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
+
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'image-gallery-item';
+
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.alt = filename;
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'image-delete-btn';
+    deleteBtn.innerHTML = '×';
+    deleteBtn.title = 'Delete image';
+
+    // Click image to insert into editor
+    img.addEventListener('click', () => {
+      const currentMarkdown = editor.getMarkdown();
+      const imageMarkdown = `![${filename}](${imageUrl})`;
+      editor.setMarkdown(currentMarkdown + '\n' + imageMarkdown);
+
+      // Close the popup
+      const popup = document.querySelector('.image-upload-popup');
+      if (popup) popup.remove();
+
+      showAlertBar('Image inserted into editor!', true);
+    });
+
+    // Delete button handler
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+
+      if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+        return;
+      }
+
+      try {
+        let success = false;
+        if (getOauthTokenGitlab() !== null) {
+          success = await deleteImageGitlab(currentSiteId, filename);
+        } else if (getOauthTokenGithub() !== null) {
+          success = await deleteImageGithub(currentSiteId, filename);
+        }
+
+        if (success) {
+          removeImageFromCache(filename);
+          populateImageGallery(galleryElement);
+          showAlertBar('Image deleted successfully!', true);
+        } else {
+          throw new Error('Failed to delete image from repository');
+        }
+      } catch (error) {
+        console.error('Error deleting image:', error);
+        alert('Failed to delete image: ' + error.message);
+      }
+    });
+
+    itemDiv.appendChild(img);
+    itemDiv.appendChild(deleteBtn);
+    galleryElement.appendChild(itemDiv);
+  });
+}
+
 // Show image upload popup
 function showImageUploadPopup() {
   // Remove existing popup if any
@@ -185,6 +252,12 @@ function showImageUploadPopup() {
           </div>
           <p class="progress-text">Processing and uploading...</p>
         </div>
+        <div class="image-gallery-section">
+          <h4>Image Gallery</h4>
+          <div class="image-gallery" id="imageGallery">
+            <!-- Images will be populated here -->
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -198,6 +271,10 @@ function showImageUploadPopup() {
   const fileInput = popup.querySelector('#imageFileInput');
   const closeButton = popup.querySelector('.image-upload-close');
   const progressContainer = popup.querySelector('.image-upload-progress');
+  const imageGallery = popup.querySelector('#imageGallery');
+
+  // Populate image gallery
+  populateImageGallery(imageGallery);
 
   // Close button handler
   closeButton.addEventListener('click', () => {
@@ -233,7 +310,7 @@ function showImageUploadPopup() {
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
-      await handleImageUpload(file, popup, progressContainer);
+      await handleImageUpload(file, popup, progressContainer, imageGallery);
     }
   });
 
@@ -260,7 +337,7 @@ function showImageUploadPopup() {
 
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
-      await handleImageUpload(file, popup, progressContainer);
+      await handleImageUpload(file, popup, progressContainer, imageGallery);
     } else {
       alert('Please drop an image file');
     }
@@ -268,13 +345,19 @@ function showImageUploadPopup() {
 }
 
 // Handle image upload
-async function handleImageUpload(file, popup, progressContainer) {
+async function handleImageUpload(file, popup, progressContainer, imageGallery) {
   try {
     // Show progress
     progressContainer.style.display = 'block';
 
     // Upload image
     const filename = await uploadImage(file);
+
+    // Hide progress
+    progressContainer.style.display = 'none';
+
+    // Refresh the image gallery
+    populateImageGallery(imageGallery);
 
     // Insert image into editor (use setMarkdown to avoid escaping)
     const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
