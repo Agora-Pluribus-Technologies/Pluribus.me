@@ -124,7 +124,6 @@ function loadToastEditor() {
       ['hr', 'quote'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
       ['table', 'link'],
-      ['code', 'codeblock'],
       [
         {
           el: createImageButton(),
