@@ -1,10 +1,12 @@
 # About this tool
 
-This website builder is intended to be a mobile-friendly web app that allows the user to create webpages easily.
+This website builder is intended to be a mobile-friendly web app that allows the user to create and edit webpages easily.
 
 How it works: This Oauth2 application can operate on behalf of a user's GitHub or GitLab account, and it allows for the creation, modification, and deletion of markdown files that are persisted in public git repositories on the user's account. When creating a Pluribus site, this app uses a Cloudflare Pages function to link to the user's files. In other words, for each Pluribus site, where the site is served (Cloudflare Pages function) is different from the location of the site's contents (the user's git repository). This distributed model is inspired by a tool created in Taiwan's g0v movement called [hackfoldr](https://github.com/hackfoldr/hackfoldr).
 
 Eventually, it will adhere to the below WIP specification.
+
+This application is not affiliated with the Apple TV original "Pluribus."
 
 ***
 
