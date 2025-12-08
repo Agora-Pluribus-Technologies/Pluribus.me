@@ -680,6 +680,13 @@ function populateSitesList(sites) {
         }
 
         if (success) {
+          const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(currentSitePathFull)}`, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          
           console.log("Site deleted successfully");
 
           // Remove from cache

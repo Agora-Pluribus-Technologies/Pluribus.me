@@ -74,3 +74,32 @@ export async function onRequestGet(context) {
   }
 
 };
+
+// functions/api/sites.ts
+
+export async function onRequestDelete(context) {
+  const { request, env } = context;
+
+  // Parse URL to get search params
+  const url = new URL(request.url);
+  const siteIdEncoded = url.searchParams.get("siteId");
+
+  if (!siteIdEncoded) {
+    return new Response("Missing required fields", { status: 400 });
+  }
+
+  // Decode the URL-encoded siteId
+  const siteId = decodeURIComponent(siteIdEncoded);
+
+  // Check if site already exists
+  const existing = await env.SITES.get(`site:${siteId}`);
+
+  if (existing) {
+    await env.SITES.delete(`site:${siteId}`);
+    return new Response(existing, { status: 200 });
+  } else {
+    // Site not found
+    return new Response("Not Found", { status: 404 });
+  }
+
+};

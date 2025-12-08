@@ -3,7 +3,7 @@
 // This function serves user sites from GitHub or GitLab based on KV config.
 // URL shape: /s/:siteId/... → fetch from that site's repo and return the file.
 
-export async function onRequest(context) {
+export async function onRequestGet(context) {
   const { request, env, params } = context;
   const url = new URL(request.url);
 
