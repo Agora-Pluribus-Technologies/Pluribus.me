@@ -192,7 +192,7 @@ function populateImageGallery(galleryElement) {
       let currentMarkdown = editor.getMarkdown();
       const imageMarkdown = `![${filename}](${imageUrl})`;
 
-      editor.setMarkdown(currentMarkdown.trim() + "\n\n" + imageMarkdown + "\n\n");
+      editor.setMarkdown(currentMarkdown.replace("<br>", "").trim() + "\n\n" + imageMarkdown + "\n\n");
 
       // Close the popup
       const popup = document.querySelector('.image-upload-popup');
@@ -461,8 +461,10 @@ function showHtmlEmbedPopup() {
 
     // Insert HTML into editor as code-block-enclosed HTML block
     let currentMarkdown = editor.getMarkdown();
+    const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
+    const htmlEmbed = `\`\`\`embed\n${htmlCode}\n\`\`\``;
 
-    editor.setMarkdown(`${currentMarkdown.trim()}\n\n\`\`\`embed\n${htmlCode}\n\`\`\`\n\n`);
+    editor.setMarkdown(`${cleanMarkdown}\n\n${htmlEmbed}\n\n`);
 
     // Close popup
     popup.remove();
