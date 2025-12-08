@@ -480,9 +480,12 @@ function showHtmlEmbedPopup() {
   popup.setAttribute('tabindex', '-1');
   popup.focus();
 
-  // Prevent blur when clicking inside the popup
+  // Prevent blur when clicking inside the popup (but not on buttons)
   popup.addEventListener('mousedown', (e) => {
-    e.preventDefault();
+    // Don't prevent default on buttons to allow clicks to work
+    if (e.target.tagName !== 'BUTTON') {
+      e.preventDefault();
+    }
   });
 
   // Focus the textarea
