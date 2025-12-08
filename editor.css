@@ -373,18 +373,6 @@ nav {
   margin: 0 !important;
 }
 
-/* Image upload popup styles */
-.image-upload-popup {
-  position: fixed !important;
-  background-color: #1e1e1e;
-  border: 1px solid #555;
-  border-radius: 8px;
-  padding: 20px;
-  min-width: 400px;
-  max-width: 600px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-}
-
 .image-upload-container {
   display: flex;
   flex-direction: column;
