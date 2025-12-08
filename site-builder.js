@@ -459,7 +459,7 @@ function showHtmlEmbedPopup() {
     }
 
     // Insert HTML into editor as code-block-enclosed HTML block
-    const currentMarkdown = editor.getMarkdown();
+    let currentMarkdown = editor.getMarkdown();
 
     while (!currentMarkdown.endsWith("\n\n")) {
       currentMarkdown = `${currentMarkdown}\n`
