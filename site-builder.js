@@ -427,7 +427,7 @@ function showHtmlEmbedPopup() {
         </div>
         <div class="html-embed-form">
           <label for="htmlEmbedTextarea">Paste your HTML code:</label>
-          <textarea id="htmlEmbedTextarea" rows="10" placeholder="<iframe src=&quot;...&quot;></iframe>"></textarea>
+          <textarea id="htmlEmbedTextarea" rows="5" placeholder="<iframe src=&quot;...&quot;></iframe>"></textarea>
           <div class="html-embed-buttons">
             <button class="html-embed-insert-btn toastui-editor-ok-button">Insert HTML</button>
             <button class="html-embed-cancel-btn toastui-editor-close-button">Cancel</button>
