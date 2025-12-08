@@ -279,7 +279,7 @@ async function handleImageUpload(file, popup, progressContainer) {
     // Insert image into editor
     const imagePath = `public/${filename}`;
     const imageUrl = `/s/${currentSitePathFull}/${filename}`;
-    editor.insertText(`![${file.name}](${imageUrl})`);
+    editor.insertText(`![${filename}](${imageUrl})`);
 
     // Close popup
     popup.remove();
