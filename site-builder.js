@@ -136,7 +136,19 @@ function loadToastEditor() {
           name: 'customHtmlEmbed'
         }
       ]
-    ]
+    ],
+    hooks: {
+    previewBeforeHook: (html) => {
+      const clean = sanitizeHtml(html, {
+        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['iframe', 'video']),
+        allowedAttributes: {
+          ...sanitizeHtml.defaults.allowedAttributes,
+          iframe: ['src', 'allowfullscreen', 'width', 'height'],
+        },
+      });
+      return clean;
+    }
+  }
   });
 }
 
@@ -458,33 +470,9 @@ function showHtmlEmbedPopup() {
       return;
     }
 
-    // Get current mode and switch to markdown if needed
-    const currentMode = editor.getCurrentModeEditor().type;
-
-    if (currentMode === 'wysiwyg') {
-      // Switch to markdown mode
-      editor.changeMode('markdown');
-    }
-
-    // Get the current cursor position or append to end
-    const mdEditor = editor.getCurrentModeEditor();
-    const currentContent = editor.getMarkdown();
-
-    // Insert HTML at current cursor position or append to end
-    if (mdEditor.setMarkdown) {
-      // Append to end
-      editor.setMarkdown(currentContent + '\n\n' + htmlCode + '\n');
-    } else {
-      // Use CodeMirror instance directly
-      const cm = mdEditor.cm;
-      const cursor = cm.getCursor();
-      cm.replaceRange('\n\n' + htmlCode + '\n', cursor);
-    }
-
-    // Switch back to wysiwyg if that's what we started with
-    if (currentMode === 'wysiwyg') {
-      editor.changeMode('wysiwyg');
-    }
+    // Insert HTML into editor as raw HTML block
+    const currentMarkdown = editor.getMarkdown();
+    editor.setMarkdown(`${currentMarkdown}\n\n${htmlCode}`);
 
     // Close popup
     popup.remove();
