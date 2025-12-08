@@ -95,8 +95,8 @@ export async function onRequestDelete(context) {
   const existing = await env.SITES.get(`site:${siteId}`);
 
   if (existing) {
-    await env.SITES.delete(`site:${siteId}`);
-    return new Response(existing, { status: 200 });
+    const del = await env.SITES.delete(`site:${siteId}`);
+    return new Response(del, { status: 200 });
   } else {
     // Site not found
     return new Response("Not Found", { status: 404 });

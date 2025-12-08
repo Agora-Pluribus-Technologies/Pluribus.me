@@ -680,7 +680,7 @@ function populateSitesList(sites) {
         }
 
         if (success) {
-          const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(currentSitePathFull)}`, {
+          const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(siteIdToDelete)}`, {
             method: "DELETE",
             headers: {
               "Content-Type": "application/json",
