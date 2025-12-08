@@ -205,16 +205,27 @@ function showImageUploadPopup() {
   });
 
   // Blur event handler to hide popup when clicking outside
-  popup.addEventListener('blur', () => {
-    popup.style.display = 'none';
+  popup.addEventListener('blur', (e) => {
+    // Don't hide if the blur is caused by clicking within the popup
+    setTimeout(() => {
+      if (!popup.contains(document.activeElement)) {
+        popup.style.display = 'none';
+      }
+    }, 0);
   }, true);
 
   // Make popup focusable and focus it
   popup.setAttribute('tabindex', '-1');
   popup.focus();
 
+  // Prevent blur when clicking inside the popup
+  popup.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+
   // Click to select file
-  dropzone.addEventListener('click', () => {
+  dropzone.addEventListener('click', (e) => {
+    e.stopPropagation();
     fileInput.click();
   });
 
