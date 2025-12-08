@@ -667,7 +667,7 @@ nav {
 }
 
 @media (max-width: 768px) {
-  .toastui-editor-toolbar-tooltip {
+  .toastui-editor-tooltip {
     display: none !important;
   }
 
