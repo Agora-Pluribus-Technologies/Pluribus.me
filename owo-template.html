@@ -219,10 +219,7 @@
         if (content.ok) {
           const text = await content.text();
           const parsedMarkdown = await marked.parse(text, breaks = true);
-          const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown, {
-            ADD_TAGS: ['img'], // Explicitly allow img tag
-            ADD_ATTR: ['src'] // Explicitly allow src attribute
-          });
+          const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
 
           const markdownSections = sanitizedMarkdown.split('<hr>');
           for (let i = 0; i < markdownSections.length; i++) {
@@ -232,6 +229,27 @@
               sectionArticle.classList.add('h-entry');
               sectionArticle.innerHTML = section;
               panel.appendChild(sectionArticle);
+            }
+          }
+
+          // Handle embeds
+          const preList = document.getElementsByClassName("pre");
+          for (let i=0; i < preList.length; i++) {
+            const pre = preList[i];
+            let embedHtml;
+            for (let j=0; j < pre.children.length; j++) {
+              const preChild = pre.children[j];
+              if (preChild.classList.contains("lang-embed")) {
+                embedHtml = preChild.innerText;
+                break;
+              }
+            };
+            if (embedHtml) {
+              let newDiv = document.createElement("div");
+              newDiv.classList.add("embed-container");
+              const sanitizedHtml = DOMPurify.sanitize(embedHtml);
+              newDiv.innerHTML = sanitizedHtml;
+              pre.replaceWith(newDiv);
             }
           }
         } else {
