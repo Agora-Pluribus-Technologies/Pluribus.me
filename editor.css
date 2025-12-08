@@ -576,13 +576,13 @@ nav {
 
 /* HTML embed popup styles */
 .html-embed-popup {
-  position: fixed !important;
+  position: relative !important;
   background-color: #1e1e1e;
   border: 1px solid #555;
   border-radius: 8px;
   padding: 20px;
   min-width: 500px;
-  max-width: 700px;
+  max-width: 90%;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
