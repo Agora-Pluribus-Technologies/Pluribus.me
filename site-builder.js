@@ -277,8 +277,7 @@ async function handleImageUpload(file, popup, progressContainer) {
     const filename = await uploadImage(file);
 
     // Insert image into editor
-    const imagePath = `public/${filename}`;
-    const imageUrl = `/s/${currentSitePathFull}/${filename}`;
+    const imageUrl = `https://pluribus.me/s/${currentSitePathFull}/${filename}`;
     editor.insertText(`![${filename}](${imageUrl})`);
 
     // Close popup
