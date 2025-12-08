@@ -666,10 +666,6 @@ nav {
   border-radius: 4px;
 }
 
-.embed-container {
-  text-align: center;
-}
-
 @media (max-width: 768px) {
   .menu-link {
     font-size: 14pt;
