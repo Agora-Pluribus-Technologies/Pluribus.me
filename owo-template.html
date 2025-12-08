@@ -219,7 +219,10 @@
         if (content.ok) {
           const text = await content.text();
           const parsedMarkdown = await marked.parse(text, breaks = true);
-          const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
+          const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown, {
+            ADD_TAGS: ['img'], // Explicitly allow img tag
+            ADD_ATTR: ['src'] // Explicitly allow src attribute
+          });
 
           const markdownSections = sanitizedMarkdown.split('<hr>');
           for (let i = 0; i < markdownSections.length; i++) {
