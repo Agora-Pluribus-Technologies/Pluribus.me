@@ -127,7 +127,18 @@
       await createMenubar(origin, basePath, pagesJson);
       await fetchPageContent(origin, basePath, pagesJson);
       decodeEmbeds();
+      centerImages();
     });
+
+    function centerImages() {
+      const pList = document.getElementsByTagName("p");
+      for (let i = 0; i < pList.children.length; i++) {
+        const p = pList[i];
+        if (p.children.length == 1 && p.children[0].nodeName.toLowerCase() == "img") {
+          p.style.textAlign = "center";
+        }
+      }
+    }
 
     function decodeEmbeds() {
       const preList = document.getElementsByTagName("pre");
