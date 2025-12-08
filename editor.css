@@ -242,6 +242,7 @@ nav {
   top: 50% !important;
   left: 50% !important;
   transform: translate(-50%,0%);
+  margin: 0 !important;
 }
 
 .btn {
