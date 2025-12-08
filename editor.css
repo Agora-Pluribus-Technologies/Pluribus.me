@@ -235,6 +235,15 @@ nav {
   flex-shrink: 0;
 }
 
+.toastui-editor-popup {
+  position:relative;
+  display: block;
+  max-width: 90%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,0%);
+}
+
 .btn {
   padding: 10px 20px;
   font-size: 16px;
