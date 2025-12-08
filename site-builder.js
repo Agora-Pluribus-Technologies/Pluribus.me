@@ -197,9 +197,17 @@ function populateImageGallery(galleryElement) {
 
     // Click image to insert into editor
     img.addEventListener('click', () => {
-      const currentMarkdown = editor.getMarkdown();
+      let currentMarkdown = editor.getMarkdown();
       const imageMarkdown = `![${filename}](${imageUrl})`;
-      editor.setMarkdown(currentMarkdown + '\n' + imageMarkdown);
+
+      currentMarkdown = currentMarkdown.trim();
+
+      // Ensure exactly 2 newlines at the end
+      while (!currentMarkdown.endsWith("\n\n")) {
+        currentMarkdown += "\n";
+      }
+
+      editor.setMarkdown(currentMarkdown + imageMarkdown + "\n\n");
 
       // Close the popup
       const popup = document.querySelector('.image-upload-popup');
