@@ -126,7 +126,30 @@
       const pagesJson = await fetchPagesJson(origin, basePath);
       await createMenubar(origin, basePath, pagesJson);
       await fetchPageContent(origin, basePath, pagesJson);
+      decodeEmbeds();
     });
+
+    function decodeEmbeds() {
+      const preList = document.getElementsByClassName("pre");
+      for (let i=0; i < preList.length; i++) {
+        const pre = preList[i];
+        let embedHtml;
+        for (let j=0; j < pre.children.length; j++) {
+          const preChild = pre.children[j];
+          if (preChild.classList.contains("language-embed")) {
+            embedHtml = preChild.innerText;
+            break;
+          }
+        };
+        if (embedHtml) {
+          let newDiv = document.createElement("div");
+          newDiv.classList.add("embed-container");
+          const sanitizedHtml = DOMPurify.sanitize(embedHtml);
+          newDiv.innerHTML = sanitizedHtml;
+          pre.replaceWith(newDiv);
+        }
+      }
+    }
 
     async function fetchPagesJson(origin, basePath) {
       const pagesJsonLink = `${origin}${basePath}/pages.json`;
@@ -229,27 +252,6 @@
               sectionArticle.classList.add('h-entry');
               sectionArticle.innerHTML = section;
               panel.appendChild(sectionArticle);
-            }
-          }
-
-          // Handle embeds
-          const preList = document.getElementsByClassName("pre");
-          for (let i=0; i < preList.length; i++) {
-            const pre = preList[i];
-            let embedHtml;
-            for (let j=0; j < pre.children.length; j++) {
-              const preChild = pre.children[j];
-              if (preChild.classList.contains("language-embed")) {
-                embedHtml = preChild.innerText;
-                break;
-              }
-            };
-            if (embedHtml) {
-              let newDiv = document.createElement("div");
-              newDiv.classList.add("embed-container");
-              const sanitizedHtml = DOMPurify.sanitize(embedHtml);
-              newDiv.innerHTML = sanitizedHtml;
-              pre.replaceWith(newDiv);
             }
           }
         } else {
