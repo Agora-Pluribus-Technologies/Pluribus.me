@@ -79,9 +79,14 @@ async function uploadImage(file) {
     // Process image (convert to AVIF and resize)
     const processedBlob = await processImage(file);
 
-    // Generate filename (keep original name but change extension to .avif)
+    // Generate filename (sanitize to lowercase letters and dashes, then change extension to .avif)
     const originalName = file.name.replace(/\.[^/.]+$/, '');
-    const filename = `${originalName}.avif`;
+    const sanitizedName = originalName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric chars with dashes
+      .replace(/^-+|-+$/g, '')       // Remove leading/trailing dashes
+      .replace(/-+/g, '-');           // Replace multiple dashes with single dash
+    const filename = `${sanitizedName}.avif`;
 
     // Convert to base64
     const base64Content = await blobToBase64(processedBlob);
@@ -134,10 +139,8 @@ function loadToastEditor() {
 // Create custom image toolbar button
 function createImageButton() {
   const button = document.createElement('button');
-  button.className = 'toastui-editor-toolbar-icons';
-  button.style.backgroundImage = 'none';
-  button.style.fontSize = '16px';
-  button.innerHTML = '🖼️';
+  button.classList.add('toastui-editor-toolbar-icons');
+  button.classList.add('image');
   button.type = 'button';
 
   button.addEventListener('click', () => {

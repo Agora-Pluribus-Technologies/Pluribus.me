@@ -236,12 +236,16 @@ nav {
 }
 
 .toastui-editor-popup {
-  position: relative;
-  display: block;
-  max-width: 90%;
+  position: relative !important;
+  display: block !important;
+  max-width: 90% !important;
   top: 50% !important;
   left: 50% !important;
-  transform: translate(-50%,0%);
+  transform: translate(-50%,0%) !important;
+  margin: 0 !important;
+}
+
+.toastui-editor-toolbar-item-wrapper {
   margin: 0 !important;
 }
 
