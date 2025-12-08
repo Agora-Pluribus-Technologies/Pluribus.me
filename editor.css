@@ -675,9 +675,10 @@ nav {
   .toastui-editor-dropdown-toolbar {
     left: auto !important;
     right: 0 !important;
-    max-width: 100vw;
+    max-width: 100%;
+    height: auto;
     box-sizing: border-box;
-    overflow-x: auto;
+    overflow: visible;;
   }
 
   .menu-link {
