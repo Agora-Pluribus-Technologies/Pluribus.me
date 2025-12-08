@@ -119,10 +119,10 @@
     document.addEventListener("DOMContentLoaded", async function () {
       // https://pluribus.me
       const origin = document.location.origin;
-      
+
       // /s/username/sitename/path/to/page.html --> /s/username/sitename
       const basePath = document.location.pathname.split('/').slice(0, 4).join("/");
-      
+
       const pagesJson = await fetchPagesJson(origin, basePath);
       await createMenubar(origin, basePath, pagesJson);
       await fetchPageContent(origin, basePath, pagesJson);
@@ -131,10 +131,10 @@
 
     function decodeEmbeds() {
       const preList = document.getElementsByTagName("pre");
-      for (let i=0; i < preList.length; i++) {
+      for (let i = 0; i < preList.length; i++) {
         const pre = preList[i];
         let embedHtml;
-        for (let j=0; j < pre.children.length; j++) {
+        for (let j = 0; j < pre.children.length; j++) {
           const preChild = pre.children[j];
           if (preChild.classList.contains("language-embed")) {
             embedHtml = preChild.innerText;
@@ -145,7 +145,26 @@
           console.log("Embed HTML" + embedHtml)
           let newDiv = document.createElement("div");
           newDiv.classList.add("embed-container");
-          const sanitizedHtml = DOMPurify.sanitize(embedHtml);
+          const sanitizedHtml = DOMPurify.sanitize(embedHtml, {
+            // Allow iframes explicitly
+            ADD_TAGS: ['iframe'],
+
+            // Allow only safe, expected attributes
+            ADD_ATTR: [
+              'allow',
+              'allowfullscreen',
+              'frameborder',
+              'referrerpolicy',
+              'scrolling',
+              'src',
+              'width',
+              'height'
+            ],
+
+            // Keep built-in protections on
+            FORBID_TAGS: ['script', 'style'],      // script already forbidden by default, but explicit is fine
+            FORBID_ATTR: ['onerror', 'onload'],    // event handlers (DOMPurify strips these by default too)
+          });
           console.log("Sanitized: " + sanitizedHtml)
           newDiv.innerHTML = sanitizedHtml;
           pre.replaceWith(newDiv);
@@ -212,7 +231,7 @@
 
       // Set tab title
       if (pagesJson) {
-        
+
         // Convert site name to Title Case
         let siteName = basePath.split('/')[3];
         siteName = siteName.replace(/^-*(.)|-+(.)/g, (s, c, d) => c ? c.toUpperCase() : ' ' + d.toUpperCase())
