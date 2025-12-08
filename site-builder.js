@@ -465,7 +465,7 @@ function showHtmlEmbedPopup() {
       currentMarkdown = `${currentMarkdown}\n`
     }
 
-    editor.setMarkdown(`${currentMarkdown}\`\`\`embed\n${htmlCode}\`\`\``);
+    editor.setMarkdown(`${currentMarkdown}\`\`\`embed\n${htmlCode}\n\`\`\``);
 
     // Close popup
     popup.remove();
