@@ -142,9 +142,11 @@
           }
         };
         if (embedHtml) {
+          console.log("Embed HTML" + embedHtml)
           let newDiv = document.createElement("div");
           newDiv.classList.add("embed-container");
           const sanitizedHtml = DOMPurify.sanitize(embedHtml);
+          console.log("Sanitized: " + sanitizedHtml)
           newDiv.innerHTML = sanitizedHtml;
           pre.replaceWith(newDiv);
         }
