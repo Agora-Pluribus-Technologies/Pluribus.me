@@ -136,19 +136,7 @@ function loadToastEditor() {
           name: 'customHtmlEmbed'
         }
       ]
-    ],
-    hooks: {
-    previewBeforeHook: (html) => {
-      const clean = sanitizeHtml(html, {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['iframe', 'video']),
-        allowedAttributes: {
-          ...sanitizeHtml.defaults.allowedAttributes,
-          iframe: ['src', 'allowfullscreen', 'width', 'height'],
-        },
-      });
-      return clean;
-    }
-  }
+    ]
   });
 }
 
