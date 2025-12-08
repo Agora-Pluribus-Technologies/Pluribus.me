@@ -235,9 +235,10 @@ nav {
   flex-shrink: 0;
 }
 
-.toastui-editor-popup {
+.toastui-editor-popup,
+.toastui-editor-popup-add-link,
+.image-upload-popup {
   position: relative !important;
-  display: block !important;
   max-width: 90% !important;
   top: 50% !important;
   left: 50% !important;
