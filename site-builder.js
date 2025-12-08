@@ -460,14 +460,11 @@ function showHtmlEmbedPopup() {
 
     // Insert HTML into editor as raw HTML block
     const currentMarkdown = editor.getMarkdown();
-    const htmlEmbed = `\n\n${htmlCode}\n\n`;
-    editor.setMarkdown(currentMarkdown + htmlEmbed);
+    editor.setMarkdown(`${currentMarkdown}\n\n${htmlCode}`);
 
     // Close popup
     popup.remove();
 
-    // Show success message
-    showAlertBar('HTML embed inserted successfully!', true);
   });
 
   // Blur event handler to hide popup when clicking outside
