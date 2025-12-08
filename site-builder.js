@@ -146,6 +146,16 @@ function loadToastEditor() {
       }
     }
   });
+
+  // Add blur event listener to all toolbar buttons
+  setTimeout(() => {
+    const toolbarButtons = document.querySelectorAll('.toastui-editor-toolbar-icons');
+    toolbarButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        button.blur();
+      });
+    });
+  }, 100);
 }
 
 // Create custom image toolbar button
