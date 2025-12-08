@@ -9,6 +9,9 @@ let modified = false;
 // Global cache for sites list
 let sitesCache = [];
 
+// Global cache for images - Array of filenames
+let imageCache = [];
+
 // Helper functions for markdownCache
 function getCacheByFileName(fileName) {
   return markdownCache.find(item => item.fileName === fileName);
@@ -41,6 +44,24 @@ function removeCacheByFileName(fileName) {
   if (index !== -1) {
     markdownCache.splice(index, 1);
   }
+}
+
+// Helper functions for imageCache
+function addImageToCache(filename) {
+  if (!imageCache.includes(filename)) {
+    imageCache.push(filename);
+  }
+}
+
+function removeImageFromCache(filename) {
+  const index = imageCache.indexOf(filename);
+  if (index !== -1) {
+    imageCache.splice(index, 1);
+  }
+}
+
+function isImageInCache(filename) {
+  return imageCache.includes(filename);
 }
 
 // Interval for checking site availability
@@ -346,6 +367,7 @@ function goBackToSiteSelection() {
   currentSitePathFull = null;
   currentSitePath = null;
   markdownCache = [];
+  imageCache = [];
   modified = false;
 
   // Hide editor container
@@ -542,6 +564,8 @@ function populateSitesList(sites) {
           "Home",
           "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
         );
+        // Initialize empty imageCache
+        imageCache = [];
       } else {
         // Initialize markdownCache to pages.json
         if (getOauthTokenGitlab() !== null) {
@@ -564,6 +588,27 @@ function populateSitesList(sites) {
             content = await getFileContentGithub(site.full_name, file);
           }
           addOrUpdateCache(file, null, content);
+        }
+
+        // Initialize imageCache from images.json
+        try {
+          let imagesJsonContent;
+          if (getOauthTokenGitlab() !== null) {
+            imagesJsonContent = await getFileContentGitlab(site.id, "public/images.json");
+          } else if (getOauthTokenGithub() !== null) {
+            imagesJsonContent = await getFileContentGithub(site.full_name, "public/images.json");
+          }
+
+          if (imagesJsonContent) {
+            imageCache = JSON.parse(imagesJsonContent);
+            console.log("Loaded imageCache:", imageCache);
+          } else {
+            imageCache = [];
+            console.log("images.json not found, initialized empty imageCache");
+          }
+        } catch (error) {
+          console.error("Error loading images.json:", error);
+          imageCache = [];
         }
       }
 

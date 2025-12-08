@@ -362,6 +362,11 @@ async function initialCommitGitlab(siteId) {
           file_path: "public/pages.json",
           content: '[]',
         },
+        {
+          action: "create",
+          file_path: "public/images.json",
+          content: '[]',
+        },
       ],
     }),
   };
@@ -372,24 +377,171 @@ async function initialCommitGitlab(siteId) {
 }
 
 async function initialCommitGithub(siteId) {
-  const githubCommitUrl = `https://api.github.com/repos/${siteId}/contents/public/pages.json`;
+  // Step 1: Get the current commit SHA (main branch should be created by GitHub automatically)
+  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
 
-  const payload = {
-    method: "PUT",
+  let currentCommitSha;
+  let baseTreeSha;
+
+  if (refResponse.ok) {
+    // Branch exists, get the current commit
+    const refData = await refResponse.json();
+    currentCommitSha = refData.object.sha;
+
+    const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    if (!commitResponse.ok) return false;
+
+    const commitData = await commitResponse.json();
+    baseTreeSha = commitData.tree.sha;
+  } else {
+    // Branch doesn't exist, we'll create it from scratch
+    currentCommitSha = null;
+    baseTreeSha = null;
+  }
+
+  // Step 2: Create blobs for pages.json and images.json
+  const pagesBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${getOauthTokenGithub()}`,
       Accept: "application/vnd.github+json",
     },
     body: JSON.stringify({
-      message: "Initial GitHub Pages setup",
-      content: encodeBase64('[]'), // Base64 encode the content
+      content: encodeBase64('[]'),
+      encoding: "base64",
     }),
+  });
+
+  if (!pagesBlobResponse.ok) return false;
+
+  const pagesBlobData = await pagesBlobResponse.json();
+
+  const imagesBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      content: encodeBase64('[]'),
+      encoding: "base64",
+    }),
+  });
+
+  if (!imagesBlobResponse.ok) return false;
+
+  const imagesBlobData = await imagesBlobResponse.json();
+
+  // Step 3: Create a new tree
+  const treePayload = {
+    tree: [
+      {
+        path: "public/pages.json",
+        mode: "100644",
+        type: "blob",
+        sha: pagesBlobData.sha,
+      },
+      {
+        path: "public/images.json",
+        mode: "100644",
+        type: "blob",
+        sha: imagesBlobData.sha,
+      },
+    ],
   };
 
-  const response = await fetch(githubCommitUrl, payload);
+  if (baseTreeSha) {
+    treePayload.base_tree = baseTreeSha;
+  }
 
-  return response.ok;
+  const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify(treePayload),
+  });
+
+  if (!treeResponse.ok) return false;
+
+  const treeData = await treeResponse.json();
+
+  // Step 4: Create a new commit
+  const commitPayload = {
+    message: "Initial GitHub Pages setup",
+    tree: treeData.sha,
+  };
+
+  if (currentCommitSha) {
+    commitPayload.parents = [currentCommitSha];
+  } else {
+    commitPayload.parents = [];
+  }
+
+  const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify(commitPayload),
+  });
+
+  if (!newCommitResponse.ok) return false;
+
+  const newCommitData = await newCommitResponse.json();
+
+  // Step 5: Update or create the reference
+  if (currentCommitSha) {
+    // Update existing reference
+    const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        sha: newCommitData.sha,
+      }),
+    });
+
+    return updateRefResponse.ok;
+  } else {
+    // Create new reference
+    const createRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        ref: "refs/heads/main",
+        sha: newCommitData.sha,
+      }),
+    });
+
+    return createRefResponse.ok;
+  }
 }
 
 async function getFileContentGitlab(siteId, filePath) {
@@ -570,6 +722,13 @@ async function deployChangesGitlab(siteId) {
       action: "update",
       file_path: "public/pages.json",
       content: JSON.stringify(pages),
+    });
+
+    // Update images.json based on imageCache
+    commitActions.push({
+      action: "update",
+      file_path: "public/images.json",
+      content: JSON.stringify(imageCache),
     });
 
     const payload = {
@@ -783,6 +942,36 @@ async function deployChangesGithub(siteId) {
       mode: "100644",
       type: "blob",
       sha: pagesBlobData.sha,
+    });
+
+    // Update images.json
+    const imagesBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getOauthTokenGithub()}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        content: encodeBase64(JSON.stringify(imageCache)),
+        encoding: "base64",
+      }),
+    });
+
+    if (!imagesBlobResponse.ok) {
+      modified = true;
+      updateDeployButtonState();
+      console.error("Failed to create images.json blob");
+      return false;
+    }
+
+    const imagesBlobData = await imagesBlobResponse.json();
+
+    treeItems.push({
+      path: "public/images.json",
+      mode: "100644",
+      type: "blob",
+      sha: imagesBlobData.sha,
     });
 
     // Step 4: Create a new tree
@@ -1042,6 +1231,40 @@ async function createPageGithub(siteId, pageName) {
   return updateRefResponse.ok;
 }
 
+async function uploadImageGitlab(siteId, filename, base64Content) {
+  const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
+
+  const payload = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGitlab()}`,
+    },
+    body: JSON.stringify({
+      branch: "main",
+      commit_message: `Upload image: ${filename}`,
+      actions: [
+        {
+          action: "create",
+          file_path: `public/${filename}`,
+          content: base64Content,
+          encoding: "base64",
+        },
+      ],
+    }),
+  };
+
+  const response = await fetch(gitlabCreateFileUrl, payload);
+
+  if (response.ok) {
+    console.log("Image uploaded to GitLab successfully:", filename);
+  } else {
+    console.error("Failed to upload image to GitLab");
+  }
+
+  return response.ok;
+}
+
 async function deletePageGitlab(siteId, pageName) {
   const gitlabCreateFileUrl = `https://gitlab.com/api/v4/projects/${siteId}/repository/commits`;
 
@@ -1201,6 +1424,134 @@ async function renamePageGitlab(siteId, pageName, newPageName) {
   const response = await fetch(gitlabCreateFileUrl, payload);
 
   return response.ok;
+}
+
+async function uploadImageGithub(siteId, filename, base64Content) {
+  // Step 1: Get the current commit SHA
+  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!refResponse.ok) {
+    console.error("Failed to get current commit");
+    return false;
+  }
+
+  const refData = await refResponse.json();
+  const currentCommitSha = refData.object.sha;
+
+  // Step 2: Get the current commit to get the tree SHA
+  const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!commitResponse.ok) {
+    console.error("Failed to get commit data");
+    return false;
+  }
+
+  const commitData = await commitResponse.json();
+  const baseTreeSha = commitData.tree.sha;
+
+  // Step 3: Create blob for image file
+  const blobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      content: base64Content,
+      encoding: "base64",
+    }),
+  });
+
+  if (!blobResponse.ok) {
+    console.error("Failed to create image blob");
+    return false;
+  }
+
+  const blobData = await blobResponse.json();
+
+  // Step 4: Create a new tree
+  const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: [
+        {
+          path: `public/${filename}`,
+          mode: "100644",
+          type: "blob",
+          sha: blobData.sha,
+        },
+      ],
+    }),
+  });
+
+  if (!treeResponse.ok) {
+    console.error("Failed to create tree");
+    return false;
+  }
+
+  const treeData = await treeResponse.json();
+
+  // Step 5: Create a new commit
+  const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      message: `Upload image: ${filename}`,
+      tree: treeData.sha,
+      parents: [currentCommitSha],
+    }),
+  });
+
+  if (!newCommitResponse.ok) {
+    console.error("Failed to create commit");
+    return false;
+  }
+
+  const newCommitData = await newCommitResponse.json();
+
+  // Step 6: Update the reference
+  const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      Accept: "application/vnd.github+json",
+    },
+    body: JSON.stringify({
+      sha: newCommitData.sha,
+    }),
+  });
+
+  if (updateRefResponse.ok) {
+    console.log("Image uploaded to GitHub successfully:", filename);
+    return true;
+  } else {
+    console.error("Failed to update reference");
+    return false;
+  }
 }
 
 async function renamePageGithub(siteId, pageName, newPageName) {
