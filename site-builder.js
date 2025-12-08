@@ -192,7 +192,7 @@ function populateImageGallery(galleryElement) {
       let currentMarkdown = editor.getMarkdown();
       const imageMarkdown = `![${filename}](${imageUrl})`;
 
-      editor.setMarkdown(currentMarkdown.replace("<br>", "").trim() + "\n\n" + imageMarkdown + "\n\n");
+      editor.setMarkdown(currentMarkdown.replace("<br>", "").trim() + "\n\n\n" + imageMarkdown);
 
       // Close the popup
       const popup = document.querySelector('.image-upload-popup');
@@ -464,7 +464,7 @@ function showHtmlEmbedPopup() {
     const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
     const htmlEmbed = `\`\`\`embed\n${htmlCode}\n\`\`\``;
 
-    editor.setMarkdown(`${cleanMarkdown}\n\n${htmlEmbed}\n\n`);
+    editor.setMarkdown(`${cleanMarkdown}\n\n\n${htmlEmbed}`);
 
     // Close popup
     popup.remove();
