@@ -574,6 +574,98 @@ nav {
   background-color: rgba(255, 0, 0, 1);
 }
 
+/* HTML embed popup styles */
+.html-embed-popup {
+  position: fixed !important;
+  background-color: #1e1e1e;
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 500px;
+  max-width: 700px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.html-embed-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.html-embed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.html-embed-header h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+.html-embed-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  line-height: 1;
+}
+
+.html-embed-close:hover {
+  color: #ff4444;
+}
+
+.html-embed-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.html-embed-form label {
+  color: #ccc;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.html-embed-form textarea {
+  width: 100%;
+  padding: 10px;
+  background-color: #0a0a0a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 150px;
+}
+
+.html-embed-form textarea:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.html-embed-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.html-embed-insert-btn,
+.html-embed-cancel-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
 @media (max-width: 768px) {
   .menu-link {
     font-size: 14pt;
@@ -599,6 +691,11 @@ nav {
   }
 
   .image-upload-popup {
+    min-width: 300px;
+    max-width: 90vw;
+  }
+
+  .html-embed-popup {
     min-width: 300px;
     max-width: 90vw;
   }

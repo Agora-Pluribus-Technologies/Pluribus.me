@@ -130,6 +130,11 @@ function loadToastEditor() {
           el: createImageButton(),
           tooltip: 'Insert image',
           name: 'customImage'
+        },
+        {
+          el: createHtmlEmbedButton(),
+          tooltip: 'Insert HTML embed',
+          name: 'customHtmlEmbed'
         }
       ]
     ]
@@ -145,6 +150,20 @@ function createImageButton() {
 
   button.addEventListener('click', () => {
     showImageUploadPopup();
+  });
+
+  return button;
+}
+
+// Create custom HTML embed toolbar button
+function createHtmlEmbedButton() {
+  const button = document.createElement('button');
+  button.classList.add('toastui-editor-toolbar-icons');
+  button.classList.add('code');
+  button.type = 'button';
+
+  button.addEventListener('click', () => {
+    showHtmlEmbedPopup();
   });
 
   return button;
@@ -375,4 +394,103 @@ async function handleImageUpload(file, popup, progressContainer, imageGallery) {
     progressContainer.style.display = 'none';
     alert('Failed to upload image: ' + error.message);
   }
+}
+
+// Show HTML embed popup
+function showHtmlEmbedPopup() {
+  // Remove existing popup if any
+  const existingPopup = document.querySelector('.html-embed-popup');
+  if (existingPopup) {
+    existingPopup.remove();
+  }
+
+  // Create popup container
+  const popup = document.createElement('div');
+  popup.className = 'toastui-editor-popup html-embed-popup';
+  popup.style.display = 'block';
+  popup.style.zIndex = '10000';
+
+  // Create popup content
+  popup.innerHTML = `
+    <div class="toastui-editor-popup-body">
+      <div class="html-embed-container">
+        <div class="html-embed-header">
+          <h3>Insert HTML Embed</h3>
+          <button class="html-embed-close">×</button>
+        </div>
+        <div class="html-embed-form">
+          <label for="htmlEmbedTextarea">Paste your HTML code:</label>
+          <textarea id="htmlEmbedTextarea" rows="10" placeholder="<iframe src=&quot;...&quot;></iframe>"></textarea>
+          <div class="html-embed-buttons">
+            <button class="html-embed-insert-btn btn btn-primary">Insert HTML</button>
+            <button class="html-embed-cancel-btn btn btn-default">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Append to editor container
+  const toolbarContainer = document.getElementsByClassName("toastui-editor-toolbar")[0];
+  toolbarContainer.appendChild(popup);
+
+  // Get elements
+  const textarea = popup.querySelector('#htmlEmbedTextarea');
+  const closeButton = popup.querySelector('.html-embed-close');
+  const insertButton = popup.querySelector('.html-embed-insert-btn');
+  const cancelButton = popup.querySelector('.html-embed-cancel-btn');
+
+  // Close button handler
+  closeButton.addEventListener('click', () => {
+    popup.remove();
+  });
+
+  // Cancel button handler
+  cancelButton.addEventListener('click', () => {
+    popup.remove();
+  });
+
+  // Insert button handler
+  insertButton.addEventListener('click', () => {
+    const htmlCode = textarea.value.trim();
+
+    if (!htmlCode) {
+      alert('Please enter HTML code');
+      return;
+    }
+
+    // Insert HTML into editor as raw HTML block
+    const currentMarkdown = editor.getMarkdown();
+    const htmlEmbed = `\n\n${htmlCode}\n\n`;
+    editor.setMarkdown(currentMarkdown + htmlEmbed);
+
+    // Close popup
+    popup.remove();
+
+    // Show success message
+    showAlertBar('HTML embed inserted successfully!', true);
+  });
+
+  // Blur event handler to hide popup when clicking outside
+  popup.addEventListener('blur', (e) => {
+    setTimeout(() => {
+      if (!popup.contains(document.activeElement)) {
+        popup.style.display = 'none';
+      }
+    }, 0);
+  }, true);
+
+  // Make popup focusable and focus it
+  popup.setAttribute('tabindex', '-1');
+  popup.focus();
+
+  // Prevent blur when clicking inside the popup
+  popup.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+
+  // Focus the textarea
+  setTimeout(() => {
+    textarea.focus();
+  }, 100);
 }

@@ -377,171 +377,51 @@ async function initialCommitGitlab(siteId) {
 }
 
 async function initialCommitGithub(siteId) {
-  // Step 1: Get the current commit SHA (main branch should be created by GitHub automatically)
-  const refResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGithub()}`,
-      Accept: "application/vnd.github+json",
-    },
-  });
+  // Use the simpler Contents API to create files in an empty repository
+  // This automatically creates the main branch if it doesn't exist
 
-  let currentCommitSha;
-  let baseTreeSha;
-
-  if (refResponse.ok) {
-    // Branch exists, get the current commit
-    const refData = await refResponse.json();
-    currentCommitSha = refData.object.sha;
-
-    const commitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits/${currentCommitSha}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${getOauthTokenGithub()}`,
-        Accept: "application/vnd.github+json",
-      },
-    });
-
-    if (!commitResponse.ok) return false;
-
-    const commitData = await commitResponse.json();
-    baseTreeSha = commitData.tree.sha;
-  } else {
-    // Branch doesn't exist, we'll create it from scratch
-    currentCommitSha = null;
-    baseTreeSha = null;
-  }
-
-  // Step 2: Create blobs for pages.json and images.json
-  const pagesBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
-    method: "POST",
+  // Create pages.json
+  const pagesResponse = await fetch(`https://api.github.com/repos/${siteId}/contents/public/pages.json`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${getOauthTokenGithub()}`,
       Accept: "application/vnd.github+json",
     },
     body: JSON.stringify({
+      message: "Initial GitHub Pages setup",
       content: encodeBase64('[]'),
-      encoding: "base64",
+      branch: "main",
     }),
   });
 
-  if (!pagesBlobResponse.ok) return false;
+  if (!pagesResponse.ok) {
+    console.error("Failed to create pages.json:", await pagesResponse.text());
+    return false;
+  }
 
-  const pagesBlobData = await pagesBlobResponse.json();
-
-  const imagesBlobResponse = await fetch(`https://api.github.com/repos/${siteId}/git/blobs`, {
-    method: "POST",
+  // Create images.json
+  const imagesResponse = await fetch(`https://api.github.com/repos/${siteId}/contents/public/images.json`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${getOauthTokenGithub()}`,
       Accept: "application/vnd.github+json",
     },
     body: JSON.stringify({
+      message: "Add images.json",
       content: encodeBase64('[]'),
-      encoding: "base64",
+      branch: "main",
     }),
   });
 
-  if (!imagesBlobResponse.ok) return false;
-
-  const imagesBlobData = await imagesBlobResponse.json();
-
-  // Step 3: Create a new tree
-  const treePayload = {
-    tree: [
-      {
-        path: "public/pages.json",
-        mode: "100644",
-        type: "blob",
-        sha: pagesBlobData.sha,
-      },
-      {
-        path: "public/images.json",
-        mode: "100644",
-        type: "blob",
-        sha: imagesBlobData.sha,
-      },
-    ],
-  };
-
-  if (baseTreeSha) {
-    treePayload.base_tree = baseTreeSha;
+  if (!imagesResponse.ok) {
+    console.error("Failed to create images.json:", await imagesResponse.text());
+    return false;
   }
 
-  const treeResponse = await fetch(`https://api.github.com/repos/${siteId}/git/trees`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getOauthTokenGithub()}`,
-      Accept: "application/vnd.github+json",
-    },
-    body: JSON.stringify(treePayload),
-  });
-
-  if (!treeResponse.ok) return false;
-
-  const treeData = await treeResponse.json();
-
-  // Step 4: Create a new commit
-  const commitPayload = {
-    message: "Initial GitHub Pages setup",
-    tree: treeData.sha,
-  };
-
-  if (currentCommitSha) {
-    commitPayload.parents = [currentCommitSha];
-  } else {
-    commitPayload.parents = [];
-  }
-
-  const newCommitResponse = await fetch(`https://api.github.com/repos/${siteId}/git/commits`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getOauthTokenGithub()}`,
-      Accept: "application/vnd.github+json",
-    },
-    body: JSON.stringify(commitPayload),
-  });
-
-  if (!newCommitResponse.ok) return false;
-
-  const newCommitData = await newCommitResponse.json();
-
-  // Step 5: Update or create the reference
-  if (currentCommitSha) {
-    // Update existing reference
-    const updateRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs/heads/main`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getOauthTokenGithub()}`,
-        Accept: "application/vnd.github+json",
-      },
-      body: JSON.stringify({
-        sha: newCommitData.sha,
-      }),
-    });
-
-    return updateRefResponse.ok;
-  } else {
-    // Create new reference
-    const createRefResponse = await fetch(`https://api.github.com/repos/${siteId}/git/refs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getOauthTokenGithub()}`,
-        Accept: "application/vnd.github+json",
-      },
-      body: JSON.stringify({
-        ref: "refs/heads/main",
-        sha: newCommitData.sha,
-      }),
-    });
-
-    return createRefResponse.ok;
-  }
+  console.log("Initial commit completed successfully for GitHub");
+  return true;
 }
 
 async function getFileContentGitlab(siteId, filePath) {
