@@ -191,7 +191,8 @@ function showImageUploadPopup() {
   `;
 
   // Append to editor container
-  document.querySelector('#editor').appendChild(popup);
+  const toolbarContainer = document.getElementsByClassName("toastui-editor-toolbar")[0];
+  toolbarContainer.appendChild(popup);
 
   // Get elements
   const dropzone = popup.querySelector('#imageDropzone');
