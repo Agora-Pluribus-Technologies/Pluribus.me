@@ -470,9 +470,14 @@ function showHtmlEmbedPopup() {
       return;
     }
 
-    // Insert HTML into editor as raw HTML block
+    // Insert HTML into editor as code-block-enclosed HTML block
     const currentMarkdown = editor.getMarkdown();
-    editor.setMarkdown(`${currentMarkdown}\n\n${htmlCode}`);
+
+    while (!currentMarkdown.endsWith("\n\n")) {
+      currentMarkdown = `${currentMarkdown}\n`
+    }
+
+    editor.setMarkdown(`${currentMarkdown}\`\`\`embed\n${htmlCode}\`\`\``);
 
     // Close popup
     popup.remove();
