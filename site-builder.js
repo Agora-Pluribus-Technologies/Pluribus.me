@@ -277,7 +277,7 @@ async function handleImageUpload(file, popup, progressContainer) {
     const filename = await uploadImage(file);
 
     // Insert image into editor (use setMarkdown to avoid escaping)
-    const imageUrl = `https://pluribus.me/s/${currentSitePathFull}/${filename}`;
+    const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
     const currentMarkdown = editor.getMarkdown();
     const imageMarkdown = `![${filename}](${imageUrl})`;
     editor.setMarkdown(currentMarkdown + '\n' + imageMarkdown);
