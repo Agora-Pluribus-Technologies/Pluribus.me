@@ -137,6 +137,47 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         console.log("Initial commit made for site ID:", siteId);
 
+        // Register site with API
+        try {
+          // Determine provider and parse owner/repo
+          const provider = getOauthTokenGitlab() !== null ? "gitlab" : "github";
+          let owner, repo;
+
+          if (provider === "gitlab") {
+            // For GitLab, siteId is numeric, use site object to get path
+            const pathParts = site.path_with_namespace.split("/");
+            owner = pathParts[0];
+            repo = pathParts[1];
+          } else {
+            // For GitHub, siteId is "owner/repo"
+            [owner, repo] = siteId.split("/");
+          }
+
+          const createResponse = await fetch("/api/sites", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              siteId: provider === "gitlab" ? site.path_with_namespace : siteId,
+              provider: provider,
+              owner: owner,
+              repo: repo,
+              branch: "main",
+              basePath: "/public",
+            }),
+          });
+
+          if (createResponse.ok) {
+            console.log("Site registered successfully in API");
+          } else {
+            const errorText = await createResponse.text();
+            console.error("Failed to register site in API:", errorText);
+          }
+        } catch (error) {
+          console.error("Error registering site with API:", error);
+        }
+
         // Close the modal
         $("#createSiteModal").modal("hide");
 
@@ -209,58 +250,6 @@ document.addEventListener("DOMContentLoaded", async function () {
             deploySuccess = await deployChangesGithub(currentSiteId);
           }
 
-          // Link pluribus site
-          console.log("Current full site path:", currentSitePathFull);
-
-          // Check if site exists in API, create if not
-          if (currentSitePathFull) {
-            try {
-              // First, check if site exists
-              const checkResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(currentSitePathFull)}`, {
-                method: "GET",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-              });
-
-              if (checkResponse.status === 404) {
-                // Site doesn't exist, create it
-                console.log("Site not found in API, creating...");
-
-                // Determine provider and parse owner/repo
-                const provider = getOauthTokenGitlab() !== null ? "gitlab" : "github";
-                const [owner, repo] = currentSitePathFull.split("/");
-
-                const createResponse = await fetch("/api/sites", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    siteId: currentSitePathFull,
-                    provider: provider,
-                    owner: owner,
-                    repo: repo,
-                    branch: "main",
-                    basePath: "/public",
-                  }),
-                });
-
-                if (createResponse.ok) {
-                  console.log("Site created successfully in API");
-                } else {
-                  const errorText = await createResponse.text();
-                  console.error("Failed to create site in API:", errorText);
-                }
-              } else if (checkResponse.ok) {
-                console.log("Site already exists in API");
-              } else {
-                console.error("Error checking site existence:", checkResponse.status);
-              }
-            } catch (error) {
-              console.error("Error linking pluribus site:", error);
-            }
-          }
 
           // Reset modified flag after successful deployment
           modified = false;
