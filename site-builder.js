@@ -462,11 +462,7 @@ function showHtmlEmbedPopup() {
     // Insert HTML into editor as code-block-enclosed HTML block
     let currentMarkdown = editor.getMarkdown();
 
-    while (!currentMarkdown.endsWith("\n\n")) {
-      currentMarkdown = `${currentMarkdown}\n`
-    }
-
-    editor.setMarkdown(`${currentMarkdown}\`\`\`embed\n${htmlCode}\n\`\`\``);
+    editor.setMarkdown(`${currentMarkdown.trim()}\n\n\`\`\`embed\n${htmlCode}\n\`\`\`\n\n`);
 
     // Close popup
     popup.remove();
