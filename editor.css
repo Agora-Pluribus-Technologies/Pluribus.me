@@ -667,8 +667,17 @@ nav {
 }
 
 @media (max-width: 768px) {
+  
   .toastui-editor-tooltip {
     display: none !important;
+  }
+
+  .toastui-editor-dropdown-toolbar {
+    left: auto !important;
+    right: 0 !important;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: auto;
   }
 
   .menu-link {
