@@ -186,6 +186,13 @@
           });
           console.log("Sanitized: " + sanitizedHtml)
           newDiv.innerHTML = sanitizedHtml;
+          
+          let iframe = newDiv.children[0];
+          const w = iframe.width;
+          const h = iframe.height;
+          iframe.style.maxWidth = "100%";
+          iframe.style.aspectRatio = `${w / h}`;
+
           pre.replaceWith(newDiv);
         }
       }
