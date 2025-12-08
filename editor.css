@@ -667,6 +667,10 @@ nav {
 }
 
 @media (max-width: 768px) {
+  .toastui-editor-toolbar-tooltip {
+    display: none !important;
+  }
+
   .menu-link {
     font-size: 14pt;
   }
