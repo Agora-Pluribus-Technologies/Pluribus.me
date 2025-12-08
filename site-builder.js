@@ -136,7 +136,15 @@ function loadToastEditor() {
           name: 'customHtmlEmbed'
         }
       ]
-    ]
+    ],
+    customHTMLRenderer: {
+      // Override soft line breaks ("softbreak")
+      softbreak() {
+        return {
+          html: '' // empty = NO <br>
+        };
+      }
+    }
   });
 }
 
