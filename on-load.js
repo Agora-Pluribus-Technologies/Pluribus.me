@@ -621,7 +621,13 @@ function populateSitesList(sites) {
               if (currentSitePath) {
                 const cacheItem = getCacheByFileName(currentSitePath);
                 if (cacheItem) {
-                  cacheItem.content = editor.getMarkdown();
+                  // Remove <br>
+                  let currentMarkdown = editor.getMarkdown();
+                  currentMarkdown = currentMarkdown.replace("<br>", "");
+                  editor.setMarkdown(currentMarkdown);
+
+                  // Cache content
+                  cacheItem.content = currentMarkdown;
                   console.log(`Cached content for ${currentSitePath}`);
                   modified = true;
                   updateDeployButtonState();

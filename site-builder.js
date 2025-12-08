@@ -136,15 +136,7 @@ function loadToastEditor() {
           name: 'customHtmlEmbed'
         }
       ]
-    ],
-    customHTMLRenderer: {
-      // Override soft line breaks ("softbreak")
-      softbreak() {
-        return {
-          html: '' // empty = NO <br>
-        };
-      }
-    }
+    ]
   });
 }
 
@@ -200,14 +192,7 @@ function populateImageGallery(galleryElement) {
       let currentMarkdown = editor.getMarkdown();
       const imageMarkdown = `![${filename}](${imageUrl})`;
 
-      currentMarkdown = currentMarkdown.trim();
-
-      // Ensure exactly 2 newlines at the end
-      while (!currentMarkdown.endsWith("\n\n")) {
-        currentMarkdown += "\n";
-      }
-
-      editor.setMarkdown(currentMarkdown + imageMarkdown + "\n\n");
+      editor.setMarkdown(currentMarkdown.trim() + "\n\n" + imageMarkdown + "\n\n");
 
       // Close the popup
       const popup = document.querySelector('.image-upload-popup');
