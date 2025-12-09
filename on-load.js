@@ -432,18 +432,16 @@ async function checkSiteAvailability() {
   }
 
   const visitSiteButton = document.getElementById("visitSiteButton");
-  const pagesJsonUrl = `/s/${currentSitePathFull}/pages.json`;
+  const pluribusSiteUrl = `/s/${currentSitePathFull}`;
 
   try {
-    console.log("Checking site availability:", pagesJsonUrl);
-    const response = await fetch(pagesJsonUrl, {
+    console.log("Checking site availability:", pluribusSiteUrl);
+    const response = await fetch(pluribusSiteUrl, {
       method: "GET",
       cache: "no-cache"
     });
-    
-    const pages = await response.json();
 
-    if (pages.length == 0) {
+    if (response.status === 404) {
       // Site not available, disable button
       visitSiteButton.disabled = true;
       visitSiteButton.style.opacity = "0.5";
