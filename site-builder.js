@@ -73,8 +73,8 @@ function blobToBase64(blob) {
   });
 }
 
-// Function to upload image to repository
-async function uploadImage(file) {
+// Function to process and upload image to R2 storage
+async function processAndUploadImage(file) {
   try {
     // Process image (convert to AVIF and resize)
     const processedBlob = await processImage(file);
@@ -359,8 +359,8 @@ async function handleImageUpload(file, popup, progressContainer, imageGallery) {
     // Show progress
     progressContainer.style.display = 'block';
 
-    // Upload image
-    const filename = await uploadImage(file);
+    // Process and upload image
+    const filename = await processAndUploadImage(file);
 
     // Hide progress
     progressContainer.style.display = 'none';
