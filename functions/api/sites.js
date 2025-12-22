@@ -95,8 +95,29 @@ export async function onRequestDelete(context) {
   const existing = await env.SITES.get(`site:${siteId}`);
 
   if (existing) {
-    const del = await env.SITES.delete(`site:${siteId}`);
-    return new Response(del, { status: 200 });
+    // Delete all R2 files for this site
+    try {
+      const prefix = `${siteId}/`;
+      const listed = await env.PLURIBUS_BUCKET.list({ prefix });
+
+      if (listed.objects.length > 0) {
+        // Delete all files with this prefix
+        for (const obj of listed.objects) {
+          await env.PLURIBUS_BUCKET.delete(obj.key);
+        }
+        console.log(`Deleted ${listed.objects.length} files from R2 for site: ${siteId}`);
+      }
+    } catch (error) {
+      console.error("Error deleting R2 files:", error);
+      // Continue with KV deletion even if R2 cleanup fails
+    }
+
+    // Delete the site config from KV
+    await env.SITES.delete(`site:${siteId}`);
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } else {
     // Site not found
     return new Response("Not Found", { status: 404 });

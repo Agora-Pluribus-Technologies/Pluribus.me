@@ -127,13 +127,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           site = await createSiteGitlab(siteName, siteDescription);
           siteId = site.id;
           console.log("New GitLab site created with ID:", siteId);
-          await initialCommitGitlab(siteId);
         } else if (getOauthTokenGithub() !== null) {
           site = await createSiteGithub(siteName, siteDescription);
           siteId = site.full_name;
           console.log("New GitHub site created with ID:", siteId);
-          await initialCommitGithub(siteId);
         }
+        await initialCommit(siteId);
 
         console.log("Initial commit made for site ID:", siteId);
 
@@ -243,12 +242,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         let deploySuccess = false;
 
         try {
-          // Deploy changes
-          if (getOauthTokenGitlab() !== null) {
-            deploySuccess = await deployChangesGitlab(currentSiteId);
-          } else if (getOauthTokenGithub() !== null) {
-            deploySuccess = await deployChangesGithub(currentSiteId);
-          }
+          // Deploy changes to R2 storage
+          deploySuccess = await deployChanges(currentSiteId);
 
 
           // Reset modified flag after successful deployment
@@ -536,13 +531,8 @@ function populateSitesList(sites) {
       const editorContainer = document.getElementById("editorContainer");
       editorContainer.style.display = "flex";
 
-      // Fetch site tree
-      let markdownFiles;
-      if (getOauthTokenGitlab() !== null) {
-        markdownFiles = await getPublicFilesGitLab(site.id);
-      } else if (getOauthTokenGithub() !== null) {
-        markdownFiles = await getPublicFilesGitHub(site.full_name);
-      }
+      // Fetch site tree from R2
+      const markdownFiles = await getPublicFiles(currentSiteId);
 
       console.log("Markdown files:", markdownFiles);
       if (markdownFiles.length === 0) {
@@ -556,12 +546,8 @@ function populateSitesList(sites) {
         // Initialize empty imageCache
         imageCache = [];
       } else {
-        // Initialize markdownCache to pages.json
-        if (getOauthTokenGitlab() !== null) {
-          markdownCache = JSON.parse(await getFileContentGitlab(site.id, "public/pages.json"));
-        } else if (getOauthTokenGithub() !== null) {
-          markdownCache = JSON.parse(await getFileContentGithub(site.full_name, "public/pages.json"));
-        }
+        // Initialize markdownCache from pages.json
+        markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
         for (let i=0; i < markdownCache.length; i++) {
           const fileName = markdownCache[i].fileName;
           markdownCache[i].fileName = `public/${fileName}.md`
@@ -570,23 +556,13 @@ function populateSitesList(sites) {
         // Load all markdown files into cache
         for (const file of markdownFiles) {
           console.log("Loading file into cache:", file);
-          let content;
-          if (getOauthTokenGitlab() !== null) {
-            content = await getFileContentGitlab(site.id, file);
-          } else if (getOauthTokenGithub() !== null) {
-            content = await getFileContentGithub(site.full_name, file);
-          }
+          const content = await getFileContent(currentSiteId, file);
           addOrUpdateCache(file, null, content);
         }
 
         // Initialize imageCache from images.json
         try {
-          let imagesJsonContent;
-          if (getOauthTokenGitlab() !== null) {
-            imagesJsonContent = await getFileContentGitlab(site.id, "public/images.json");
-          } else if (getOauthTokenGithub() !== null) {
-            imagesJsonContent = await getFileContentGithub(site.full_name, "public/images.json");
-          }
+          const imagesJsonContent = await getFileContent(currentSiteId, "public/images.json");
 
           if (imagesJsonContent) {
             imageCache = JSON.parse(imagesJsonContent);
@@ -806,12 +782,7 @@ async function populateMenubar(siteId) {
               existing.fileName = newFilePath;
             } else {
               // If not in cache yet, fetch it first then rename
-              let content;
-              if (getOauthTokenGitlab() !== null) {
-                content = await getFileContentGitlab(siteId, oldFilePath);
-              } else if (getOauthTokenGithub() !== null) {
-                content = await getFileContentGithub(siteId, oldFilePath);
-              }
+              const content = await getFileContent(siteId, oldFilePath);
               addOrUpdateCache(newFilePath, newPageName, content);
             }
 

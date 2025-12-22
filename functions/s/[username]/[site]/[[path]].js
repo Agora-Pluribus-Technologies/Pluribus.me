@@ -1,7 +1,7 @@
-// functions/s/[site]/[[path]].js
+// functions/s/[username]/[site]/[[path]].js
 
-// This function serves user sites from GitHub or GitLab based on KV config.
-// URL shape: /s/:siteId/... → fetch from that site's repo and return the file.
+// This function serves user sites from Cloudflare R2 storage.
+// URL shape: /s/:username/:site/... -> fetch from R2 and return the file.
 
 export async function onRequestGet(context) {
   const { request, env, params } = context;
@@ -21,20 +21,15 @@ export async function onRequestGet(context) {
 
   console.log("Site id:", siteId);
 
-  // Compute the path inside the site, after /s/:siteId/
-  // e.g. /s/alice/about/team.html -> "about/team.html"
-  const segments = url.pathname.split("/").filter(Boolean); // ["s","alice","about","team.html"]
-  const restSegments = segments.slice(3); // skip "s", username, and siteId
+  // Compute the path inside the site, after /s/:username/:site/
+  // e.g. /s/alice/myblog/about/team.html -> "about/team.html"
+  const segments = url.pathname.split("/").filter(Boolean); // ["s","alice","myblog","about","team.html"]
+  const restSegments = segments.slice(3); // skip "s", username, and site
   let filePath = restSegments.join("/");
 
   // Default to index.html if no specific file
   if (!filePath) {
     filePath = "index.html";
-  }
-
-  // Normalize to always start with "/"
-  if (!filePath.startsWith("/")) {
-    filePath = "/" + filePath;
   }
 
   // Very simple path traversal guard
@@ -44,7 +39,7 @@ export async function onRequestGet(context) {
 
   console.log("File path:", filePath);
 
-  // Look up site configuration in KV: site:<siteId>
+  // Look up site configuration in KV to verify the site exists
   const cfgJson = await env.SITES.get(`site:${siteId}`);
   if (!cfgJson) {
     // Fail closed: if we don't know this site, return 404
@@ -60,86 +55,66 @@ export async function onRequestGet(context) {
 
   console.log("Site config:", cfg);
 
-  const provider = cfg.provider;
-  const owner = cfg.owner;
-  const repo = cfg.repo;
-  const branch = cfg.branch || "main";
+  // Get basePath from config (defaults to "/public")
   let basePath = cfg.basePath || "/public";
 
   // Normalize basePath
-  if (!basePath.startsWith("/")) basePath = "/" + basePath;
+  if (basePath.startsWith("/")) basePath = basePath.slice(1);
   if (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
 
-  const repoFilePath = basePath + filePath; // e.g. "/public/index.html"
+  // Build the R2 key: siteId/basePath/filePath
+  const r2Key = basePath ? `${siteId}/${basePath}/${filePath}` : `${siteId}/${filePath}`;
 
-  console.log("Repo file path:", repoFilePath);
+  console.log("R2 key:", r2Key);
 
-  // Build raw URL
-  let upstreamBaseUrl;
-  if (provider === "github") {
-    upstreamBaseUrl = githubRawUrl(owner, repo, branch, basePath);
-  } else if (provider === "gitlab") {
-    upstreamBaseUrl = gitlabRawUrl(owner, repo, branch, basePath);
-  } else {
-    return new Response("Unsupported provider", { status: 500 });
-  }
+  try {
+    const object = await env.PLURIBUS_BUCKET.get(r2Key);
 
-  let upstreamUrl = upstreamBaseUrl + filePath;
-
-  upstreamUrl += `?t=${Date.now()}`; // prevent caching
-  console.log("Upstream URL:", upstreamUrl);
-
-  const upstreamRes = await fetch(upstreamUrl, {
-    method: "GET",
-    headers: {
-      "Cache-Control": "public, max-age=300, stale-while-revalidate=3600"
-    },
-    cf: {
-      cacheTtl: 300,
-      cacheEverything: true
+    if (!object) {
+      return new Response("File not found", { status: 404 });
     }
-  });
 
-  if (!upstreamRes.ok) {
-    // You could get fancy here (e.g. SPA routing), but 404 is fine for now.
-    return new Response("File not found", { status: upstreamRes.status });
+    // Build response headers
+    const headers = new Headers();
+    headers.set("Content-Type", object.httpMetadata?.contentType || guessContentType(filePath));
+    // Cache control - allow some caching but not too aggressive
+    headers.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
+
+    return new Response(object.body, {
+      status: 200,
+      headers,
+    });
+  } catch (error) {
+    console.error("R2 get error:", error);
+    return new Response("Failed to retrieve file", { status: 500 });
   }
-
-  // Copy upstream headers (content-type, etc.) and add cache control
-  const headers = new Headers();
-  // Basic cache: adjust as you like
-  headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-  headers.set("Expires", "0");
-
-  return new Response(upstreamRes.body, {
-    status: upstreamRes.status,
-    headers
-  });
-};
-
-// --- helpers ---
-
-function githubRawUrl(owner, repo, branch, filePath) {
-  // filePath already starts with "/"
-  return (
-    "https://raw.githubusercontent.com/" +
-    encodeURIComponent(owner) +
-    "/" +
-    encodeURIComponent(repo) +
-    "/" +
-    encodeURIComponent(branch) +
-    filePath
-  );
 }
 
-function gitlabRawUrl(owner, repo, branch, filePath) {
-  return (
-    "https://gitlab.com/" +
-    encodeURIComponent(owner) +
-    "/" +
-    encodeURIComponent(repo) +
-    "/-/raw/" +
-    encodeURIComponent(branch) +
-    filePath
-  );
+// Helper function to guess content type from file extension
+function guessContentType(filePath) {
+  const ext = filePath.split(".").pop()?.toLowerCase();
+  const mimeTypes = {
+    html: "text/html",
+    htm: "text/html",
+    css: "text/css",
+    js: "application/javascript",
+    json: "application/json",
+    md: "text/markdown",
+    txt: "text/plain",
+    xml: "application/xml",
+    svg: "image/svg+xml",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    avif: "image/avif",
+    ico: "image/x-icon",
+    pdf: "application/pdf",
+    woff: "font/woff",
+    woff2: "font/woff2",
+    ttf: "font/ttf",
+    eot: "application/vnd.ms-fontobject",
+  };
+  return mimeTypes[ext] || "application/octet-stream";
 }

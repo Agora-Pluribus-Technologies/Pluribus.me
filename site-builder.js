@@ -91,13 +91,8 @@ async function uploadImage(file) {
     // Convert to base64
     const base64Content = await blobToBase64(processedBlob);
 
-    // Upload to repository
-    let success = false;
-    if (getOauthTokenGitlab() !== null) {
-      success = await uploadImageGitlab(currentSiteId, filename, base64Content);
-    } else if (getOauthTokenGithub() !== null) {
-      success = await uploadImageGithub(currentSiteId, filename, base64Content);
-    }
+    // Upload to R2 storage
+    const success = await uploadImage(currentSiteId, filename, base64Content);
 
     if (success) {
       // Add to imageCache
@@ -210,12 +205,7 @@ function populateImageGallery(galleryElement) {
       }
 
       try {
-        let success = false;
-        if (getOauthTokenGitlab() !== null) {
-          success = await deleteImageGitlab(currentSiteId, filename);
-        } else if (getOauthTokenGithub() !== null) {
-          success = await deleteImageGithub(currentSiteId, filename);
-        }
+        const success = await deleteImage(currentSiteId, filename);
 
         if (success) {
           removeImageFromCache(filename);
