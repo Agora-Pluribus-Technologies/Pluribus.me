@@ -272,6 +272,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         await initialCommit(siteId);
         console.log("Initial commit completed for site:", siteId);
 
+        // Initialize git repository
+        await gitInit(siteId);
+        await gitWriteFile(siteId, "public/pages.json", "[]");
+        await gitWriteFile(siteId, "public/images.json", "[]");
+        await gitCommit(siteId, "Initial commit");
+        console.log("Git repo initialized for site:", siteId);
+
         // Add new site to cache
         const newSite = {
           siteId: siteId,
@@ -322,7 +329,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Handle deploy button click
+  // Handle deploy button click - show commit modal
   document
     .getElementById("deployButton")
     .addEventListener("click", async function () {
@@ -330,42 +337,71 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.log("Current site ID:", currentSiteId);
       console.log("Markdown cache:", markdownCache);
 
-      if (currentSiteId) {
-        const deployButton = document.getElementById("deployButton");
-        const originalButtonText = deployButton.textContent;
-
-        // Show loading state
-        deployButton.classList.add("loading");
-        deployButton.textContent = "";
-        deployButton.disabled = true;
-
-        let deploySuccess = false;
-
-        try {
-          // Deploy changes to R2 storage
-          deploySuccess = await deployChanges(currentSiteId);
-
-
-          // Reset modified flag after successful deployment
-          modified = false;
-          updateDeployButtonState();
-
-          // Show success or failure message
-          if (deploySuccess) {
-            showAlertBar("Deploy successful! Your changes will be live within 5 minutes.", true);
-          } else {
-            showAlertBar("Deploy failed. Please check the console for errors.", false);
-          }
-        } catch (error) {
-          console.error("Deploy error:", error);
-          showAlertBar("Deploy failed. Please check the console for errors.", false);
-        } finally {
-          // Remove loading state
-          deployButton.classList.remove("loading");
-          deployButton.textContent = originalButtonText;
-        }
-      } else {
+      if (!currentSiteId) {
         console.error("No site selected");
+        return;
+      }
+
+      // Sync current cache to git working directory
+      await syncCacheToGit(currentSiteId, markdownCache, imageCache);
+
+      // Get and display changes
+      const changesPreview = document.getElementById("changesPreview");
+      changesPreview.innerHTML = "<p style='color: #888;'>Loading changes...</p>";
+
+      const changesHtml = await formatChangesForDisplay(currentSiteId);
+      changesPreview.innerHTML = changesHtml;
+
+      // Clear commit message
+      document.getElementById("commitMessage").value = "";
+
+      // Show commit modal
+      $("#commitModal").modal("show");
+    });
+
+  // Handle commit confirmation
+  document
+    .getElementById("confirmCommitButton")
+    .addEventListener("click", async function () {
+      const commitMessage = document.getElementById("commitMessage").value.trim();
+
+      if (!commitMessage) {
+        alert("Please enter a commit message.");
+        return;
+      }
+
+      const confirmButton = document.getElementById("confirmCommitButton");
+      const originalText = confirmButton.textContent;
+      confirmButton.disabled = true;
+      confirmButton.textContent = "Deploying...";
+
+      try {
+        // Create git commit
+        const commitSha = await gitCommit(currentSiteId, commitMessage);
+        console.log("Commit created:", commitSha);
+
+        // Deploy changes to R2 storage
+        const deploySuccess = await deployChanges(currentSiteId);
+
+        // Close modal
+        $("#commitModal").modal("hide");
+
+        // Reset modified flag after successful deployment
+        modified = false;
+        updateDeployButtonState();
+
+        // Show success or failure message
+        if (deploySuccess) {
+          showAlertBar(`Deployed successfully! Commit: ${commitSha ? commitSha.substring(0, 7) : "done"}`, true);
+        } else {
+          showAlertBar("Deploy failed. Please check the console for errors.", false);
+        }
+      } catch (error) {
+        console.error("Deploy error:", error);
+        showAlertBar("Deploy failed: " + error.message, false);
+      } finally {
+        confirmButton.disabled = false;
+        confirmButton.textContent = originalText;
       }
     });
 
@@ -671,6 +707,9 @@ function populateSitesList(sites) {
           imageCache = [];
         }
       }
+
+      // Initialize git repo and load files from R2
+      await loadR2ToGit(currentSiteId);
 
       // Populate menubar from cache
       await populateMenubar(site.siteId);

@@ -14,8 +14,11 @@
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+  <script src="https://unpkg.com/@isomorphic-git/lightning-fs"></script>
+  <script src="https://unpkg.com/isomorphic-git"></script>
   <script src="local-dev.js"></script>
   <script src="api.js"></script>
+  <script src="git.js"></script>
   <script src="site-builder.js"></script>
   <script src="on-load.js"></script>
 </head>
@@ -75,6 +78,36 @@
         </div>
         <div class="modal-footer">
           <button id="create-site-button" type="submit" form="createSiteForm" class="btn btn-primary">Create Site</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Commit Modal -->
+  <div class="modal fade" id="commitModal" tabindex="-1" role="dialog" aria-labelledby="commitModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="commitModalLabel">Review Changes & Deploy</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="commitMessage">Commit Message</label>
+            <input type="text" class="form-control" id="commitMessage" placeholder="Describe your changes..." required>
+          </div>
+          <div class="form-group">
+            <label>Changes to be committed:</label>
+            <div id="changesPreview" style="max-height: 300px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px;">
+              <p style="color: #888;">Loading changes...</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="confirmCommitButton" type="button" class="btn btn-success">Commit & Deploy</button>
           <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
         </div>
       </div>
