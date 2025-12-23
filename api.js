@@ -129,11 +129,21 @@ const GITHUB_DEV_CLIENT_ID = "Ov23liwXpCsvFNlZJ0x8";
 const GITHUB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/github/oauth/callback";
 const GITHUB_CLIENT_SCOPE = "repo user delete_repo";
 
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_CLIENT_ID = "8624161102-4guo9djint6glfkl2e6detjhlgoe3iv2.apps.googleusercontent.com";
+const GOOGLE_REDIRECT_URI = "https://pluribus.me/google/oauth/callback";
+const GOOGLE_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/google/oauth/callback";
+const GOOGLE_CLIENT_SCOPE = "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
+
 var GITLAB_USER_ID = null;
 var GITHUB_USERNAME = null;
+var GOOGLE_USER_ID = null;
+var CURRENT_USERNAME = null;
 
 const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "pluribus.me.gitlab.oauth_token";
 const STORAGE_KEY_GITHUB_OAUTH_TOKEN = "pluribus.me.github.oauth_token";
+const STORAGE_KEY_GOOGLE_OAUTH_TOKEN = "pluribus.me.google.oauth_token";
+const STORAGE_KEY_USERNAME = "pluribus.me.username";
 
 // Check if we have a token in the URL hash (from OAuth callback redirect)
 if (window.location.hash) {
@@ -145,6 +155,9 @@ if (window.location.hash) {
   } else if (window.location.hash.startsWith("#github")) {
     accessToken = params.get("github_access_token");
     sessionStorage.setItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN, accessToken);
+  } else if (window.location.hash.startsWith("#google")) {
+    accessToken = params.get("google_access_token");
+    sessionStorage.setItem(STORAGE_KEY_GOOGLE_OAUTH_TOKEN, accessToken);
   }
 
   if (accessToken) {
@@ -159,6 +172,10 @@ function getOauthTokenGitlab() {
 
 function getOauthTokenGithub() {
   return sessionStorage.getItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN);
+}
+
+function getOauthTokenGoogle() {
+  return sessionStorage.getItem(STORAGE_KEY_GOOGLE_OAUTH_TOKEN);
 }
 
 function displayLoginButtons() {
@@ -229,8 +246,38 @@ function displayLoginButtons() {
     window.location.href = `${GITLAB_AUTH_URL}?${params.toString()}`;
   });
 
+  // Google login button
+  var googleLoginButton = document.createElement("button");
+  googleLoginButton.classList.add("btn");
+  googleLoginButton.innerText = "Sign in with Google";
+  googleLoginButton.style.padding = "10px 18px";
+  googleLoginButton.style.cursor = "pointer";
+
+  googleLoginButton.addEventListener("click", () => {
+    // Build the authorization URL
+    // Same client ID for dev and prod, only redirect URI differs
+    let redirectUri;
+    if (document.location.origin.includes("develop")) {
+      redirectUri = GOOGLE_DEV_REDIRECT_URI;
+    } else {
+      redirectUri = GOOGLE_REDIRECT_URI;
+    }
+
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: redirectUri,
+      scope: GOOGLE_CLIENT_SCOPE,
+      response_type: "code",
+      access_type: "offline",
+    });
+
+    // Redirect user to login page
+    window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`;
+  });
+
   buttonContainer.appendChild(githubLoginButton);
   buttonContainer.appendChild(gitlabLoginButton);
+  buttonContainer.appendChild(googleLoginButton);
 
   const sitesListPanel = document.getElementById("sites-list-panel");
   sitesListPanel.appendChild(buttonContainer);
@@ -281,6 +328,98 @@ async function getGithubUsername() {
   console.log("GitHub User ID:", data.login);
 
   return data.login;
+}
+
+async function getGoogleUserId() {
+  if (GOOGLE_USER_ID) {
+    return GOOGLE_USER_ID;
+  }
+
+  const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${getOauthTokenGoogle()}`,
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+
+  GOOGLE_USER_ID = data.id;
+
+  console.log("Google User ID:", data.id);
+
+  return data.id;
+}
+
+// Get current provider and provider ID
+async function getCurrentProviderInfo() {
+  if (getOauthTokenGitlab() !== null) {
+    const providerId = await getGitlabUserId();
+    return { provider: "gitlab", providerId: String(providerId) };
+  } else if (getOauthTokenGithub() !== null) {
+    const providerId = await getGithubUsername();
+    return { provider: "github", providerId: providerId };
+  } else if (getOauthTokenGoogle() !== null) {
+    const providerId = await getGoogleUserId();
+    return { provider: "google", providerId: providerId };
+  }
+  return null;
+}
+
+// Check if username is available
+async function checkUsernameAvailable(username) {
+  const response = await fetch(`/api/users?username=${encodeURIComponent(username)}`);
+  if (!response.ok) return false;
+  const data = await response.json();
+  return !data.exists;
+}
+
+// Get user by provider ID (check if user already has a username)
+async function getUserByProvider(provider, providerId) {
+  const response = await fetch(`/api/users?provider=${provider}&providerId=${encodeURIComponent(providerId)}`);
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (data.exists === false) return null;
+  return data;
+}
+
+// Create a new user with username
+async function createUser(username, provider, providerId) {
+  const response = await fetch("/api/users", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ username, provider, providerId }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  const user = await response.json();
+  CURRENT_USERNAME = user.username;
+  sessionStorage.setItem(STORAGE_KEY_USERNAME, user.username);
+  return user;
+}
+
+// Get stored username from session
+function getStoredUsername() {
+  if (CURRENT_USERNAME) return CURRENT_USERNAME;
+  const stored = sessionStorage.getItem(STORAGE_KEY_USERNAME);
+  if (stored) {
+    CURRENT_USERNAME = stored;
+  }
+  return stored;
+}
+
+// Set stored username
+function setStoredUsername(username) {
+  CURRENT_USERNAME = username;
+  sessionStorage.setItem(STORAGE_KEY_USERNAME, username);
 }
 
 async function getSitesGitLab() {
@@ -345,58 +484,27 @@ async function getSitesGitHub() {
   return sites;
 }
 
-async function createSiteGitlab(siteName, siteDescription) {
-  const gitlabCreateSiteUrl = "https://gitlab.com/api/v4/projects";
-  const payload = {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getOauthTokenGitlab()}`,
-    },
-    body: JSON.stringify({
-      name: `${siteName}`,
-      path: `${siteName.toLowerCase().replace(/\s+/g, "-")}`,
-      description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`,
-      visibility: "public",
-      pages_access_level: "disabled",
-    }),
-  };
-
-  const response = await fetch(gitlabCreateSiteUrl, payload);
-
-  if (!response.ok) {
-    return null;
+async function getSites(owner) {
+  const params = new URLSearchParams();
+  if (owner) {
+    params.set("owner", owner);
   }
 
-  const responseJson = await response.json();
-
-  return responseJson;
-}
-
-async function createSiteGithub(siteName, siteDescription) {
-  const gitlabCreateSiteUrl = "https://api.github.com/user/repos";
-  const payload = {
-    method: "POST",
+  const response = await fetch(`/api/sites?${params.toString()}`, {
+    method: "GET",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getOauthTokenGithub()}`,
+      "Cache-Control": "no-cache",
     },
-    body: JSON.stringify({
-      name: `${siteName}`,
-      description: `${siteName}: ${siteDescription} | A Pluribus OwO site created with the Pluribus.me site builder`,
-      private: false
-    }),
-  };
-
-  const response = await fetch(gitlabCreateSiteUrl, payload);
+  });
 
   if (!response.ok) {
-    return null;
+    console.error("Failed to fetch sites:", response.status);
+    return [];
   }
 
-  const responseJson = await response.json();
-
-  return responseJson;
+  const sites = await response.json();
+  console.log("Sites from R2:", sites);
+  return sites;
 }
 
 async function deleteSiteGitlab(siteId) {

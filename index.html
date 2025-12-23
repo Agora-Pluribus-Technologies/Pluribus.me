@@ -80,6 +80,33 @@
       </div>
     </div>
   </div>
+
+  <!-- Username Selection Modal -->
+  <div class="modal fade" id="usernameModal" tabindex="-1" role="dialog" aria-labelledby="usernameModalLabel" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title" id="usernameModalLabel">Choose Your Username</h4>
+        </div>
+        <div class="modal-body">
+          <p>Welcome! Please choose a username. This will be used to identify your sites and <strong>cannot be changed later</strong>.</p>
+          <form id="usernameForm">
+            <div class="form-group">
+              <label for="usernameInput">Username</label>
+              <input type="text" class="form-control" id="usernameInput" placeholder="Enter username" required pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,28}[a-zA-Z0-9]" minlength="3" maxlength="30">
+              <p class="help-block">3-30 characters. Letters, numbers, and hyphens only. Cannot start or end with a hyphen.</p>
+              <p id="usernameError" class="text-danger" style="display: none;"></p>
+              <p id="usernameSuccess" class="text-success" style="display: none;"></p>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button id="submitUsernameButton" type="submit" form="usernameForm" class="btn btn-primary" disabled>Confirm Username</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="footer" style="text-align: center;">
     <p>
       Pluribus.me Site Builder v2025.12.8 (pre-Alpha)
