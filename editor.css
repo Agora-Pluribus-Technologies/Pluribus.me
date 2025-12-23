@@ -133,6 +133,16 @@ nav {
   border-color: #555;
 }
 
+.modal-header .close {
+  color: #ff4444;
+  opacity: 1;
+  text-shadow: none;
+}
+
+.modal-header .close:hover {
+  color: #ff0000;
+}
+
 #sidebar {
   display: flex;
   flex-direction: column;
