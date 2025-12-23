@@ -235,6 +235,36 @@ async function gitLog(siteId, depth = 10) {
   }
 }
 
+// Format commit history for display
+async function formatCommitHistory(siteId) {
+  const commits = await gitLog(siteId, 50);
+
+  if (commits.length === 0) {
+    return "<p style='color: #888;'>No commits yet.</p>";
+  }
+
+  let html = "";
+
+  for (const commit of commits) {
+    const date = new Date(commit.commit.author.timestamp * 1000);
+    const dateStr = date.toLocaleDateString() + " " + date.toLocaleTimeString();
+    const shortSha = commit.oid.substring(0, 7);
+    const message = escapeHtml(commit.commit.message);
+    const author = escapeHtml(commit.commit.author.name);
+
+    html += `<div style="border-bottom: 1px solid #ddd; padding: 10px 0;">`;
+    html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
+    html += `<strong style="color: #337ab7;">${shortSha}</strong>`;
+    html += `<span style="color: #888; font-size: 12px;">${dateStr}</span>`;
+    html += `</div>`;
+    html += `<div style="margin-top: 5px;">${message}</div>`;
+    html += `<div style="color: #888; font-size: 12px; margin-top: 3px;">by ${author}</div>`;
+    html += `</div>`;
+  }
+
+  return html;
+}
+
 // Get diff for a file between working directory and HEAD
 async function gitDiff(siteId, filepath) {
   const dir = getRepoDir(siteId);

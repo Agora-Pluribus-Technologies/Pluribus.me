@@ -41,6 +41,7 @@
           <div id="editor-topbar" style="text-align: center; margin-bottom: 10px;">
             <button id="backButton" class="btn btn-warning">Back</button>
             <button id="visitSiteButton" class="btn btn-info">Visit Site</button>
+            <button id="historyButton" class="btn btn-default">History</button>
             <button id="deployButton" class="btn btn-success">Deploy Site</button>
           </div>
           <div id="last-updated-time-label" style="text-align: right; display: inline-block"></div>
@@ -111,6 +112,28 @@
         <div class="modal-footer">
           <button id="confirmCommitButton" type="button" class="btn btn-success">Commit & Deploy</button>
           <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Commit History Modal -->
+  <div class="modal fade" id="historyModal" tabindex="-1" role="dialog" aria-labelledby="historyModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="historyModalLabel">Commit History</h4>
+        </div>
+        <div class="modal-body">
+          <div id="historyList" style="max-height: 400px; overflow-y: auto;">
+            <p style="color: #888;">Loading commit history...</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
         </div>
       </div>
     </div>

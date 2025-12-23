@@ -405,6 +405,25 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
 
+  // Handle history button click
+  document
+    .getElementById("historyButton")
+    .addEventListener("click", async function () {
+      if (!currentSiteId) {
+        console.error("No site selected");
+        return;
+      }
+
+      // Show modal with loading state
+      const historyList = document.getElementById("historyList");
+      historyList.innerHTML = "<p style='color: #888;'>Loading commit history...</p>";
+      $("#historyModal").modal("show");
+
+      // Fetch and display commit history
+      const historyHtml = await formatCommitHistory(currentSiteId);
+      historyList.innerHTML = historyHtml;
+    });
+
   // Handle add new page button click
   document
     .getElementById("addNewPageButton")
