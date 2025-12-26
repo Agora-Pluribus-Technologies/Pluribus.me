@@ -577,6 +577,32 @@ function base64ToArrayBuffer(base64) {
   return bytes;
 }
 
+// Helper function to create directories recursively (LightningFS doesn't support recursive well)
+async function mkdirRecursive(path) {
+  const parts = path.split("/").filter((p) => p);
+  let currentPath = "";
+
+  for (const part of parts) {
+    currentPath += "/" + part;
+    try {
+      await pfs.mkdir(currentPath);
+    } catch (e) {
+      // Directory might already exist, that's fine
+      if (e.code !== "EEXIST") {
+        // Check if it exists as a directory
+        try {
+          const stat = await pfs.stat(currentPath);
+          if (!stat.isDirectory()) {
+            throw e;
+          }
+        } catch (statErr) {
+          // If stat also fails with something other than "it exists", ignore
+        }
+      }
+    }
+  }
+}
+
 // Serialize the .git directory to a JSON object for R2 storage
 async function serializeGitDirectory(siteId) {
   const dir = getRepoDir(siteId);
@@ -620,16 +646,8 @@ async function deserializeGitDirectory(siteId, gitData) {
 
   try {
     // Create base directories
-    try {
-      await pfs.mkdir(dir, { recursive: true });
-    } catch (e) {
-      // Directory might exist
-    }
-    try {
-      await pfs.mkdir(gitDir, { recursive: true });
-    } catch (e) {
-      // Directory might exist
-    }
+    await mkdirRecursive(dir);
+    await mkdirRecursive(gitDir);
 
     // Restore each file
     for (const [filePath, base64Content] of Object.entries(gitData)) {
@@ -638,11 +656,7 @@ async function deserializeGitDirectory(siteId, gitData) {
       // Ensure parent directory exists
       const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
       if (parentDir && parentDir !== gitDir) {
-        try {
-          await pfs.mkdir(parentDir, { recursive: true });
-        } catch (e) {
-          // Directory might exist
-        }
+        await mkdirRecursive(parentDir);
       }
 
       // Write file as binary
