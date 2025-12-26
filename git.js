@@ -383,6 +383,40 @@ async function formatChangesForDisplay(siteId) {
       }
     }
 
+    // Show content for added files
+    if (change.status === "added") {
+      const content = await gitReadFile(siteId, change.filepath);
+      if (content) {
+        const lines = content.split("\n");
+        html += `<div style="padding-left: 10px;">`;
+        for (const line of lines.slice(0, 20)) {
+          const escapedLine = escapeHtml(line);
+          html += `<div style="color: #4ec9b0;">+ ${escapedLine}</div>`;
+        }
+        if (lines.length > 20) {
+          html += `<div style="color: #888;">... and ${lines.length - 20} more lines</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    // Show content for deleted files
+    if (change.status === "deleted") {
+      const { old: oldContent } = await gitDiff(siteId, change.filepath);
+      if (oldContent) {
+        const lines = oldContent.split("\n");
+        html += `<div style="padding-left: 10px;">`;
+        for (const line of lines.slice(0, 20)) {
+          const escapedLine = escapeHtml(line);
+          html += `<div style="color: #f14c4c;">- ${escapedLine}</div>`;
+        }
+        if (lines.length > 20) {
+          html += `<div style="color: #888;">... and ${lines.length - 20} more lines</div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
     html += `</div>`;
   }
 
