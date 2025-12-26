@@ -1,3 +1,98 @@
+// ==================== Turnstile Configuration ====================
+
+const TURNSTILE_SITE_KEY = "0x4AAAAAACJNWjSEPW9SeZxb";
+
+let turnstileToken = null;
+let turnstileWidgetId = null;
+
+// Initialize Turnstile widget when the script loads
+function initTurnstile() {
+  if (typeof turnstile === "undefined") {
+    setTimeout(initTurnstile, 100);
+    return;
+  }
+
+  const container = document.getElementById("turnstile-container");
+  if (!container) {
+    console.error("Turnstile container not found");
+    return;
+  }
+
+  turnstileWidgetId = turnstile.render(container, {
+    sitekey: TURNSTILE_SITE_KEY,
+    callback: function(token) {
+      turnstileToken = token;
+      console.log("Turnstile token obtained");
+    },
+    "error-callback": function() {
+      console.error("Turnstile error");
+      turnstileToken = null;
+    },
+    "expired-callback": function() {
+      console.log("Turnstile token expired, refreshing...");
+      turnstileToken = null;
+      turnstile.reset(turnstileWidgetId);
+    },
+    size: "invisible",
+  });
+}
+
+// Get current Turnstile token, refreshing if necessary
+async function getTurnstileToken() {
+  if (turnstileToken) {
+    return turnstileToken;
+  }
+
+  if (typeof turnstile === "undefined") {
+    console.warn("Turnstile not available");
+    return null;
+  }
+
+  if (turnstileWidgetId !== null) {
+    turnstile.reset(turnstileWidgetId);
+  }
+
+  return new Promise((resolve) => {
+    let attempts = 0;
+    const maxAttempts = 50;
+    const checkToken = setInterval(() => {
+      attempts++;
+      if (turnstileToken) {
+        clearInterval(checkToken);
+        resolve(turnstileToken);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(checkToken);
+        console.warn("Turnstile token timeout");
+        resolve(null);
+      }
+    }, 100);
+  });
+}
+
+// Helper to add Turnstile token to headers (for PUT, POST, DELETE requests)
+async function getHeadersWithTurnstile(additionalHeaders = {}) {
+  const token = await getTurnstileToken();
+  const headers = { ...additionalHeaders };
+  if (token) {
+    headers["X-Turnstile-Token"] = token;
+  }
+  // Reset token after use (tokens are single-use)
+  turnstileToken = null;
+  if (typeof turnstile !== "undefined" && turnstileWidgetId !== null) {
+    turnstile.reset(turnstileWidgetId);
+  }
+  return headers;
+}
+
+// Initialize Turnstile when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initTurnstile);
+} else {
+  initTurnstile();
+}
+
+// ==================== Helper Functions ====================
+
 // Helper functions for base64 encoding/decoding
 function encodeBase64(str) {
   const encoder = new TextEncoder();
@@ -25,11 +120,13 @@ function decodeBase64(base64) {
 async function saveFileToR2(siteId, filePath, content, options = {}) {
   const { contentType, encoding } = options;
 
+  const headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+
   const response = await fetch("/api/files", {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       siteId,
       filePath,
@@ -49,11 +146,13 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
 
 // Save multiple files to R2 in a batch
 async function saveFilesToR2(siteId, files) {
+  const headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+
   const response = await fetch("/api/files", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       siteId,
       files,
@@ -94,8 +193,11 @@ async function deleteFileFromR2(siteId, filePath) {
     filePath,
   });
 
+  const headers = await getHeadersWithTurnstile();
+
   const response = await fetch(`/api/files?${params.toString()}`, {
     method: "DELETE",
+    headers,
   });
 
   return response.ok;
@@ -108,8 +210,11 @@ async function deleteAllFilesFromR2(siteId) {
     deleteAll: "true",
   });
 
+  const headers = await getHeadersWithTurnstile();
+
   const response = await fetch(`/api/files?${params.toString()}`, {
     method: "DELETE",
+    headers,
   });
 
   return response.ok;
@@ -387,11 +492,13 @@ async function getUserByProvider(provider, providerId) {
 
 // Create a new user with username
 async function createUser(username, provider, providerId) {
+  const headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+
   const response = await fetch("/api/users", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({ username, provider, providerId }),
   });
 
