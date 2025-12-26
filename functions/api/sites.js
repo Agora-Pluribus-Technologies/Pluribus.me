@@ -12,7 +12,7 @@ export async function onRequestPost(context) {
   }
 
   // Validate required fields
-  const { siteId, provider, owner, repo, branch, basePath } = data;
+  const { siteId, provider, owner, repo, branch, basePath, displayName } = data;
 
   if (!siteId || !provider || !owner || !repo || !branch) {
     return new Response("Missing required fields", { status: 400 });
@@ -30,7 +30,8 @@ export async function onRequestPost(context) {
     owner,
     repo,
     branch,
-    basePath: basePath || "/public"
+    basePath: basePath || "/public",
+    displayName: displayName || repo
   };
 
   // Check if site already exists

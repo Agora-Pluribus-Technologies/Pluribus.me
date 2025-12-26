@@ -256,6 +256,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             repo: repo,
             branch: "main",
             basePath: "/public",
+            displayName: siteName,
           }),
         });
 
@@ -291,6 +292,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           repo: repo,
           branch: "main",
           basePath: "/public",
+          displayName: siteName,
         };
         sitesCache.unshift(newSite);
 
@@ -302,6 +304,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         // Repopulate sites list
         populateSitesList(sitesCache);
+
+        // Click into the newly created site to open the editor
+        const newSiteButton = document.getElementById(siteId);
+        if (newSiteButton) {
+          newSiteButton.click();
+        }
       } catch (error) {
         console.error("Error creating site:", error);
         alert("Failed to create site. Please try again.");
@@ -692,11 +700,11 @@ function populateSitesList(sites) {
     // Create site button
     var siteDiv = document.createElement("div");
     siteDiv.classList.add("site-button", "site-item", "btn", "btn-default");
-    siteDiv.innerText = site.repo;
+    siteDiv.innerText = site.displayName || site.repo;
     siteDiv.id = site.siteId;
     siteDiv.style.flex = "1";
     siteDiv.addEventListener("click", async function () {
-      console.log(`Loading site: ${site.repo} (ID: ${site.siteId})`);
+      console.log(`Loading site: ${site.displayName || site.repo} (ID: ${site.siteId})`);
 
       // Set current site ID
       currentSiteId = site.siteId;
