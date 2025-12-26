@@ -432,16 +432,58 @@ async function loadR2ToGit(siteId) {
   const dir = getRepoDir(siteId);
 
   try {
-    // Check if repo already exists
+    // Check if repo already exists in local filesystem
     try {
       await pfs.stat(`${dir}/.git`);
       console.log("Git repo already exists, skipping R2 sync");
       return true;
     } catch (e) {
-      // Repo doesn't exist, need to init and load from R2
+      // Repo doesn't exist locally, need to load from R2
     }
 
-    // Initialize the repo
+    // Try to restore git history from R2 first
+    const gitData = await loadGitHistoryFromR2(siteId);
+    if (gitData && Object.keys(gitData).length > 0) {
+      console.log("Restoring git history from R2...");
+      const restored = await deserializeGitDirectory(siteId, gitData);
+      if (restored) {
+        // Also restore working directory files from R2
+        const pagesJson = await getFileFromR2(siteId, "public/pages.json");
+        if (pagesJson) {
+          // Create public directory if needed
+          try {
+            await pfs.mkdir(`${dir}/public`, { recursive: true });
+          } catch (e) {}
+
+          await pfs.writeFile(`${dir}/public/pages.json`, pagesJson, "utf8");
+
+          // Load each page into working directory
+          const pages = JSON.parse(pagesJson);
+          for (const page of pages) {
+            const mdContent = await getFileFromR2(siteId, `public/${page.fileName}.md`);
+            if (mdContent) {
+              await pfs.writeFile(`${dir}/public/${page.fileName}.md`, mdContent, "utf8");
+            }
+            const htmlContent = await getFileFromR2(siteId, `public/${page.fileName}.html`);
+            if (htmlContent) {
+              await pfs.writeFile(`${dir}/public/${page.fileName}.html`, htmlContent, "utf8");
+            }
+          }
+        }
+
+        // Load images.json
+        const imagesJson = await getFileFromR2(siteId, "public/images.json");
+        if (imagesJson) {
+          await pfs.writeFile(`${dir}/public/images.json`, imagesJson, "utf8");
+        }
+
+        console.log("Git history restored from R2 successfully");
+        return true;
+      }
+    }
+
+    // Fall back to creating new repo if no history exists
+    console.log("No git history in R2, initializing new repo...");
     await gitInit(siteId);
 
     // Load pages.json from R2
@@ -487,4 +529,173 @@ async function loadR2ToGit(siteId) {
 async function hasUncommittedChanges(siteId) {
   const changes = await gitStatus(siteId);
   return changes.length > 0;
+}
+
+// Helper function to recursively list all files in a directory
+async function listAllFiles(dirPath, basePath = "") {
+  const files = [];
+  try {
+    const entries = await pfs.readdir(dirPath);
+    for (const entry of entries) {
+      const fullPath = `${dirPath}/${entry}`;
+      const relativePath = basePath ? `${basePath}/${entry}` : entry;
+      try {
+        const stat = await pfs.stat(fullPath);
+        if (stat.isDirectory()) {
+          const subFiles = await listAllFiles(fullPath, relativePath);
+          files.push(...subFiles);
+        } else {
+          files.push(relativePath);
+        }
+      } catch (e) {
+        // Skip files that can't be stat'd
+      }
+    }
+  } catch (e) {
+    // Directory might not exist
+  }
+  return files;
+}
+
+// Helper function to convert ArrayBuffer/Uint8Array to base64
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Helper function to convert base64 to Uint8Array
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// Serialize the .git directory to a JSON object for R2 storage
+async function serializeGitDirectory(siteId) {
+  const dir = getRepoDir(siteId);
+  const gitDir = `${dir}/.git`;
+
+  try {
+    const files = await listAllFiles(gitDir);
+    const gitData = {};
+
+    for (const file of files) {
+      const fullPath = `${gitDir}/${file}`;
+      try {
+        // Read file as binary (Uint8Array)
+        const content = await pfs.readFile(fullPath);
+        // Convert to base64 for JSON storage
+        if (content instanceof Uint8Array) {
+          gitData[file] = arrayBufferToBase64(content);
+        } else if (typeof content === "string") {
+          // Text content - encode as base64 for consistency
+          gitData[file] = btoa(unescape(encodeURIComponent(content)));
+        } else {
+          gitData[file] = arrayBufferToBase64(new Uint8Array(content));
+        }
+      } catch (e) {
+        console.error(`Error reading git file ${file}:`, e);
+      }
+    }
+
+    console.log(`Serialized ${Object.keys(gitData).length} git files`);
+    return gitData;
+  } catch (error) {
+    console.error("Error serializing git directory:", error);
+    return null;
+  }
+}
+
+// Deserialize and restore the .git directory from R2 data
+async function deserializeGitDirectory(siteId, gitData) {
+  const dir = getRepoDir(siteId);
+  const gitDir = `${dir}/.git`;
+
+  try {
+    // Create base directories
+    try {
+      await pfs.mkdir(dir, { recursive: true });
+    } catch (e) {
+      // Directory might exist
+    }
+    try {
+      await pfs.mkdir(gitDir, { recursive: true });
+    } catch (e) {
+      // Directory might exist
+    }
+
+    // Restore each file
+    for (const [filePath, base64Content] of Object.entries(gitData)) {
+      const fullPath = `${gitDir}/${filePath}`;
+
+      // Ensure parent directory exists
+      const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+      if (parentDir && parentDir !== gitDir) {
+        try {
+          await pfs.mkdir(parentDir, { recursive: true });
+        } catch (e) {
+          // Directory might exist
+        }
+      }
+
+      // Write file as binary
+      const content = base64ToArrayBuffer(base64Content);
+      await pfs.writeFile(fullPath, content);
+    }
+
+    console.log(`Deserialized ${Object.keys(gitData).length} git files`);
+    return true;
+  } catch (error) {
+    console.error("Error deserializing git directory:", error);
+    return false;
+  }
+}
+
+// Save git history to R2 storage
+async function saveGitHistoryToR2(siteId) {
+  try {
+    const gitData = await serializeGitDirectory(siteId);
+    if (!gitData) {
+      console.error("Failed to serialize git directory");
+      return false;
+    }
+
+    const jsonContent = JSON.stringify(gitData);
+    const result = await saveFileToR2(siteId, ".git-history.json", jsonContent, {
+      contentType: "application/json",
+    });
+
+    if (result) {
+      console.log("Git history saved to R2");
+    }
+    return result;
+  } catch (error) {
+    console.error("Error saving git history to R2:", error);
+    return false;
+  }
+}
+
+// Load git history from R2 storage
+async function loadGitHistoryFromR2(siteId) {
+  try {
+    const jsonContent = await getFileFromR2(siteId, ".git-history.json");
+    if (!jsonContent) {
+      console.log("No git history found in R2");
+      return null;
+    }
+
+    const gitData = JSON.parse(jsonContent);
+    console.log("Git history loaded from R2");
+    return gitData;
+  } catch (error) {
+    console.error("Error loading git history from R2:", error);
+    return null;
+  }
 }

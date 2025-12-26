@@ -279,6 +279,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         await gitCommit(siteId, "Initial commit");
         console.log("Git repo initialized for site:", siteId);
 
+        // Save git history to R2 for persistence
+        await saveGitHistoryToR2(siteId);
+        console.log("Git history saved to R2 for site:", siteId);
+
         // Add new site to cache
         const newSite = {
           siteId: siteId,
@@ -382,6 +386,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         // Deploy changes to R2 storage
         const deploySuccess = await deployChanges(currentSiteId);
+
+        // Save git history to R2 for persistence
+        if (deploySuccess) {
+          await saveGitHistoryToR2(currentSiteId);
+          console.log("Git history saved to R2");
+        }
 
         // Close modal
         $("#commitModal").modal("hide");
