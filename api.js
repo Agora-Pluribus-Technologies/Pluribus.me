@@ -23,6 +23,7 @@ function initTurnstile() {
     sitekey: TURNSTILE_SITE_KEY,
     callback: function(token) {
       turnstileToken = token;
+      container.display = "none"; // Hide the widget after obtaining the token
       console.log("Turnstile token obtained");
     },
     "error-callback": function() {
