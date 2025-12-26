@@ -67,30 +67,136 @@ function isImageInCache(filename) {
 // Interval for checking site availability
 let siteAvailabilityInterval = null;
 
+// Load sites for a specific user
+async function loadSitesForUser(username) {
+  console.log("Loading sites for user:", username);
+
+  // Fetch sites filtered by owner (username)
+  const sites = await getSites(username);
+
+  // Cache the sites list
+  sitesCache = sites || [];
+
+  const sitesListHeader = document.getElementById("sites-list-header");
+  sitesListHeader.style.display = "block";
+
+  populateSitesList(sitesCache);
+}
+
 document.addEventListener("DOMContentLoaded", async function () {
-  if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null) {
+  if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null && getOauthTokenGoogle() === null) {
     console.log("Access tokens missing or expired");
     displayLoginButtons();
   } else {
-    let sites;
-    if (getOauthTokenGitlab() !== null) {
-      console.log("GitLab access token present and valid");
-      sites = await getSitesGitLab();
-      console.log("GitLab Sites:", sites);
-    } else if (getOauthTokenGithub() !== null) {
-      console.log("GitHub access token present and valid");
-      sites = await getSitesGitHub();
-      console.log("GitHub Sites:", sites);
+    console.log("Access token present and valid");
+
+    // Check if user has a username
+    const providerInfo = await getCurrentProviderInfo();
+    if (!providerInfo) {
+      console.error("Could not get provider info");
+      displayLoginButtons();
+      return;
     }
 
-    // Cache the sites list
-    sitesCache = sites || [];
+    console.log("Provider info:", providerInfo);
 
-    const sitesListHeader = document.getElementById("sites-list-header");
-    sitesListHeader.style.display = "block";
+    // Check if user already has a username
+    const existingUser = await getUserByProvider(providerInfo.provider, providerInfo.providerId);
 
-    populateSitesList(sitesCache);
+    if (existingUser && existingUser.username) {
+      // User has a username, proceed to load sites
+      console.log("User found:", existingUser.username);
+      setStoredUsername(existingUser.username);
+      await loadSitesForUser(existingUser.username);
+    } else {
+      // User needs to select a username
+      console.log("New user, showing username selection modal");
+      $("#usernameModal").modal("show");
+    }
   }
+
+  // Handle username form input for live validation
+  const usernameInput = document.getElementById("usernameInput");
+  const usernameError = document.getElementById("usernameError");
+  const usernameSuccess = document.getElementById("usernameSuccess");
+  const submitUsernameButton = document.getElementById("submitUsernameButton");
+
+  let usernameCheckTimeout = null;
+
+  usernameInput.addEventListener("input", function () {
+    const username = usernameInput.value.trim();
+
+    // Clear previous timeout
+    if (usernameCheckTimeout) {
+      clearTimeout(usernameCheckTimeout);
+    }
+
+    // Reset states
+    usernameError.style.display = "none";
+    usernameSuccess.style.display = "none";
+    submitUsernameButton.disabled = true;
+
+    // Validate format
+    const usernameRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,28}[a-zA-Z0-9]$/;
+    if (username.length < 3) {
+      return;
+    }
+
+    if (!usernameRegex.test(username)) {
+      usernameError.textContent = "Invalid format. Use letters, numbers, and hyphens only. Cannot start or end with hyphen.";
+      usernameError.style.display = "block";
+      return;
+    }
+
+    // Debounce the API check
+    usernameCheckTimeout = setTimeout(async () => {
+      const isAvailable = await checkUsernameAvailable(username);
+      if (isAvailable) {
+        usernameSuccess.textContent = "Username is available!";
+        usernameSuccess.style.display = "block";
+        usernameError.style.display = "none";
+        submitUsernameButton.disabled = false;
+      } else {
+        usernameError.textContent = "Username is already taken.";
+        usernameError.style.display = "block";
+        usernameSuccess.style.display = "none";
+        submitUsernameButton.disabled = true;
+      }
+    }, 500);
+  });
+
+  // Handle username form submission
+  document.getElementById("usernameForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const username = usernameInput.value.trim();
+    const providerInfo = await getCurrentProviderInfo();
+
+    if (!providerInfo) {
+      usernameError.textContent = "Could not get provider info. Please try again.";
+      usernameError.style.display = "block";
+      return;
+    }
+
+    // Disable button during submission
+    submitUsernameButton.disabled = true;
+    submitUsernameButton.textContent = "Creating...";
+
+    try {
+      const user = await createUser(username, providerInfo.provider, providerInfo.providerId);
+      console.log("User created:", user);
+
+      // Close modal and load sites
+      $("#usernameModal").modal("hide");
+      await loadSitesForUser(user.username);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      usernameError.textContent = error.message || "Failed to create username. Please try again.";
+      usernameError.style.display = "block";
+      submitUsernameButton.disabled = false;
+      submitUsernameButton.textContent = "Confirm Username";
+    }
+  });
 
   // Warn user before leaving page with unsaved changes
   window.addEventListener("beforeunload", function (event) {
@@ -121,62 +227,75 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         console.log("Creating new site:", siteName, siteDescription);
 
-        let site;
-        let siteId;
-        if (getOauthTokenGitlab() !== null) {
-          site = await createSiteGitlab(siteName, siteDescription);
-          siteId = site.id;
-          console.log("New GitLab site created with ID:", siteId);
-          await initialCommitGitlab(siteId);
-        } else if (getOauthTokenGithub() !== null) {
-          site = await createSiteGithub(siteName, siteDescription);
-          siteId = site.full_name;
-          console.log("New GitHub site created with ID:", siteId);
-          await initialCommitGithub(siteId);
+        // Get stored username (set during login)
+        const owner = getStoredUsername();
+        if (!owner) {
+          alert("No username found. Please log in again.");
+          return;
         }
 
-        console.log("Initial commit made for site ID:", siteId);
+        // Get provider info
+        const providerInfo = await getCurrentProviderInfo();
+        const provider = providerInfo ? providerInfo.provider : "unknown";
 
-        // Register site with API
-        try {
-          // Determine provider and parse owner/repo
-          const provider = getOauthTokenGitlab() !== null ? "gitlab" : "github";
-          let owner, repo;
+        // Sanitize site name for use as repo name
+        const repo = siteName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-          if (provider === "gitlab") {
-            // For GitLab, siteId is numeric, use site object to get path
-            const pathParts = site.path_with_namespace.split("/");
-            owner = pathParts[0];
-            repo = pathParts[1];
-          } else {
-            // For GitHub, siteId is "owner/repo"
-            [owner, repo] = siteId.split("/");
-          }
+        const siteId = `${owner}/${repo}`;
 
-          const createResponse = await fetch("/api/sites", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              siteId: provider === "gitlab" ? site.path_with_namespace : siteId,
-              provider: provider,
-              owner: owner,
-              repo: repo,
-              branch: "main",
-              basePath: "/public",
-            }),
-          });
+        // Store site config in KV
+        const createSiteHeaders = await getHeadersWithTurnstile({
+          "Content-Type": "application/json",
+        });
+        const createResponse = await fetch("/api/sites", {
+          method: "POST",
+          headers: createSiteHeaders,
+          body: JSON.stringify({
+            siteId: siteId,
+            provider: provider,
+            owner: owner,
+            repo: repo,
+            branch: "main",
+            basePath: "/public",
+            displayName: siteName,
+          }),
+        });
 
-          if (createResponse.ok) {
-            console.log("Site registered successfully in API");
-          } else {
-            const errorText = await createResponse.text();
-            console.error("Failed to register site in API:", errorText);
-          }
-        } catch (error) {
-          console.error("Error registering site with API:", error);
+        if (!createResponse.ok) {
+          const errorText = await createResponse.text();
+          console.error("Failed to create site:", errorText);
+          alert("Failed to create site: " + errorText);
+          return;
         }
+
+        console.log("Site config stored successfully");
+
+        // Create initial files in R2
+        await initialCommit(siteId);
+        console.log("Initial commit completed for site:", siteId);
+
+        // Initialize git repository
+        await gitInit(siteId);
+        await gitWriteFile(siteId, "public/pages.json", "[]");
+        await gitWriteFile(siteId, "public/images.json", "[]");
+        await gitCommit(siteId, "Initial commit");
+        console.log("Git repo initialized for site:", siteId);
+
+        // Save git history to R2 for persistence
+        await saveGitHistoryToR2(siteId);
+        console.log("Git history saved to R2 for site:", siteId);
+
+        // Add new site to cache
+        const newSite = {
+          siteId: siteId,
+          provider: provider,
+          owner: owner,
+          repo: repo,
+          branch: "main",
+          basePath: "/public",
+          displayName: siteName,
+        };
+        sitesCache.unshift(newSite);
 
         // Close the modal
         $("#createSiteModal").modal("hide");
@@ -184,14 +303,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Clear the form
         document.getElementById("createSiteForm").reset();
 
-        // Add new site directly to cache
-        console.log("Adding new site to cache");
-
-        // Add to the beginning of the cache
-        sitesCache.unshift(site);
-
         // Repopulate sites list
         populateSitesList(sitesCache);
+
+        // Click into the newly created site to open the editor
+        const newSiteButton = document.getElementById(siteId);
+        if (newSiteButton) {
+          newSiteButton.click();
+        }
       } catch (error) {
         console.error("Error creating site:", error);
         alert("Failed to create site. Please try again.");
@@ -223,7 +342,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Handle deploy button click
+  // Handle deploy button click - show commit modal
   document
     .getElementById("deployButton")
     .addEventListener("click", async function () {
@@ -231,46 +350,146 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.log("Current site ID:", currentSiteId);
       console.log("Markdown cache:", markdownCache);
 
-      if (currentSiteId) {
-        const deployButton = document.getElementById("deployButton");
-        const originalButtonText = deployButton.textContent;
-
-        // Show loading state
-        deployButton.classList.add("loading");
-        deployButton.textContent = "";
-        deployButton.disabled = true;
-
-        let deploySuccess = false;
-
-        try {
-          // Deploy changes
-          if (getOauthTokenGitlab() !== null) {
-            deploySuccess = await deployChangesGitlab(currentSiteId);
-          } else if (getOauthTokenGithub() !== null) {
-            deploySuccess = await deployChangesGithub(currentSiteId);
-          }
-
-
-          // Reset modified flag after successful deployment
-          modified = false;
-          updateDeployButtonState();
-
-          // Show success or failure message
-          if (deploySuccess) {
-            showAlertBar("Deploy successful! Your changes will be live within 5 minutes.", true);
-          } else {
-            showAlertBar("Deploy failed. Please check the console for errors.", false);
-          }
-        } catch (error) {
-          console.error("Deploy error:", error);
-          showAlertBar("Deploy failed. Please check the console for errors.", false);
-        } finally {
-          // Remove loading state
-          deployButton.classList.remove("loading");
-          deployButton.textContent = originalButtonText;
-        }
-      } else {
+      if (!currentSiteId) {
         console.error("No site selected");
+        return;
+      }
+
+      // Sync current cache to git working directory
+      await syncCacheToGit(currentSiteId, markdownCache, imageCache);
+
+      // Get and display changes
+      const changesPreview = document.getElementById("changesPreview");
+      changesPreview.innerHTML = "<p style='color: #888;'>Loading changes...</p>";
+
+      const changesHtml = await formatChangesForDisplay(currentSiteId);
+      changesPreview.innerHTML = changesHtml;
+
+      // Clear commit message
+      document.getElementById("commitMessage").value = "";
+
+      // Show commit modal
+      $("#commitModal").modal("show");
+    });
+
+  // Handle commit confirmation
+  document
+    .getElementById("confirmCommitButton")
+    .addEventListener("click", async function () {
+      const commitMessage = document.getElementById("commitMessage").value.trim();
+
+      if (!commitMessage) {
+        alert("Please enter a commit message.");
+        return;
+      }
+
+      const confirmButton = document.getElementById("confirmCommitButton");
+      const originalText = confirmButton.textContent;
+      confirmButton.disabled = true;
+      confirmButton.textContent = "Deploying...";
+
+      try {
+        // Create git commit
+        const commitSha = await gitCommit(currentSiteId, commitMessage);
+        console.log("Commit created:", commitSha);
+
+        // Deploy changes to R2 storage
+        const deploySuccess = await deployChanges(currentSiteId);
+
+        // Save git history to R2 for persistence
+        if (deploySuccess) {
+          await saveGitHistoryToR2(currentSiteId);
+          console.log("Git history saved to R2");
+        }
+
+        // Close modal
+        $("#commitModal").modal("hide");
+
+        // Reset modified flag after successful deployment
+        modified = false;
+        updateDeployButtonState();
+
+        // Show success or failure message
+        if (deploySuccess) {
+          showAlertBar(`Deployed successfully! Commit: ${commitSha ? commitSha.substring(0, 7) : "done"}`, true);
+        } else {
+          showAlertBar("Deploy failed. Please check the console for errors.", false);
+        }
+      } catch (error) {
+        console.error("Deploy error:", error);
+        showAlertBar("Deploy failed: " + error.message, false);
+      } finally {
+        confirmButton.disabled = false;
+        confirmButton.textContent = originalText;
+      }
+    });
+
+  // Handle history button click
+  document
+    .getElementById("historyButton")
+    .addEventListener("click", async function () {
+      if (!currentSiteId) {
+        console.error("No site selected");
+        return;
+      }
+
+      // Show modal with loading state
+      const historyList = document.getElementById("historyList");
+      historyList.innerHTML = "<p style='color: #888;'>Loading commit history...</p>";
+      $("#historyModal").modal("show");
+
+      // Fetch and display commit history
+      const historyHtml = await formatCommitHistory(currentSiteId);
+      historyList.innerHTML = historyHtml;
+    });
+
+  // Handle click on commit links in history (event delegation)
+  document
+    .getElementById("historyList")
+    .addEventListener("click", async function (e) {
+      const commitLink = e.target.closest(".commit-link");
+      if (!commitLink) return;
+
+      e.preventDefault();
+
+      const commitOid = commitLink.dataset.commitOid;
+      if (!commitOid || !currentSiteId) return;
+
+      const historyList = document.getElementById("historyList");
+      const shortSha = commitOid.substring(0, 7);
+
+      // Show loading state with back button
+      historyList.innerHTML = `
+        <div style="margin-bottom: 15px;">
+          <a href="#" id="backToHistoryList" style="color: #337ab7; text-decoration: none;">← Back to history</a>
+        </div>
+        <h5 style="margin-bottom: 15px;">Changes in commit ${shortSha}</h5>
+        <p style='color: #888;'>Loading changes...</p>
+      `;
+
+      // Fetch and display commit changes
+      const changesHtml = await formatCommitChanges(currentSiteId, commitOid);
+      historyList.innerHTML = `
+        <div style="margin-bottom: 15px;">
+          <a href="#" id="backToHistoryList" style="color: #337ab7; text-decoration: none;">← Back to history</a>
+        </div>
+        <h5 style="margin-bottom: 15px;">Changes in commit ${shortSha}</h5>
+        ${changesHtml}
+      `;
+    });
+
+  // Handle back to history list click (event delegation)
+  document
+    .getElementById("historyList")
+    .addEventListener("click", async function (e) {
+      if (e.target.id === "backToHistoryList") {
+        e.preventDefault();
+
+        const historyList = document.getElementById("historyList");
+        historyList.innerHTML = "<p style='color: #888;'>Loading commit history...</p>";
+
+        const historyHtml = await formatCommitHistory(currentSiteId);
+        historyList.innerHTML = historyHtml;
       }
     });
 
@@ -482,20 +701,15 @@ function populateSitesList(sites) {
     // Create site button
     var siteDiv = document.createElement("div");
     siteDiv.classList.add("site-button", "site-item", "btn", "btn-default");
-    siteDiv.innerText = site.name;
-    siteDiv.id = site.id;
+    siteDiv.innerText = site.displayName || site.repo;
+    siteDiv.id = site.siteId;
     siteDiv.style.flex = "1";
     siteDiv.addEventListener("click", async function () {
-      console.log(`Loading site: ${site.name} (ID: ${site.id})`);
+      console.log(`Loading site: ${site.displayName || site.repo} (ID: ${site.siteId})`);
 
-      // Set current site ID and clear cache
-      if (getOauthTokenGitlab() !== null) {
-        currentSiteId = site.id;
-        currentSitePathFull = site.path_with_namespace;
-      } else if (getOauthTokenGithub() !== null) {
-        currentSiteId = site.full_name;
-        currentSitePathFull = site.full_name;
-      }
+      // Set current site ID
+      currentSiteId = site.siteId;
+      currentSitePathFull = site.siteId;
       console.log("Current site path full:", currentSitePathFull);
 
       // Update Visit Site button URL
@@ -536,13 +750,8 @@ function populateSitesList(sites) {
       const editorContainer = document.getElementById("editorContainer");
       editorContainer.style.display = "flex";
 
-      // Fetch site tree
-      let markdownFiles;
-      if (getOauthTokenGitlab() !== null) {
-        markdownFiles = await getPublicFilesGitLab(site.id);
-      } else if (getOauthTokenGithub() !== null) {
-        markdownFiles = await getPublicFilesGitHub(site.full_name);
-      }
+      // Fetch site tree from R2
+      const markdownFiles = await getPublicFiles(currentSiteId);
 
       console.log("Markdown files:", markdownFiles);
       if (markdownFiles.length === 0) {
@@ -556,12 +765,8 @@ function populateSitesList(sites) {
         // Initialize empty imageCache
         imageCache = [];
       } else {
-        // Initialize markdownCache to pages.json
-        if (getOauthTokenGitlab() !== null) {
-          markdownCache = JSON.parse(await getFileContentGitlab(site.id, "public/pages.json"));
-        } else if (getOauthTokenGithub() !== null) {
-          markdownCache = JSON.parse(await getFileContentGithub(site.full_name, "public/pages.json"));
-        }
+        // Initialize markdownCache from pages.json
+        markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
         for (let i=0; i < markdownCache.length; i++) {
           const fileName = markdownCache[i].fileName;
           markdownCache[i].fileName = `public/${fileName}.md`
@@ -570,23 +775,13 @@ function populateSitesList(sites) {
         // Load all markdown files into cache
         for (const file of markdownFiles) {
           console.log("Loading file into cache:", file);
-          let content;
-          if (getOauthTokenGitlab() !== null) {
-            content = await getFileContentGitlab(site.id, file);
-          } else if (getOauthTokenGithub() !== null) {
-            content = await getFileContentGithub(site.full_name, file);
-          }
+          const content = await getFileContent(currentSiteId, file);
           addOrUpdateCache(file, null, content);
         }
 
         // Initialize imageCache from images.json
         try {
-          let imagesJsonContent;
-          if (getOauthTokenGitlab() !== null) {
-            imagesJsonContent = await getFileContentGitlab(site.id, "public/images.json");
-          } else if (getOauthTokenGithub() !== null) {
-            imagesJsonContent = await getFileContentGithub(site.full_name, "public/images.json");
-          }
+          const imagesJsonContent = await getFileContent(currentSiteId, "public/images.json");
 
           if (imagesJsonContent) {
             imageCache = JSON.parse(imagesJsonContent);
@@ -601,8 +796,11 @@ function populateSitesList(sites) {
         }
       }
 
+      // Initialize git repo and load files from R2
+      await loadR2ToGit(currentSiteId);
+
       // Populate menubar from cache
-      await populateMenubar(site.id);
+      await populateMenubar(site.siteId);
 
       // Load the editor
       loadToastEditor();
@@ -649,44 +847,28 @@ function populateSitesList(sites) {
     deleteButton.addEventListener("click", async function (event) {
       event.stopPropagation(); // Prevent triggering site click
 
-      const confirmMessage = `Are you sure you want to delete "${site.name}"? This action cannot be undone and will permanently delete the repository.`;
+      const confirmMessage = `Are you sure you want to delete "${site.repo}"? This action cannot be undone.`;
       if (confirm(confirmMessage)) {
-        console.log("Deleting site:", site.name);
+        console.log("Deleting site:", site.repo);
 
         // Disable button during deletion
         deleteButton.disabled = true;
         deleteButton.textContent = "...";
         deleteButton.style.opacity = "0.5";
 
-        let success = false;
-        let siteIdToDelete;
+        const deleteSiteHeaders = await getHeadersWithTurnstile({
+          "Content-Type": "application/json",
+        });
+        const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(site.siteId)}`, {
+          method: "DELETE",
+          headers: deleteSiteHeaders,
+        });
 
-        if (getOauthTokenGitlab() !== null) {
-          siteIdToDelete = site.id;
-          success = await deleteSiteGitlab(siteIdToDelete);
-        } else if (getOauthTokenGithub() !== null) {
-          siteIdToDelete = site.full_name;
-          success = await deleteSiteGithub(siteIdToDelete);
-        }
-
-        if (success) {
-          const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(siteIdToDelete)}`, {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          });
-          
+        if (deleteResponse.ok) {
           console.log("Site deleted successfully");
 
           // Remove from cache
-          sitesCache = sitesCache.filter(s => {
-            if (getOauthTokenGitlab() !== null) {
-              return s.id !== siteIdToDelete;
-            } else {
-              return s.full_name !== siteIdToDelete;
-            }
-          });
+          sitesCache = sitesCache.filter(s => s.siteId !== site.siteId);
 
           // Repopulate the list
           populateSitesList(sitesCache);
@@ -806,12 +988,7 @@ async function populateMenubar(siteId) {
               existing.fileName = newFilePath;
             } else {
               // If not in cache yet, fetch it first then rename
-              let content;
-              if (getOauthTokenGitlab() !== null) {
-                content = await getFileContentGitlab(siteId, oldFilePath);
-              } else if (getOauthTokenGithub() !== null) {
-                content = await getFileContentGithub(siteId, oldFilePath);
-              }
+              const content = await getFileContent(siteId, oldFilePath);
               addOrUpdateCache(newFilePath, newPageName, content);
             }
 

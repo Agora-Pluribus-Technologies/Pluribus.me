@@ -246,7 +246,6 @@
     async function fetchPageContent(origin, basePath, pagesJson) {
       marked.setOptions({
         gfm: true,
-        breaks: true,
       });
 
       // https://pluribus.me/s/username/sitename/path/to/page.html --> path/to/page
@@ -288,7 +287,7 @@
         });
         if (content.ok) {
           const text = await content.text();
-          const parsedMarkdown = await marked.parse(text, breaks = true);
+          const parsedMarkdown = await marked.parse(text);
           const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
 
           const markdownSections = sanitizedMarkdown.split('<hr>');

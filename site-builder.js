@@ -73,8 +73,8 @@ function blobToBase64(blob) {
   });
 }
 
-// Function to upload image to repository
-async function uploadImage(file) {
+// Function to process and upload image to R2 storage
+async function processAndUploadImage(file) {
   try {
     // Process image (convert to AVIF and resize)
     const processedBlob = await processImage(file);
@@ -91,13 +91,8 @@ async function uploadImage(file) {
     // Convert to base64
     const base64Content = await blobToBase64(processedBlob);
 
-    // Upload to repository
-    let success = false;
-    if (getOauthTokenGitlab() !== null) {
-      success = await uploadImageGitlab(currentSiteId, filename, base64Content);
-    } else if (getOauthTokenGithub() !== null) {
-      success = await uploadImageGithub(currentSiteId, filename, base64Content);
-    }
+    // Upload to R2 storage
+    const success = await uploadImage(currentSiteId, filename, base64Content);
 
     if (success) {
       // Add to imageCache
@@ -210,12 +205,7 @@ function populateImageGallery(galleryElement) {
       }
 
       try {
-        let success = false;
-        if (getOauthTokenGitlab() !== null) {
-          success = await deleteImageGitlab(currentSiteId, filename);
-        } else if (getOauthTokenGithub() !== null) {
-          success = await deleteImageGithub(currentSiteId, filename);
-        }
+        const success = await deleteImage(currentSiteId, filename);
 
         if (success) {
           removeImageFromCache(filename);
@@ -369,8 +359,8 @@ async function handleImageUpload(file, popup, progressContainer, imageGallery) {
     // Show progress
     progressContainer.style.display = 'block';
 
-    // Upload image
-    const filename = await uploadImage(file);
+    // Process and upload image
+    const filename = await processAndUploadImage(file);
 
     // Hide progress
     progressContainer.style.display = 'none';

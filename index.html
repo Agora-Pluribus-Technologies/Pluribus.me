@@ -14,21 +14,30 @@
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+  <script src="https://bundle.run/buffer@6.0.3"></script>
+  <script>window.Buffer = buffer.Buffer;</script>
+  <script src="https://unpkg.com/@isomorphic-git/lightning-fs"></script>
+  <script src="https://unpkg.com/isomorphic-git"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <script src="local-dev.js"></script>
   <script src="api.js"></script>
+  <script src="git.js"></script>
   <script src="site-builder.js"></script>
   <script src="on-load.js"></script>
 </head>
 
 <body>
+  <div id="turnstile-container"></div>
   <div id="alertBar" class="alert-bar"></div>
   <main id="main" class="content-area" style="margin: 0 20px 0 20px;">
     <div id="mainContent" style="display: flex; flex: 1; overflow: hidden;">
       <div id="editorSection" style="flex: 1;">
         <div id="sites-list-panel">
           <div id="sites-list-header" style="display: none">
-            <h2>Available Sites</h2>
-            <button id="createSiteButton" class="site-button btn btn-primary" data-toggle="modal" data-target="#createSiteModal">Create New Site</button>
+            <h2>Your Sites</h2>
+            <div style="display: flex; margin-bottom: 8px;">
+              <button id="createSiteButton" class="site-button btn btn-primary" style="flex: 1;" data-toggle="modal" data-target="#createSiteModal">Create New Site</button>
+            </div>
           </div>
           <div id="sites-list"></div>
         </div>
@@ -36,6 +45,7 @@
           <div id="editor-topbar" style="text-align: center; margin-bottom: 10px;">
             <button id="backButton" class="btn btn-warning">Back</button>
             <button id="visitSiteButton" class="btn btn-info">Visit Site</button>
+            <button id="historyButton" class="btn btn-default">History</button>
             <button id="deployButton" class="btn btn-success">Deploy Site</button>
           </div>
           <div id="last-updated-time-label" style="text-align: right; display: inline-block"></div>
@@ -80,9 +90,88 @@
       </div>
     </div>
   </div>
+
+  <!-- Commit Modal -->
+  <div class="modal fade" id="commitModal" tabindex="-1" role="dialog" aria-labelledby="commitModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="commitModalLabel">Review Changes & Deploy</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="commitMessage">Commit Message</label>
+            <input type="text" class="form-control" id="commitMessage" placeholder="Describe your changes..." required>
+          </div>
+          <div class="form-group">
+            <label>Changes to be committed:</label>
+            <div id="changesPreview" style="max-height: 300px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px;">
+              <p style="color: #888;">Loading changes...</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="confirmCommitButton" type="button" class="btn btn-success">Commit & Deploy</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Commit History Modal -->
+  <div class="modal fade" id="historyModal" tabindex="-1" role="dialog" aria-labelledby="historyModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="historyModalLabel">Commit History</h4>
+        </div>
+        <div class="modal-body">
+          <div id="historyList" style="max-height: 400px; overflow-y: auto;">
+            <p style="color: #888;">Loading commit history...</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Username Selection Modal -->
+  <div class="modal fade" id="usernameModal" tabindex="-1" role="dialog" aria-labelledby="usernameModalLabel" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title" id="usernameModalLabel">Choose Your Username</h4>
+        </div>
+        <div class="modal-body">
+          <p>Welcome! Please choose a username. This will be used to identify your sites and <strong>cannot be changed later</strong>.</p>
+          <form id="usernameForm">
+            <div class="form-group">
+              <label for="usernameInput">Username</label>
+              <input type="text" class="form-control" id="usernameInput" placeholder="Enter username" required pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,28}[a-zA-Z0-9]" minlength="3" maxlength="30">
+              <p class="help-block">3-30 characters. Letters, numbers, and hyphens only. Cannot start or end with a hyphen.</p>
+              <p id="usernameError" class="text-danger" style="display: none;"></p>
+              <p id="usernameSuccess" class="text-success" style="display: none;"></p>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button id="submitUsernameButton" type="submit" form="usernameForm" class="btn btn-primary" disabled>Confirm Username</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="footer" style="text-align: center;">
     <p>
-      Pluribus.me Site Builder v2025.12.8 (pre-Alpha)
+      Pluribus.me Site Builder v2025.12.26 (pre-Alpha)
     </p>
     <p>
       <a href="https://codeberg.org/Agora-Pluribus-Technologies/Pluribus.me" target="_blank">Source code</a> • <a href="about.html" target="_blank">About</a> • <a href="https://agorapluribus.com/#support-me" target="_blank">Support Me</a>
