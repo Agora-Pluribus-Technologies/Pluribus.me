@@ -1,104 +1,3 @@
-// ==================== Turnstile Configuration ====================
-
-const TURNSTILE_SITE_KEY = "0x4AAAAAACJNWjSEPW9SeZxb";
-
-let turnstileToken = null;
-let turnstileWidgetId = null;
-
-// Initialize Turnstile widget when the script loads
-function initTurnstile() {
-  if (typeof turnstile === "undefined") {
-    // Turnstile script not loaded yet, retry after a short delay
-    setTimeout(initTurnstile, 100);
-    return;
-  }
-
-  const container = document.getElementById("turnstile-container");
-  if (!container) {
-    console.error("Turnstile container not found");
-    return;
-  }
-
-  turnstileWidgetId = turnstile.render(container, {
-    sitekey: TURNSTILE_SITE_KEY,
-    callback: function(token) {
-      turnstileToken = token;
-      container.display = "none"; // Hide the widget after obtaining the token
-      console.log("Turnstile token obtained");
-    },
-    "error-callback": function() {
-      console.error("Turnstile error");
-      turnstileToken = null;
-    },
-    "expired-callback": function() {
-      console.log("Turnstile token expired, refreshing...");
-      turnstileToken = null;
-      turnstile.reset(turnstileWidgetId);
-    },
-    size: "invisible",
-  });
-}
-
-// Get current Turnstile token, refreshing if necessary
-async function getTurnstileToken() {
-  // If we have a valid token, return it
-  if (turnstileToken) {
-    return turnstileToken;
-  }
-
-  // If Turnstile is not available, return null (for development)
-  if (typeof turnstile === "undefined") {
-    console.warn("Turnstile not available");
-    return null;
-  }
-
-  // Reset and wait for new token
-  if (turnstileWidgetId !== null) {
-    turnstile.reset(turnstileWidgetId);
-  }
-
-  // Wait for token with timeout
-  return new Promise((resolve) => {
-    let attempts = 0;
-    const maxAttempts = 50; // 5 seconds max wait
-    const checkToken = setInterval(() => {
-      attempts++;
-      if (turnstileToken) {
-        clearInterval(checkToken);
-        resolve(turnstileToken);
-      } else if (attempts >= maxAttempts) {
-        clearInterval(checkToken);
-        console.warn("Turnstile token timeout");
-        resolve(null);
-      }
-    }, 100);
-  });
-}
-
-// Helper to add Turnstile token to headers
-async function getHeadersWithTurnstile(additionalHeaders = {}) {
-  const token = await getTurnstileToken();
-  const headers = { ...additionalHeaders };
-  if (token) {
-    headers["X-Turnstile-Token"] = token;
-  }
-  // Reset token after use (tokens are single-use)
-  turnstileToken = null;
-  if (typeof turnstile !== "undefined" && turnstileWidgetId !== null) {
-    turnstile.reset(turnstileWidgetId);
-  }
-  return headers;
-}
-
-// Initialize Turnstile when DOM is ready
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initTurnstile);
-} else {
-  initTurnstile();
-}
-
-// ==================== Helper Functions ====================
-
 // Helper functions for base64 encoding/decoding
 function encodeBase64(str) {
   const encoder = new TextEncoder();
@@ -126,13 +25,11 @@ function decodeBase64(base64) {
 async function saveFileToR2(siteId, filePath, content, options = {}) {
   const { contentType, encoding } = options;
 
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/files", {
     method: "PUT",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       siteId,
       filePath,
@@ -152,13 +49,11 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
 
 // Save multiple files to R2 in a batch
 async function saveFilesToR2(siteId, files) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/files", {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       siteId,
       files,
@@ -181,11 +76,8 @@ async function getFileFromR2(siteId, filePath) {
     filePath,
   });
 
-  const headers = await getHeadersWithTurnstile();
-
   const response = await fetch(`/api/files?${params.toString()}`, {
     method: "GET",
-    headers,
   });
 
   if (!response.ok) {
@@ -202,11 +94,8 @@ async function deleteFileFromR2(siteId, filePath) {
     filePath,
   });
 
-  const headers = await getHeadersWithTurnstile();
-
   const response = await fetch(`/api/files?${params.toString()}`, {
     method: "DELETE",
-    headers,
   });
 
   return response.ok;
@@ -219,11 +108,8 @@ async function deleteAllFilesFromR2(siteId) {
     deleteAll: "true",
   });
 
-  const headers = await getHeadersWithTurnstile();
-
   const response = await fetch(`/api/files?${params.toString()}`, {
     method: "DELETE",
-    headers,
   });
 
   return response.ok;
@@ -484,10 +370,7 @@ async function getCurrentProviderInfo() {
 
 // Check if username is available
 async function checkUsernameAvailable(username) {
-  const headers = await getHeadersWithTurnstile();
-  const response = await fetch(`/api/users?username=${encodeURIComponent(username)}`, {
-    headers,
-  });
+  const response = await fetch(`/api/users?username=${encodeURIComponent(username)}`);
   if (!response.ok) return false;
   const data = await response.json();
   return !data.exists;
@@ -495,10 +378,7 @@ async function checkUsernameAvailable(username) {
 
 // Get user by provider ID (check if user already has a username)
 async function getUserByProvider(provider, providerId) {
-  const headers = await getHeadersWithTurnstile();
-  const response = await fetch(`/api/users?provider=${provider}&providerId=${encodeURIComponent(providerId)}`, {
-    headers,
-  });
+  const response = await fetch(`/api/users?provider=${provider}&providerId=${encodeURIComponent(providerId)}`);
   if (!response.ok) return null;
   const data = await response.json();
   if (data.exists === false) return null;
@@ -507,13 +387,11 @@ async function getUserByProvider(provider, providerId) {
 
 // Create a new user with username
 async function createUser(username, provider, providerId) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/users", {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ username, provider, providerId }),
   });
 
@@ -612,13 +490,11 @@ async function getSites(owner) {
     params.set("owner", owner);
   }
 
-  const headers = await getHeadersWithTurnstile({
-    "Cache-Control": "no-cache",
-  });
-
   const response = await fetch(`/api/sites?${params.toString()}`, {
     method: "GET",
-    headers,
+    headers: {
+      "Cache-Control": "no-cache",
+    },
   });
 
   if (!response.ok) {

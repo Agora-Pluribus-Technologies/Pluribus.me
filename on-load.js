@@ -244,12 +244,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         const siteId = `${owner}/${repo}`;
 
         // Store site config in KV
-        const createSiteHeaders = await getHeadersWithTurnstile({
-          "Content-Type": "application/json",
-        });
         const createResponse = await fetch("/api/sites", {
           method: "POST",
-          headers: createSiteHeaders,
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             siteId: siteId,
             provider: provider,
@@ -856,12 +855,11 @@ function populateSitesList(sites) {
         deleteButton.textContent = "...";
         deleteButton.style.opacity = "0.5";
 
-        const deleteSiteHeaders = await getHeadersWithTurnstile({
-          "Content-Type": "application/json",
-        });
         const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(site.siteId)}`, {
           method: "DELETE",
-          headers: deleteSiteHeaders,
+          headers: {
+            "Content-Type": "application/json",
+          },
         });
 
         if (deleteResponse.ok) {
