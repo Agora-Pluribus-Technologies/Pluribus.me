@@ -434,6 +434,56 @@ document.addEventListener("DOMContentLoaded", async function () {
       historyList.innerHTML = historyHtml;
     });
 
+  // Handle click on commit links in history (event delegation)
+  document
+    .getElementById("historyList")
+    .addEventListener("click", async function (e) {
+      const commitLink = e.target.closest(".commit-link");
+      if (!commitLink) return;
+
+      e.preventDefault();
+
+      const commitOid = commitLink.dataset.commitOid;
+      if (!commitOid || !currentSiteId) return;
+
+      const historyList = document.getElementById("historyList");
+      const shortSha = commitOid.substring(0, 7);
+
+      // Show loading state with back button
+      historyList.innerHTML = `
+        <div style="margin-bottom: 15px;">
+          <a href="#" id="backToHistoryList" style="color: #337ab7; text-decoration: none;">← Back to history</a>
+        </div>
+        <h5 style="margin-bottom: 15px;">Changes in commit ${shortSha}</h5>
+        <p style='color: #888;'>Loading changes...</p>
+      `;
+
+      // Fetch and display commit changes
+      const changesHtml = await formatCommitChanges(currentSiteId, commitOid);
+      historyList.innerHTML = `
+        <div style="margin-bottom: 15px;">
+          <a href="#" id="backToHistoryList" style="color: #337ab7; text-decoration: none;">← Back to history</a>
+        </div>
+        <h5 style="margin-bottom: 15px;">Changes in commit ${shortSha}</h5>
+        ${changesHtml}
+      `;
+    });
+
+  // Handle back to history list click (event delegation)
+  document
+    .getElementById("historyList")
+    .addEventListener("click", async function (e) {
+      if (e.target.id === "backToHistoryList") {
+        e.preventDefault();
+
+        const historyList = document.getElementById("historyList");
+        historyList.innerHTML = "<p style='color: #888;'>Loading commit history...</p>";
+
+        const historyHtml = await formatCommitHistory(currentSiteId);
+        historyList.innerHTML = historyHtml;
+      }
+    });
+
   // Handle add new page button click
   document
     .getElementById("addNewPageButton")

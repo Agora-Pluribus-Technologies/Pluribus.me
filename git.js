@@ -254,11 +254,184 @@ async function formatCommitHistory(siteId) {
 
     html += `<div style="border-bottom: 1px solid #ddd; padding: 10px 0;">`;
     html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
-    html += `<strong style="color: #337ab7;">${shortSha}</strong>`;
+    html += `<a href="#" class="commit-link" data-commit-oid="${commit.oid}" style="color: #337ab7; text-decoration: none; cursor: pointer;"><strong>${shortSha}</strong></a>`;
     html += `<span style="color: #888; font-size: 12px;">${dateStr}</span>`;
     html += `</div>`;
     html += `<div style="margin-top: 5px;">${message}</div>`;
     html += `<div style="color: #888; font-size: 12px; margin-top: 3px;">by ${author}</div>`;
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+// Get changes for a specific commit (compared to its parent)
+async function getCommitChanges(siteId, commitOid) {
+  const dir = getRepoDir(siteId);
+
+  try {
+    // Get the commit
+    const commitObj = await git.readCommit({ fs, dir, oid: commitOid });
+    const commit = commitObj.commit;
+
+    // Get parent commit oid (if any)
+    const parentOid = commit.parent.length > 0 ? commit.parent[0] : null;
+
+    // Get trees for both commits
+    const commitTree = commitObj.commit.tree;
+    let parentTree = null;
+
+    if (parentOid) {
+      const parentCommit = await git.readCommit({ fs, dir, oid: parentOid });
+      parentTree = parentCommit.commit.tree;
+    }
+
+    // Walk both trees to find changes
+    const changes = [];
+
+    // Get files from current commit
+    const currentFiles = await getTreeFiles(dir, commitTree, "");
+
+    // Get files from parent commit
+    const parentFiles = parentOid ? await getTreeFiles(dir, parentTree, "") : {};
+
+    // Find added and modified files
+    for (const [filepath, oid] of Object.entries(currentFiles)) {
+      if (!parentFiles[filepath]) {
+        // File was added
+        changes.push({ filepath, status: "added", newOid: oid, oldOid: null });
+      } else if (parentFiles[filepath] !== oid) {
+        // File was modified
+        changes.push({ filepath, status: "modified", newOid: oid, oldOid: parentFiles[filepath] });
+      }
+    }
+
+    // Find deleted files
+    for (const [filepath, oid] of Object.entries(parentFiles)) {
+      if (!currentFiles[filepath]) {
+        changes.push({ filepath, status: "deleted", newOid: null, oldOid: oid });
+      }
+    }
+
+    return changes;
+  } catch (error) {
+    console.error("Error getting commit changes:", error);
+    return [];
+  }
+}
+
+// Helper to get all files from a tree recursively
+async function getTreeFiles(dir, treeOid, basePath) {
+  const files = {};
+
+  try {
+    const { tree } = await git.readTree({ fs, dir, oid: treeOid });
+
+    for (const entry of tree) {
+      const filepath = basePath ? `${basePath}/${entry.path}` : entry.path;
+
+      if (entry.type === "blob") {
+        files[filepath] = entry.oid;
+      } else if (entry.type === "tree") {
+        const subFiles = await getTreeFiles(dir, entry.oid, filepath);
+        Object.assign(files, subFiles);
+      }
+    }
+  } catch (error) {
+    console.error("Error reading tree:", error);
+  }
+
+  return files;
+}
+
+// Format commit changes for display
+async function formatCommitChanges(siteId, commitOid) {
+  const dir = getRepoDir(siteId);
+  const changes = await getCommitChanges(siteId, commitOid);
+
+  if (changes.length === 0) {
+    return "<p style='color: #888;'>No changes in this commit.</p>";
+  }
+
+  let html = "";
+
+  for (const change of changes) {
+    // Skip .git files
+    if (change.filepath.startsWith(".git")) continue;
+
+    const statusColor =
+      change.status === "added"
+        ? "#4ec9b0"
+        : change.status === "deleted"
+        ? "#f14c4c"
+        : "#dcdcaa";
+    const statusSymbol =
+      change.status === "added"
+        ? "+"
+        : change.status === "deleted"
+        ? "-"
+        : "M";
+
+    html += `<div style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;">`;
+    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${change.filepath}</strong></div>`;
+
+    try {
+      if (change.status === "added" && change.newOid) {
+        // Show added content
+        const { blob } = await git.readBlob({ fs, dir, oid: change.newOid });
+        const content = new TextDecoder().decode(blob);
+        const lines = content.split("\n");
+
+        html += `<div style="padding-left: 10px;">`;
+        for (const line of lines.slice(0, 20)) {
+          const escapedLine = escapeHtml(line);
+          html += `<div style="color: #4ec9b0;">+ ${escapedLine}</div>`;
+        }
+        if (lines.length > 20) {
+          html += `<div style="color: #888;">... and ${lines.length - 20} more lines</div>`;
+        }
+        html += `</div>`;
+      } else if (change.status === "deleted" && change.oldOid) {
+        // Show deleted content
+        const { blob } = await git.readBlob({ fs, dir, oid: change.oldOid });
+        const content = new TextDecoder().decode(blob);
+        const lines = content.split("\n");
+
+        html += `<div style="padding-left: 10px;">`;
+        for (const line of lines.slice(0, 20)) {
+          const escapedLine = escapeHtml(line);
+          html += `<div style="color: #f14c4c;">- ${escapedLine}</div>`;
+        }
+        if (lines.length > 20) {
+          html += `<div style="color: #888;">... and ${lines.length - 20} more lines</div>`;
+        }
+        html += `</div>`;
+      } else if (change.status === "modified" && change.oldOid && change.newOid) {
+        // Show diff
+        const { blob: oldBlob } = await git.readBlob({ fs, dir, oid: change.oldOid });
+        const { blob: newBlob } = await git.readBlob({ fs, dir, oid: change.newOid });
+        const oldContent = new TextDecoder().decode(oldBlob);
+        const newContent = new TextDecoder().decode(newBlob);
+        const diff = generateSimpleDiff(oldContent, newContent);
+
+        if (diff.length > 0) {
+          html += `<div style="padding-left: 10px;">`;
+          for (const line of diff.slice(0, 20)) {
+            const color = line.type === "add" ? "#4ec9b0" : "#f14c4c";
+            const prefix = line.type === "add" ? "+" : "-";
+            const escapedLine = escapeHtml(line.line);
+            html += `<div style="color: ${color};">${prefix} ${escapedLine}</div>`;
+          }
+          if (diff.length > 20) {
+            html += `<div style="color: #888;">... and ${diff.length - 20} more lines</div>`;
+          }
+          html += `</div>`;
+        }
+      }
+    } catch (e) {
+      console.error("Error reading blob for diff:", e);
+    }
+
     html += `</div>`;
   }
 
