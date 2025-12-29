@@ -186,7 +186,7 @@
           });
           console.log("Sanitized: " + sanitizedHtml)
           newDiv.innerHTML = sanitizedHtml;
-          
+
           let iframe = newDiv.children[0];
           const w = iframe.width;
           const h = iframe.height;
@@ -285,6 +285,13 @@
             "Cache-Control": "no-cache, must-revalidate",
           },
         });
+        const contentMetadata = await fetch(fetchPathName + ".meta", {
+          method: "GET",
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache, must-revalidate",
+          },
+        });
         if (content.ok) {
           const text = await content.text();
           const parsedMarkdown = await marked.parse(text);
@@ -294,9 +301,34 @@
           for (let i = 0; i < markdownSections.length; i++) {
             const section = markdownSections[i].trim();
             if (section) {
-              const sectionArticle = document.createElement('article');
+              let sectionArticle = document.createElement('article');
               sectionArticle.classList.add('h-entry');
-              sectionArticle.innerHTML = section;
+
+              if (contentMetadata.ok) {
+                let author = document.createElement("span");
+                author.classList.add("p-author");
+                const metadata = await contentMetadata.json();
+                author.textContent = "By " + (metadata.author || "Unknown Author");
+                sectionArticle.appendChild(author);
+
+                let published = document.createElement("time");
+                published.classList.add("dt-published");
+                published.dateTime = metadata.createdAt;
+                published.textContent = "Published " + new Date(published.dateTime).toLocaleString();
+                author.appendChild(published);
+
+                let modified = document.createElement("time");
+                modified.classList.add("dt-updated");
+                modified.dateTime = metadata.modifiedAt;
+                modified.textContent = "Updated " + new Date(modified.dateTime).toLocaleString();
+                author.appendChild(modified);
+              }
+
+              let article = document.createElement("div");
+              article.classList.add("e-content");
+              article.innerHTML = section;
+              sectionArticle.appendChild(article);
+
               panel.appendChild(sectionArticle);
             }
           }
