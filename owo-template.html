@@ -304,6 +304,22 @@
               let sectionArticle = document.createElement('article');
               sectionArticle.classList.add('h-entry');
 
+              if (section.startsWith("<h")) {
+                // Extract title text from header tag
+                const hNum = section.charAt(2);
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = section;
+                const header = tempDiv.querySelector("h" + hNum);
+                if (header) {
+                  const titleText = header.textContent;
+                  let title = document.createElement("h" + hNum);
+                  title.classList.add("p-name");
+                  title.textContent = titleText;
+                  sectionArticle.appendChild(title);
+                  section = section.substring(section.indexOf("</h" + hNum + ">") + 5).trim();
+                }
+              }
+
               if (contentMetadata.ok) {
                 let author = document.createElement("span");
                 author.classList.add("p-author");
