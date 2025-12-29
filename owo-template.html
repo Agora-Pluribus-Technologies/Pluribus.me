@@ -299,7 +299,7 @@
 
           const markdownSections = sanitizedMarkdown.split('<hr>');
           for (let i = 0; i < markdownSections.length; i++) {
-            const section = markdownSections[i].trim();
+            let section = markdownSections[i].trim();
             if (section) {
               let sectionArticle = document.createElement('article');
               sectionArticle.classList.add('h-entry');
