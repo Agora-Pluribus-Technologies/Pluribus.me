@@ -316,14 +316,14 @@
                 published.classList.add("dt-published");
                 published.dateTime = metadata.createdAt;
                 published.textContent = "Published " + new Date(published.dateTime).toLocaleString();
-                author.appendChild(published);
+                sectionArticle.appendChild(published);
                 sectionArticle.appendChild(document.createElement("br"));
 
                 let modified = document.createElement("time");
                 modified.classList.add("dt-updated");
                 modified.dateTime = metadata.modifiedAt;
                 modified.textContent = "Updated " + new Date(modified.dateTime).toLocaleString();
-                author.appendChild(modified);
+                sectionArticle.appendChild(modified);
                 sectionArticle.appendChild(document.createElement("br"));
               }
 
