@@ -21,7 +21,7 @@ function getCacheByDisplayName(displayName) {
   return markdownCache.find(item => item.displayName === displayName);
 }
 
-function addOrUpdateCache(fileName, displayName, content) {
+function addOrUpdateCache(fileName, displayName, content, metadata = null) {
   const existing = getCacheByFileName(fileName);
   if (existing) {
     if (displayName) {
@@ -34,8 +34,25 @@ function addOrUpdateCache(fileName, displayName, content) {
     } else {
       content = existing.content;
     }
+    // Update metadata if provided, but preserve existing if not
+    if (metadata) {
+      existing.metadata = { ...existing.metadata, ...metadata };
+    }
   } else {
-    markdownCache.push({ displayName, fileName, content });
+    // Create new entry with metadata
+    const now = new Date().toISOString();
+    const author = getStoredUsername() || "unknown";
+    const defaultMetadata = {
+      author: author,
+      createdAt: now,
+      modifiedAt: now,
+    };
+    markdownCache.push({
+      displayName,
+      fileName,
+      content,
+      metadata: metadata || defaultMetadata
+    });
   }
 }
 
@@ -776,7 +793,20 @@ function populateSitesList(sites) {
         for (const file of markdownFiles) {
           console.log("Loading file into cache:", file);
           const content = await getFileContent(currentSiteId, file);
-          addOrUpdateCache(file, null, content);
+
+          // Try to load metadata from .md.meta file
+          let metadata = null;
+          try {
+            const metaContent = await getFileContent(currentSiteId, file + ".meta");
+            if (metaContent) {
+              metadata = JSON.parse(metaContent);
+              console.log("Loaded metadata for:", file, metadata);
+            }
+          } catch (e) {
+            console.log("No metadata found for:", file);
+          }
+
+          addOrUpdateCache(file, null, content, metadata);
         }
 
         // Initialize imageCache from images.json
