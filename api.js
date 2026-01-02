@@ -144,7 +144,7 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
 
 // Save multiple files to R2 in a batch
 async function saveFilesToR2(siteId, files) {
-  headers = await getHeadersWithTurnstile({
+  let headers = await getHeadersWithTurnstile({
     "Content-Type": "application/json",
   });
   
