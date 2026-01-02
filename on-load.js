@@ -138,8 +138,18 @@ document.addEventListener("DOMContentLoaded", async function () {
   const usernameError = document.getElementById("usernameError");
   const usernameSuccess = document.getElementById("usernameSuccess");
   const submitUsernameButton = document.getElementById("submitUsernameButton");
+  const acceptTermsCheckbox = document.getElementById("acceptTermsCheckbox");
 
   let usernameCheckTimeout = null;
+  let usernameIsValid = false;
+
+  // Function to update submit button state based on username and terms
+  function updateSubmitButtonState() {
+    submitUsernameButton.disabled = !(usernameIsValid && acceptTermsCheckbox.checked);
+  }
+
+  // Handle checkbox change
+  acceptTermsCheckbox.addEventListener("change", updateSubmitButtonState);
 
   usernameInput.addEventListener("input", function () {
     const username = usernameInput.value.trim();
@@ -152,7 +162,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     // Reset states
     usernameError.style.display = "none";
     usernameSuccess.style.display = "none";
-    submitUsernameButton.disabled = true;
+    usernameIsValid = false;
+    updateSubmitButtonState();
 
     // Validate format
     const usernameRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,28}[a-zA-Z0-9]$/;
@@ -173,13 +184,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         usernameSuccess.textContent = "Username is available!";
         usernameSuccess.style.display = "block";
         usernameError.style.display = "none";
-        submitUsernameButton.disabled = false;
+        usernameIsValid = true;
       } else {
         usernameError.textContent = "Username is already taken.";
         usernameError.style.display = "block";
         usernameSuccess.style.display = "none";
-        submitUsernameButton.disabled = true;
+        usernameIsValid = false;
       }
+      updateSubmitButtonState();
     }, 500);
   });
 
