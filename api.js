@@ -78,9 +78,7 @@ async function getHeadersWithTurnstile(additionalHeaders = {}) {
   }
   // Reset token after use (tokens are single-use)
   turnstileToken = null;
-  if (typeof turnstile !== "undefined" && turnstileWidgetId !== null) {
-    turnstile.reset(turnstileWidgetId);
-  }
+  
   return headers;
 }
 
@@ -145,13 +143,11 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
 }
 
 // Save multiple files to R2 in a batch
-async function saveFilesToR2(siteId, files, headers = null) {
-  if (!headers) {
-    headers = await getHeadersWithTurnstile({
-      "Content-Type": "application/json",
-    });
-  }
-
+async function saveFilesToR2(siteId, files) {
+  headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+  
   const response = await fetch("/api/files", {
     method: "POST",
     headers,
@@ -675,7 +671,7 @@ function guessContentType(filename) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
-async function initialCommit(siteId, siteSettings = {}, headers = null) {
+async function initialCommit(siteId, siteSettings = {}) {
   const { siteName, repo, owner } = siteSettings;
 
   const siteJson = {
@@ -703,7 +699,7 @@ async function initialCommit(siteId, siteSettings = {}, headers = null) {
     },
   ];
 
-  const result = await saveFilesToR2(siteId, files, headers);
+  const result = await saveFilesToR2(siteId, files);
   if (result) {
     console.log("Initial commit completed successfully (via R2)");
   }
