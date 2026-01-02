@@ -142,8 +142,10 @@
       const basePath = document.location.pathname.split('/').slice(0, 4).join("/");
 
       const pagesJson = await fetchPagesJson(origin, basePath);
+      const siteJson = await fetchSiteJson(origin, basePath);
+      const siteName = siteJson ? siteJson.siteName : null;
       await createMenubar(origin, basePath, pagesJson);
-      await fetchPageContent(origin, basePath, pagesJson);
+      await fetchPageContent(origin, basePath, siteName, pagesJson);
       decodeEmbeds();
       centerImages();
     });
@@ -208,6 +210,26 @@
       }
     }
 
+    async function fetchSiteJson(origin, basePath) {
+      const siteJsonLink = `${origin}${basePath}/site.json`;
+
+      const content = await fetch(siteJsonLink, {
+        method: "GET",
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-cache, must-revalidate",
+        },
+      });
+      let siteJson;
+      if (content.ok) {
+        siteJson = await content.json();
+      } else {
+        siteJson = null;
+      }
+
+      return siteJson;
+    }
+
     async function fetchPagesJson(origin, basePath) {
       const pagesJsonLink = `${origin}${basePath}/pages.json`;
 
@@ -253,7 +275,7 @@
       }
     }
 
-    async function fetchPageContent(origin, basePath, pagesJson) {
+    async function fetchPageContent(origin, basePath, siteName, pagesJson) {
       marked.setOptions({
         gfm: true,
       });
@@ -266,10 +288,15 @@
 
       // Set tab title
       if (pagesJson) {
-
-        // Convert site name to Title Case
-        let siteName = basePath.split('/')[3];
-        siteName = siteName.replace(/^-*(.)|-+(.)/g, (s, c, d) => c ? c.toUpperCase() : ' ' + d.toUpperCase())
+        
+        let siteName;
+        if (siteName) {
+          siteName = siteName;
+        } else {
+          // Convert site name to Title Case
+          siteName = basePath.split('/')[3];
+          siteName = siteName.replace(/^-*(.)|-+(.)/g, (s, c, d) => c ? c.toUpperCase() : ' ' + d.toUpperCase())
+        }
 
         // Get page displayName from pages.json
         for (const page of pagesJson) {
