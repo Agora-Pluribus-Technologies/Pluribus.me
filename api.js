@@ -673,7 +673,16 @@ function guessContentType(filename) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
-async function initialCommit(siteId) {
+async function initialCommit(siteId, siteSettings = {}) {
+  const { siteName, repo, owner } = siteSettings;
+
+  const siteJson = {
+    siteName: siteName || repo || "Untitled Site",
+    repo: repo || siteId.split("/")[1] || "",
+    owner: owner || siteId.split("/")[0] || "",
+    createdAt: new Date().toISOString(),
+  };
+
   const files = [
     {
       filePath: "public/pages.json",
@@ -683,6 +692,11 @@ async function initialCommit(siteId) {
     {
       filePath: "public/images.json",
       content: "[]",
+      contentType: "application/json",
+    },
+    {
+      filePath: "public/site.json",
+      content: JSON.stringify(siteJson, null, 2),
       contentType: "application/json",
     },
   ];

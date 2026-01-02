@@ -97,3 +97,66 @@ export async function onRequestPost(context) {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+// DELETE /api/users - Delete user account and all associated data
+export async function onRequestDelete(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+
+  const username = url.searchParams.get("username");
+
+  if (!username) {
+    return new Response("Missing required parameter: username", { status: 400 });
+  }
+
+  const usernameLower = username.toLowerCase();
+
+  // Get user info to find provider ID for cleanup
+  const userJson = await env.USERS.get(`username:${usernameLower}`);
+  if (!userJson) {
+    return new Response("User not found", { status: 404 });
+  }
+
+  const user = JSON.parse(userJson);
+
+  try {
+    // 1. Delete all user's sites from KV and R2
+    const sitePrefix = `site:${usernameLower}/`;
+    const sitesList = await env.SITES.list({ prefix: sitePrefix });
+
+    for (const key of sitesList.keys) {
+      const siteId = key.name.replace("site:", "");
+
+      // Delete all R2 files for this site
+      try {
+        const r2Prefix = `${siteId}/`;
+        const r2List = await env.PLURIBUS_BUCKET.list({ prefix: r2Prefix });
+
+        for (const obj of r2List.objects) {
+          await env.PLURIBUS_BUCKET.delete(obj.key);
+        }
+        console.log(`Deleted ${r2List.objects.length} files from R2 for site: ${siteId}`);
+      } catch (r2Error) {
+        console.error(`Error deleting R2 files for site ${siteId}:`, r2Error);
+      }
+
+      // Delete site config from KV
+      await env.SITES.delete(key.name);
+      console.log(`Deleted site config: ${key.name}`);
+    }
+
+    // 2. Delete user records from KV
+    await env.USERS.delete(`username:${usernameLower}`);
+    await env.USERS.delete(`provider:${user.provider}:${user.providerId}`);
+
+    console.log(`User ${usernameLower} deleted successfully`);
+
+    return new Response(JSON.stringify({ success: true, message: "Account deleted successfully" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return new Response("Failed to delete account", { status: 500 });
+  }
+}

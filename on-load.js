@@ -124,6 +124,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       // User has a username, proceed to load sites
       console.log("User found:", existingUser.username);
       setStoredUsername(existingUser.username);
+      showUserMenu(existingUser.username);
       await loadSitesForUser(existingUser.username);
     } else {
       // User needs to select a username
@@ -203,8 +204,9 @@ document.addEventListener("DOMContentLoaded", async function () {
       const user = await createUser(username, providerInfo.provider, providerInfo.providerId);
       console.log("User created:", user);
 
-      // Close modal and load sites
+      // Close modal, show user menu, and load sites
       $("#usernameModal").modal("hide");
+      showUserMenu(user.username);
       await loadSitesForUser(user.username);
     } catch (error) {
       console.error("Error creating user:", error);
@@ -288,7 +290,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.log("Site config stored successfully");
 
         // Create initial files in R2
-        await initialCommit(siteId);
+        await initialCommit(siteId, { siteName, repo, owner });
         console.log("Initial commit completed for site:", siteId);
 
         // Initialize git repository
@@ -1135,3 +1137,190 @@ async function populateMenubar(siteId) {
   // Add the "+" button back at the end
   menubarContent.appendChild(addButton);
 }
+
+// ==================== User Menu Functions ====================
+
+function showUserMenu(username) {
+  const userMenuContainer = document.getElementById("userMenuContainer");
+  const userMenuUsername = document.getElementById("userMenuUsername");
+  const settingsUsername = document.getElementById("settingsUsername");
+  const deleteConfirmUsername = document.getElementById("deleteConfirmUsername");
+
+  if (userMenuContainer && userMenuUsername) {
+    userMenuUsername.textContent = username;
+    userMenuContainer.style.display = "block";
+  }
+
+  if (settingsUsername) {
+    settingsUsername.textContent = username;
+  }
+
+  if (deleteConfirmUsername) {
+    deleteConfirmUsername.textContent = username;
+  }
+}
+
+// Sign Out handler
+document.addEventListener("DOMContentLoaded", function() {
+  const signOutLink = document.getElementById("signOutLink");
+  if (signOutLink) {
+    signOutLink.addEventListener("click", function(event) {
+      event.preventDefault();
+
+      // Clear all OAuth tokens from session storage
+      sessionStorage.removeItem("pluribus.me.gitlab.oauth_token");
+      sessionStorage.removeItem("pluribus.me.github.oauth_token");
+      sessionStorage.removeItem("pluribus.me.google.oauth_token");
+      sessionStorage.removeItem("pluribus.me.username");
+
+      console.log("Signed out - tokens cleared");
+
+      // Reload the page
+      window.location.reload();
+    });
+  }
+
+  // Download Data handler
+  const downloadDataButton = document.getElementById("downloadDataButton");
+  if (downloadDataButton) {
+    downloadDataButton.addEventListener("click", async function() {
+      const username = getStoredUsername();
+      if (!username) {
+        alert("No user logged in.");
+        return;
+      }
+
+      downloadDataButton.disabled = true;
+      downloadDataButton.textContent = "Downloading...";
+
+      try {
+        const response = await fetch(`/api/users/download?username=${encodeURIComponent(username)}`);
+
+        if (!response.ok) {
+          throw new Error("Failed to download data");
+        }
+
+        const data = await response.json();
+
+        // Create ZIP file using JSZip
+        const zip = new JSZip();
+
+        // Add user info
+        zip.file("user-info.json", JSON.stringify(data.user, null, 2));
+
+        // Add each site's files
+        for (const site of data.sites) {
+          const siteFolderName = site.config.siteId.replace("/", "_");
+
+          // Add site config
+          zip.file(`${siteFolderName}/site-config.json`, JSON.stringify(site.config, null, 2));
+
+          // Add all files
+          for (const file of site.files) {
+            // Decode base64 content
+            const binaryString = atob(file.content);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            zip.file(`${siteFolderName}/${file.path}`, bytes);
+          }
+        }
+
+        // Generate ZIP and download
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = window.URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${username}-data.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+
+        console.log("Data download completed");
+      } catch (error) {
+        console.error("Download error:", error);
+        alert("Failed to download data. Please try again.");
+      } finally {
+        downloadDataButton.disabled = false;
+        downloadDataButton.textContent = "Download All Data";
+      }
+    });
+  }
+
+  // Delete Account - show confirmation modal
+  const deleteAccountButton = document.getElementById("deleteAccountButton");
+  if (deleteAccountButton) {
+    deleteAccountButton.addEventListener("click", function() {
+      $("#userSettingsModal").modal("hide");
+      $("#deleteAccountModal").modal("show");
+    });
+  }
+
+  // Delete Account - enable/disable confirm button based on username input
+  const deleteConfirmInput = document.getElementById("deleteConfirmInput");
+  const confirmDeleteAccountButton = document.getElementById("confirmDeleteAccountButton");
+
+  if (deleteConfirmInput && confirmDeleteAccountButton) {
+    deleteConfirmInput.addEventListener("input", function() {
+      const username = getStoredUsername();
+      if (deleteConfirmInput.value === username) {
+        confirmDeleteAccountButton.disabled = false;
+      } else {
+        confirmDeleteAccountButton.disabled = true;
+      }
+    });
+  }
+
+  // Delete Account - confirm deletion
+  if (confirmDeleteAccountButton) {
+    confirmDeleteAccountButton.addEventListener("click", async function() {
+      const username = getStoredUsername();
+      if (!username) {
+        alert("No user logged in.");
+        return;
+      }
+
+      // Double-check username matches
+      if (deleteConfirmInput.value !== username) {
+        alert("Username does not match.");
+        return;
+      }
+
+      confirmDeleteAccountButton.disabled = true;
+      confirmDeleteAccountButton.textContent = "Deleting...";
+
+      try {
+        const headers = await getHeadersWithTurnstile();
+        const response = await fetch(`/api/users?username=${encodeURIComponent(username)}`, {
+          method: "DELETE",
+          headers,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || "Failed to delete account");
+        }
+
+        console.log("Account deleted successfully");
+
+        // Clear all session data
+        sessionStorage.removeItem("pluribus.me.gitlab.oauth_token");
+        sessionStorage.removeItem("pluribus.me.github.oauth_token");
+        sessionStorage.removeItem("pluribus.me.google.oauth_token");
+        sessionStorage.removeItem("pluribus.me.username");
+
+        alert("Your account has been deleted.");
+
+        // Reload the page
+        window.location.reload();
+      } catch (error) {
+        console.error("Delete account error:", error);
+        alert("Failed to delete account: " + error.message);
+        confirmDeleteAccountButton.disabled = false;
+        confirmDeleteAccountButton.textContent = "Delete My Account";
+      }
+    });
+  }
+});
