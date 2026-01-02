@@ -145,10 +145,12 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
 }
 
 // Save multiple files to R2 in a batch
-async function saveFilesToR2(siteId, files) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
+async function saveFilesToR2(siteId, files, headers = null) {
+  if (!headers) {
+    headers = await getHeadersWithTurnstile({
+      "Content-Type": "application/json",
+    });
+  }
 
   const response = await fetch("/api/files", {
     method: "POST",
@@ -673,7 +675,7 @@ function guessContentType(filename) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
-async function initialCommit(siteId, siteSettings = {}) {
+async function initialCommit(siteId, siteSettings = {}, headers = null) {
   const { siteName, repo, owner } = siteSettings;
 
   const siteJson = {
@@ -701,7 +703,7 @@ async function initialCommit(siteId, siteSettings = {}) {
     },
   ];
 
-  const result = await saveFilesToR2(siteId, files);
+  const result = await saveFilesToR2(siteId, files, headers);
   if (result) {
     console.log("Initial commit completed successfully (via R2)");
   }

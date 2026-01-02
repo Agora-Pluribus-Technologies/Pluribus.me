@@ -290,7 +290,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.log("Site config stored successfully");
 
         // Create initial files in R2
-        await initialCommit(siteId, { siteName, repo, owner });
+        await initialCommit(siteId, { siteName, repo, owner }, createSiteHeaders);
         console.log("Initial commit completed for site:", siteId);
 
         // Initialize git repository
