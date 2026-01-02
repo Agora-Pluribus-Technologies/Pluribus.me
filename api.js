@@ -58,6 +58,7 @@ async function getTurnstileToken() {
     const checkToken = setInterval(() => {
       attempts++;
       if (turnstileToken) {
+        console.log("Got turnstile token");
         clearInterval(checkToken);
         resolve(turnstileToken);
       } else if (attempts >= maxAttempts) {
@@ -144,7 +145,7 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
 
 // Save multiple files to R2 in a batch
 async function saveFilesToR2(siteId, files) {
-  let headers = await getHeadersWithTurnstile({
+  const headers = await getHeadersWithTurnstile({
     "Content-Type": "application/json",
   });
   
