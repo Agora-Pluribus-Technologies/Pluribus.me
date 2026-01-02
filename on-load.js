@@ -1215,15 +1215,44 @@ document.addEventListener("DOMContentLoaded", function() {
           // Add site config
           zip.file(`${siteFolderName}/site-config.json`, JSON.stringify(site.config, null, 2));
 
-          // Add all files
+          // Add all files, converting .git-history.json to proper .git directory
           for (const file of site.files) {
-            // Decode base64 content
-            const binaryString = atob(file.content);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
+            // Check if this is the git history file
+            if (file.path === ".git-history.json") {
+              // Parse the git history JSON and create proper .git directory structure
+              try {
+                const gitHistoryJson = atob(file.content);
+                const gitData = JSON.parse(gitHistoryJson);
+
+                // Add each git file to the .git directory
+                for (const [gitFilePath, gitFileBase64] of Object.entries(gitData)) {
+                  const binaryString = atob(gitFileBase64);
+                  const bytes = new Uint8Array(binaryString.length);
+                  for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                  }
+                  zip.file(`${siteFolderName}/.git/${gitFilePath}`, bytes);
+                }
+                console.log(`Converted .git-history.json to .git directory for ${siteFolderName}`);
+              } catch (e) {
+                console.error("Error converting git history:", e);
+                // Fall back to including the raw file
+                const binaryString = atob(file.content);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                zip.file(`${siteFolderName}/${file.path}`, bytes);
+              }
+            } else {
+              // Regular file - decode base64 content
+              const binaryString = atob(file.content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              zip.file(`${siteFolderName}/${file.path}`, bytes);
             }
-            zip.file(`${siteFolderName}/${file.path}`, bytes);
           }
         }
 
