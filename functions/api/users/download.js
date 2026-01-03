@@ -11,13 +11,14 @@ export async function onRequestGet(context) {
 
   const usernameLower = username.toLowerCase();
 
-  // Get user info
-  const userJson = await env.USERS.get(`username:${usernameLower}`);
-  if (!userJson) {
+  // Get user info from D1 database
+  const user = await env.USERS_DB.prepare(
+    "SELECT username FROM Users WHERE LOWER(username) = LOWER(?)"
+  ).bind(usernameLower).first();
+
+  if (!user) {
     return new Response("User not found", { status: 404 });
   }
-
-  const user = JSON.parse(userJson);
 
   try {
     const exportData = {

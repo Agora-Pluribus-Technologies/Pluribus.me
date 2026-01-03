@@ -9,9 +9,12 @@ export async function onRequestGet(context) {
 
   // Check if username is taken
   if (username) {
-    const existing = await env.USERS.get(`username:${username.toLowerCase()}`);
-    if (existing) {
-      return new Response(JSON.stringify({ exists: true, user: JSON.parse(existing) }), {
+    const result = await env.USERS_DB.prepare(
+      "SELECT id, provider, providerId, username, createdAt FROM Users WHERE LOWER(username) = LOWER(?)"
+    ).bind(username).first();
+
+    if (result) {
+      return new Response(JSON.stringify({ exists: true, user: result }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -24,9 +27,12 @@ export async function onRequestGet(context) {
 
   // Get user by provider ID
   if (providerId && provider) {
-    const existing = await env.USERS.get(`provider:${provider}:${providerId}`);
-    if (existing) {
-      return new Response(existing, {
+    const result = await env.USERS_DB.prepare(
+      "SELECT id, provider, providerId, username, createdAt FROM Users WHERE provider = ? AND providerId = ?"
+    ).bind(provider, providerId).first();
+
+    if (result) {
+      return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -67,30 +73,39 @@ export async function onRequestPost(context) {
   const usernameLower = username.toLowerCase();
 
   // Check if username is already taken
-  const existingUsername = await env.USERS.get(`username:${usernameLower}`);
+  const existingUsername = await env.USERS_DB.prepare(
+    "SELECT id FROM Users WHERE LOWER(username) = LOWER(?)"
+  ).bind(usernameLower).first();
+
   if (existingUsername) {
     return new Response("Username already taken", { status: 409 });
   }
 
   // Check if this provider ID already has a username
-  const existingProvider = await env.USERS.get(`provider:${provider}:${providerId}`);
+  const existingProvider = await env.USERS_DB.prepare(
+    "SELECT id FROM Users WHERE provider = ? AND providerId = ?"
+  ).bind(provider, providerId).first();
+
   if (existingProvider) {
     return new Response("User already has a username", { status: 409 });
   }
 
-  // Create user object
+  // Generate UUID for the new user
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+
+  // Insert new user into database
+  await env.USERS_DB.prepare(
+    "INSERT INTO Users (id, provider, providerId, username, createdAt) VALUES (?, ?, ?, ?, ?)"
+  ).bind(id, provider, providerId, usernameLower, createdAt).run();
+
   const user = {
+    id,
+    provider,
+    providerId,
     username: usernameLower,
-    provider: provider,
-    providerId: providerId,
-    createdAt: new Date().toISOString(),
+    createdAt,
   };
-
-  // Store by username (for uniqueness check)
-  await env.USERS.put(`username:${usernameLower}`, JSON.stringify(user));
-
-  // Store by provider ID (for reverse lookup)
-  await env.USERS.put(`provider:${provider}:${providerId}`, JSON.stringify(user));
 
   return new Response(JSON.stringify(user), {
     status: 201,
@@ -111,13 +126,14 @@ export async function onRequestDelete(context) {
 
   const usernameLower = username.toLowerCase();
 
-  // Get user info to find provider ID for cleanup
-  const userJson = await env.USERS.get(`username:${usernameLower}`);
-  if (!userJson) {
+  // Get user info from database
+  const user = await env.USERS_DB.prepare(
+    "SELECT id, provider, providerId, username, createdAt FROM Users WHERE LOWER(username) = LOWER(?)"
+  ).bind(usernameLower).first();
+
+  if (!user) {
     return new Response("User not found", { status: 404 });
   }
-
-  const user = JSON.parse(userJson);
 
   try {
     // 1. Delete all user's sites from KV and R2
@@ -145,9 +161,10 @@ export async function onRequestDelete(context) {
       console.log(`Deleted site config: ${key.name}`);
     }
 
-    // 2. Delete user records from KV
-    await env.USERS.delete(`username:${usernameLower}`);
-    await env.USERS.delete(`provider:${user.provider}:${user.providerId}`);
+    // 2. Delete user from database
+    await env.USERS_DB.prepare(
+      "DELETE FROM Users WHERE id = ?"
+    ).bind(user.id).run();
 
     console.log(`User ${usernameLower} deleted successfully`);
 
