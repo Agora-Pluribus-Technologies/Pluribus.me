@@ -8,6 +8,7 @@ let modified = false;
 
 // Global cache for sites list
 let sitesCache = [];
+let sharedSitesCache = [];
 
 // Global cache for images - Array of filenames
 let imageCache = [];
@@ -350,11 +351,14 @@ async function handleEditContext(username) {
     return;
   }
 
-  // Find the site in sitesCache, or fetch it if not found (for collaborators)
+  // Find the site in sitesCache or sharedSitesCache, or fetch it if not found
   let site = sitesCache.find(s => s.siteId === editContext.siteId);
+  if (!site) {
+    site = sharedSitesCache.find(s => s.siteId === editContext.siteId);
+  }
 
   if (!site) {
-    // User might be a collaborator - fetch the site config
+    // Site not in cache - fetch the site config
     try {
       const response = await fetch(`/api/sites?siteId=${encodeURIComponent(editContext.siteId)}`);
       if (response.ok) {
@@ -380,16 +384,22 @@ async function handleEditContext(username) {
 async function loadSitesForUser(username) {
   console.log("Loading sites for user:", username);
 
-  // Fetch sites filtered by owner (username)
-  const sites = await getSites(username);
+  // Fetch sites owned by user and sites shared with user in parallel
+  const [ownedSites, sharedSites] = await Promise.all([
+    getSites(username),
+    getSharedSites(username)
+  ]);
 
-  // Cache the sites list
-  sitesCache = sites || [];
+  // Cache the sites lists
+  sitesCache = ownedSites || [];
+  sharedSitesCache = sharedSites || [];
+
+  console.log("Owned sites:", sitesCache.length, "Shared sites:", sharedSitesCache.length);
 
   const sitesListHeader = document.getElementById("sites-list-header");
   sitesListHeader.style.display = "block";
 
-  populateSitesList(sitesCache);
+  populateSitesList(sitesCache, sharedSitesCache);
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -651,7 +661,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.getElementById("createSiteForm").reset();
 
         // Repopulate sites list
-        populateSitesList(sitesCache);
+        populateSitesList(sitesCache, sharedSitesCache);
 
         // Click into the newly created site to open the editor
         const newSiteButton = document.getElementById(siteId);
@@ -1026,7 +1036,7 @@ function goBackToSiteSelection() {
   sitesListPanel.style.display = "block";
 
   // Repopulate sites list from cache
-  populateSitesList(sitesCache);
+  populateSitesList(sitesCache, sharedSitesCache);
 
   console.log("Back to site selection complete");
 }
@@ -1127,9 +1137,12 @@ async function checkSiteAvailability() {
   }
 }
 
-function populateSitesList(sites) {
-  document.getElementById("sites-list").innerHTML = ""; // Clear existing list
-  for (const site of sites) {
+function populateSitesList(ownedSites, sharedSites = []) {
+  const sitesList = document.getElementById("sites-list");
+  sitesList.innerHTML = ""; // Clear existing list
+
+  // Helper function to create a site item
+  function createSiteItem(site, isOwned) {
     // Create container for site button and delete button
     var siteContainer = document.createElement("div");
     siteContainer.style.display = "flex";
@@ -1148,62 +1161,86 @@ function populateSitesList(sites) {
       window.location.href = `/edit/${site.siteId}`;
     });
 
-    // Create delete button
-    var deleteButton = document.createElement("button");
-    deleteButton.textContent = "×";
-    deleteButton.classList.add("btn", "btn-danger");
-    deleteButton.style.fontSize = "20px";
-    deleteButton.style.padding = "6px 12px";
-    deleteButton.style.fontWeight = "bold";
-    deleteButton.title = "Delete site";
-    deleteButton.addEventListener("click", async function (event) {
-      event.stopPropagation(); // Prevent triggering site click
-
-      const confirmMessage = `Are you sure you want to delete "${site.repo}"? This action cannot be undone.`;
-      if (confirm(confirmMessage)) {
-        console.log("Deleting site:", site.repo);
-
-        // Disable button during deletion
-        deleteButton.disabled = true;
-        deleteButton.textContent = "...";
-        deleteButton.style.opacity = "0.5";
-
-        const deleteSiteHeaders = await getHeadersWithTurnstile({
-          "Content-Type": "application/json",
-        });
-        const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(site.siteId)}`, {
-          method: "DELETE",
-          headers: deleteSiteHeaders,
-        });
-
-        if (deleteResponse.ok) {
-          console.log("Site deleted successfully");
-
-          // Remove from cache
-          sitesCache = sitesCache.filter(s => s.siteId !== site.siteId);
-
-          // Repopulate the list
-          populateSitesList(sitesCache);
-
-          alert("Site deleted successfully!");
-        } else {
-          console.error("Failed to delete site");
-          alert("Failed to delete site. Please try again.");
-
-          // Re-enable button on failure
-          deleteButton.disabled = false;
-          deleteButton.textContent = "×";
-          deleteButton.style.opacity = "1";
-        }
-      }
-    });
-
-    // Add both buttons to container
     siteContainer.appendChild(siteDiv);
-    siteContainer.appendChild(deleteButton);
 
-    // Add container to sites list
-    document.getElementById("sites-list").appendChild(siteContainer);
+    // Only show delete button for owned sites
+    if (isOwned) {
+      var deleteButton = document.createElement("button");
+      deleteButton.textContent = "×";
+      deleteButton.classList.add("btn", "btn-danger");
+      deleteButton.style.fontSize = "20px";
+      deleteButton.style.padding = "6px 12px";
+      deleteButton.style.fontWeight = "bold";
+      deleteButton.title = "Delete site";
+      deleteButton.addEventListener("click", async function (event) {
+        event.stopPropagation(); // Prevent triggering site click
+
+        const confirmMessage = `Are you sure you want to delete "${site.repo}"? This action cannot be undone.`;
+        if (confirm(confirmMessage)) {
+          console.log("Deleting site:", site.repo);
+
+          // Disable button during deletion
+          deleteButton.disabled = true;
+          deleteButton.textContent = "...";
+          deleteButton.style.opacity = "0.5";
+
+          const deleteSiteHeaders = await getHeadersWithTurnstile({
+            "Content-Type": "application/json",
+          });
+          const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(site.siteId)}`, {
+            method: "DELETE",
+            headers: deleteSiteHeaders,
+          });
+
+          if (deleteResponse.ok) {
+            console.log("Site deleted successfully");
+
+            // Remove from cache
+            sitesCache = sitesCache.filter(s => s.siteId !== site.siteId);
+
+            // Repopulate the list
+            populateSitesList(sitesCache, sharedSitesCache);
+
+            alert("Site deleted successfully!");
+          } else {
+            console.error("Failed to delete site");
+            alert("Failed to delete site. Please try again.");
+
+            // Re-enable button on failure
+            deleteButton.disabled = false;
+            deleteButton.textContent = "×";
+            deleteButton.style.opacity = "1";
+          }
+        }
+      });
+
+      siteContainer.appendChild(deleteButton);
+    }
+
+    return siteContainer;
+  }
+
+  // Add owned sites
+  for (const site of ownedSites) {
+    sitesList.appendChild(createSiteItem(site, true));
+  }
+
+  // Add shared sites section if there are any
+  if (sharedSites.length > 0) {
+    // Add section header
+    var sharedHeader = document.createElement("h4");
+    sharedHeader.textContent = "Shared with You";
+    sharedHeader.style.marginTop = "20px";
+    sharedHeader.style.marginBottom = "10px";
+    sharedHeader.style.color = "#888";
+    sharedHeader.style.borderTop = "1px solid #555";
+    sharedHeader.style.paddingTop = "15px";
+    sitesList.appendChild(sharedHeader);
+
+    // Add shared sites
+    for (const site of sharedSites) {
+      sitesList.appendChild(createSiteItem(site, false));
+    }
   }
 }
 

@@ -966,3 +966,15 @@ async function checkUserCanEditSite(siteId, username) {
   return { canEdit: isCollaborator, isOwner: false };
 }
 
+async function getSharedSites(username) {
+  const params = new URLSearchParams({ username });
+  const response = await fetch(`/api/collaborators?${params.toString()}`);
+
+  if (!response.ok) {
+    console.error("Failed to fetch shared sites:", response.status);
+    return [];
+  }
+
+  return await response.json();
+}
+

@@ -1,12 +1,53 @@
-// GET /api/collaborators - Get collaborators for a site
+// GET /api/collaborators - Get collaborators for a site OR get sites shared with a user
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
 
   const siteId = url.searchParams.get("siteId");
+  const username = url.searchParams.get("username");
 
+  // If username is provided, get all sites shared with this user
+  if (username) {
+    try {
+      // First get the user's ID
+      const user = await env.USERS_DB.prepare(
+        "SELECT id FROM Users WHERE LOWER(username) = LOWER(?)"
+      ).bind(username).first();
+
+      if (!user) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Get all sites where this user is a collaborator
+      const result = await env.USERS_DB.prepare(`
+        SELECT siteId FROM Collaborators WHERE userId = ?
+      `).bind(user.id).all();
+
+      // Fetch full site configs for each site
+      const sharedSites = [];
+      for (const row of result.results || []) {
+        const siteConfig = await env.SITES.get(`site:${row.siteId}`);
+        if (siteConfig) {
+          sharedSites.push(JSON.parse(siteConfig));
+        }
+      }
+
+      return new Response(JSON.stringify(sharedSites), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error fetching shared sites:", error);
+      return new Response("Failed to fetch shared sites", { status: 500 });
+    }
+  }
+
+  // If siteId is provided, get collaborators for that site
   if (!siteId) {
-    return new Response("Missing required parameter: siteId", { status: 400 });
+    return new Response("Missing required parameter: siteId or username", { status: 400 });
   }
 
   try {
