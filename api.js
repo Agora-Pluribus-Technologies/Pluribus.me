@@ -730,7 +730,7 @@ async function deployChanges(siteId) {
   modified = false;
   updateDeployButtonState();
 
-  var owoTemplateResp = await fetch("owo-template.html", {
+  var owoTemplateResp = await fetch("/owo-template.html", {
     method: "GET",
     headers: {
       "Cache-Control": "no-cache, must-revalidate",
@@ -821,7 +821,7 @@ async function deployChanges(siteId) {
 }
 
 async function createPage(siteId, pageName) {
-  var owoTemplateResp = await fetch("owo-template.html", {
+  var owoTemplateResp = await fetch("/owo-template.html", {
     method: "GET",
     headers: {
       "Cache-Control": "no-cache, must-revalidate",
