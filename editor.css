@@ -143,6 +143,38 @@ nav {
   color: #ff0000;
 }
 
+/* List group dark mode styles */
+.list-group {
+  margin-bottom: 0;
+  padding-left: 0;
+  background-color: transparent;
+}
+
+.list-group-item {
+  background-color: #303030;
+  border: 1px solid #555;
+  color: #fff;
+  padding: 10px 15px;
+}
+
+.list-group-item:first-child {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.list-group-item:last-child {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.list-group-item + .list-group-item {
+  border-top-width: 0;
+}
+
+.list-group-item:hover {
+  background-color: #404040;
+}
+
 #sidebar {
   display: flex;
   flex-direction: column;
