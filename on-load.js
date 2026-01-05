@@ -1116,7 +1116,7 @@ function populateSitesList(ownedSites, sharedSites = []) {
     // Create site button
     var siteDiv = document.createElement("div");
     siteDiv.classList.add("site-button", "site-item", "btn", "btn-default");
-    siteDiv.innerText = site.displayName || site.repo;
+    siteDiv.innerText = `${site.owner}/${site.displayName || site.repo}`;
     siteDiv.id = site.siteId;
     siteDiv.style.flex = "1";
     siteDiv.addEventListener("click", function () {
