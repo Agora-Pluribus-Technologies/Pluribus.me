@@ -84,6 +84,194 @@ function isImageInCache(filename) {
 // Interval for checking site availability
 let siteAvailabilityInterval = null;
 
+// Open a site in the editor
+async function openSiteInEditor(site, initialPage = "index") {
+  console.log(`Loading site: ${site.displayName || site.repo} (ID: ${site.siteId})`);
+
+  // Set current site ID
+  currentSiteId = site.siteId;
+  currentSitePathFull = site.siteId;
+  console.log("Current site path full:", currentSitePathFull);
+
+  // Update Visit Site button URL
+  const visitSiteButton = document.getElementById("visitSiteButton");
+  if (visitSiteButton && currentSitePathFull) {
+    const pluribusSiteUrl = `/s/${currentSitePathFull}`;
+    visitSiteButton.onclick = function () {
+      window.open(pluribusSiteUrl, "_blank");
+    };
+    visitSiteButton.disabled = false;
+    console.log("Visit Site button updated to:", pluribusSiteUrl);
+
+    // Start site availability check
+    // Clear any existing interval first
+    if (siteAvailabilityInterval) {
+      clearInterval(siteAvailabilityInterval);
+      siteAvailabilityInterval = null;
+    }
+
+    // Check immediately
+    checkSiteAvailability();
+
+    // Then check every 5 seconds
+    siteAvailabilityInterval = setInterval(checkSiteAvailability, 5000);
+    console.log("Started site availability check interval");
+  }
+
+  modified = false;
+
+  // Update deploy button state (should be disabled since not modified)
+  updateDeployButtonState();
+
+  // Hide sites list panel
+  const sitesListPanel = document.getElementById("sites-list-panel");
+  sitesListPanel.style.display = "none";
+
+  // Show editor panel
+  const editorContainer = document.getElementById("editorContainer");
+  editorContainer.style.display = "flex";
+
+  // Fetch site tree from R2
+  const markdownFiles = await getPublicFiles(currentSiteId);
+
+  console.log("Markdown files:", markdownFiles);
+  if (markdownFiles.length === 0) {
+    // No markdown files found - create a dummy index.md
+    console.log("Site is empty - created dummy index.md");
+    addOrUpdateCache(
+      "public/index.md",
+      "Home",
+      "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
+    );
+    // Initialize empty imageCache
+    imageCache = [];
+  } else {
+    // Initialize markdownCache from pages.json
+    markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
+    for (let i=0; i < markdownCache.length; i++) {
+      const fileName = markdownCache[i].fileName;
+      markdownCache[i].fileName = `public/${fileName}.md`
+    }
+
+    // Load all markdown files into cache
+    for (const file of markdownFiles) {
+      console.log("Loading file into cache:", file);
+      const content = await getFileContent(currentSiteId, file);
+
+      // Try to load metadata from .md.meta file
+      let metadata = null;
+      try {
+        const metaContent = await getFileContent(currentSiteId, file + ".meta");
+        if (metaContent) {
+          metadata = JSON.parse(metaContent);
+          console.log("Loaded metadata for:", file, metadata);
+        }
+      } catch (e) {
+        console.log("No metadata found for:", file);
+      }
+
+      addOrUpdateCache(file, null, content, metadata);
+    }
+
+    // Initialize imageCache from images.json
+    try {
+      const imagesJsonContent = await getFileContent(currentSiteId, "public/images.json");
+
+      if (imagesJsonContent) {
+        imageCache = JSON.parse(imagesJsonContent);
+        console.log("Loaded imageCache:", imageCache);
+      } else {
+        imageCache = [];
+        console.log("images.json not found, initialized empty imageCache");
+      }
+    } catch (error) {
+      console.error("Error loading images.json:", error);
+      imageCache = [];
+    }
+  }
+
+  // Initialize git repo and load files from R2
+  await loadR2ToGit(currentSiteId);
+
+  // Populate menubar from cache
+  await populateMenubar(site.siteId);
+
+  // Load the editor
+  loadToastEditor();
+
+  // Find and click the appropriate page tab
+  setTimeout(() => {
+    const menubarItems = document.querySelectorAll(".menubar-item");
+    const fileName = `public/${initialPage}.md`;
+    let pageFound = false;
+
+    for (const item of menubarItems) {
+      const text = item.querySelector("span");
+      if (text) {
+        // Check if this menubar item matches the requested page
+        const cacheItem = markdownCache.find(c =>
+          c.fileName === fileName ||
+          c.displayName.toLowerCase() === initialPage.toLowerCase() ||
+          (initialPage === "index" && c.displayName === "Home")
+        );
+
+        if (cacheItem && text.textContent === cacheItem.displayName) {
+          console.log("Opening page:", cacheItem.displayName);
+          text.click();
+          pageFound = true;
+
+          // Set up editor change listener to update cache
+          editor.off("change");
+          editor.on("change", function () {
+            if (currentSitePath) {
+              const cacheItem = getCacheByFileName(currentSitePath);
+              if (cacheItem) {
+                let currentMarkdown = editor.getMarkdown();
+                cacheItem.content = currentMarkdown;
+                console.log(`Cached content for ${currentSitePath}`);
+                modified = true;
+                updateDeployButtonState();
+              }
+            }
+          });
+
+          // Ensure modified flag is false on initial load
+          modified = false;
+          break;
+        }
+      }
+    }
+
+    // Fallback to Home if requested page not found
+    if (!pageFound) {
+      console.log("Page not found:", initialPage, "- opening Home");
+      for (const item of menubarItems) {
+        const text = item.querySelector("span");
+        if (text && text.textContent === "Home") {
+          text.click();
+
+          editor.off("change");
+          editor.on("change", function () {
+            if (currentSitePath) {
+              const cacheItem = getCacheByFileName(currentSitePath);
+              if (cacheItem) {
+                let currentMarkdown = editor.getMarkdown();
+                cacheItem.content = currentMarkdown;
+                console.log(`Cached content for ${currentSitePath}`);
+                modified = true;
+                updateDeployButtonState();
+              }
+            }
+          });
+
+          modified = false;
+          break;
+        }
+      }
+    }
+  }, 100);
+}
+
 // Handle edit context from /edit route
 async function handleEditContext(username) {
   const editContext = window.PLURIBUS_EDIT_CONTEXT;
@@ -110,44 +298,9 @@ async function handleEditContext(username) {
     return;
   }
 
-  // Click the site button to open it
-  const siteButton = document.getElementById(editContext.siteId);
-  if (siteButton) {
-    console.log("Opening site:", editContext.siteId);
-    siteButton.click();
-
-    // Wait for the editor to load, then navigate to the specific page
-    setTimeout(() => {
-      const pagePath = editContext.pagePath || "index";
-      const fileName = `public/${pagePath}.md`;
-
-      // Find and click the matching page tab
-      const menubarItems = document.querySelectorAll(".menubar-item");
-      let pageFound = false;
-
-      for (const item of menubarItems) {
-        const text = item.querySelector("span");
-        if (text) {
-          // Check if this menubar item matches the requested page
-          const cacheItem = markdownCache.find(c =>
-            c.fileName === fileName ||
-            c.displayName.toLowerCase() === pagePath.toLowerCase()
-          );
-
-          if (cacheItem && text.textContent === cacheItem.displayName) {
-            console.log("Opening page:", cacheItem.displayName);
-            text.click();
-            pageFound = true;
-            break;
-          }
-        }
-      }
-
-      if (!pageFound && pagePath !== "index") {
-        console.log("Page not found:", pagePath, "- staying on current page");
-      }
-    }, 500);
-  }
+  // Open the site in the editor
+  const pagePath = editContext.pagePath || "index";
+  await openSiteInEditor(site, pagePath);
 }
 
 // Load sites for a specific user
@@ -532,7 +685,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         // Show success or failure message
         if (deploySuccess) {
-          showAlertBar(`Deployed successfully! Commit: ${commitSha ? commitSha.substring(0, 7) : "done"}`, true);
+          showAlertBar("Deployed successfully!", true);
         } else {
           showAlertBar("Deploy failed. Please check the console for errors.", false);
         }
@@ -825,149 +978,9 @@ function populateSitesList(sites) {
     siteDiv.innerText = site.displayName || site.repo;
     siteDiv.id = site.siteId;
     siteDiv.style.flex = "1";
-    siteDiv.addEventListener("click", async function () {
-      console.log(`Loading site: ${site.displayName || site.repo} (ID: ${site.siteId})`);
-
-      // Set current site ID
-      currentSiteId = site.siteId;
-      currentSitePathFull = site.siteId;
-      console.log("Current site path full:", currentSitePathFull);
-
-      // Update Visit Site button URL
-      const visitSiteButton = document.getElementById("visitSiteButton");
-      if (visitSiteButton && currentSitePathFull) {
-        const pluribusSiteUrl = `/s/${currentSitePathFull}`;
-        visitSiteButton.onclick = function () {
-          window.open(pluribusSiteUrl, "_blank");
-        };
-        visitSiteButton.disabled = false;
-        console.log("Visit Site button updated to:", pluribusSiteUrl);
-
-        // Start site availability check
-        // Clear any existing interval first
-        if (siteAvailabilityInterval) {
-          clearInterval(siteAvailabilityInterval);
-          siteAvailabilityInterval = null;
-        }
-
-        // Check immediately
-        checkSiteAvailability();
-
-        // Then check every 5 seconds
-        siteAvailabilityInterval = setInterval(checkSiteAvailability, 5000);
-        console.log("Started site availability check interval");
-      }
-
-      modified = false;
-
-      // Update deploy button state (should be disabled since not modified)
-      updateDeployButtonState();
-
-      // Hide sites list panel
-      const sitesListPanel = document.getElementById("sites-list-panel");
-      sitesListPanel.style.display = "none";
-
-      // Show editor panel
-      const editorContainer = document.getElementById("editorContainer");
-      editorContainer.style.display = "flex";
-
-      // Fetch site tree from R2
-      const markdownFiles = await getPublicFiles(currentSiteId);
-
-      console.log("Markdown files:", markdownFiles);
-      if (markdownFiles.length === 0) {
-        // No markdown files found - create a dummy index.md
-        console.log("Site is empty - created dummy index.md");
-        addOrUpdateCache(
-          "public/index.md",
-          "Home",
-          "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
-        );
-        // Initialize empty imageCache
-        imageCache = [];
-      } else {
-        // Initialize markdownCache from pages.json
-        markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
-        for (let i=0; i < markdownCache.length; i++) {
-          const fileName = markdownCache[i].fileName;
-          markdownCache[i].fileName = `public/${fileName}.md`
-        }
-
-        // Load all markdown files into cache
-        for (const file of markdownFiles) {
-          console.log("Loading file into cache:", file);
-          const content = await getFileContent(currentSiteId, file);
-
-          // Try to load metadata from .md.meta file
-          let metadata = null;
-          try {
-            const metaContent = await getFileContent(currentSiteId, file + ".meta");
-            if (metaContent) {
-              metadata = JSON.parse(metaContent);
-              console.log("Loaded metadata for:", file, metadata);
-            }
-          } catch (e) {
-            console.log("No metadata found for:", file);
-          }
-
-          addOrUpdateCache(file, null, content, metadata);
-        }
-
-        // Initialize imageCache from images.json
-        try {
-          const imagesJsonContent = await getFileContent(currentSiteId, "public/images.json");
-
-          if (imagesJsonContent) {
-            imageCache = JSON.parse(imagesJsonContent);
-            console.log("Loaded imageCache:", imageCache);
-          } else {
-            imageCache = [];
-            console.log("images.json not found, initialized empty imageCache");
-          }
-        } catch (error) {
-          console.error("Error loading images.json:", error);
-          imageCache = [];
-        }
-      }
-
-      // Initialize git repo and load files from R2
-      await loadR2ToGit(currentSiteId);
-
-      // Populate menubar from cache
-      await populateMenubar(site.siteId);
-
-      // Load the editor
-      loadToastEditor();
-
-      // Click the Home menubar item to load it
-      setTimeout(() => {
-        const menubarItems = document.querySelectorAll(".menubar-item");
-        for (const item of menubarItems) {
-          const text = item.querySelector("span");
-          if (text && text.textContent === "Home") {
-            text.click();
-
-            // Set up editor change listener to update cache
-            editor.off("change");
-            editor.on("change", function () {
-              if (currentSitePath) {
-                const cacheItem = getCacheByFileName(currentSitePath);
-                if (cacheItem) {
-                  let currentMarkdown = editor.getMarkdown();
-                  cacheItem.content = currentMarkdown;
-                  console.log(`Cached content for ${currentSitePath}`);
-                  modified = true;
-                  updateDeployButtonState();
-                }
-              }
-            });
-
-            // Ensure modified flag is false on initial load
-            modified = false;
-            break;
-          }
-        }
-      }, 100);
+    siteDiv.addEventListener("click", function () {
+      // Navigate to the edit endpoint
+      window.location.href = `/edit/${site.siteId}`;
     });
 
     // Create delete button

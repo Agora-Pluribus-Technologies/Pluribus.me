@@ -192,8 +192,6 @@ function populateImageGallery(galleryElement) {
       // Close the popup
       const popup = document.querySelector('.image-upload-popup');
       if (popup) popup.remove();
-
-      showAlertBar('Image inserted into editor!', true);
     });
 
     // Delete button handler
@@ -210,7 +208,6 @@ function populateImageGallery(galleryElement) {
         if (success) {
           removeImageFromCache(filename);
           populateImageGallery(galleryElement);
-          showAlertBar('Image deleted successfully!', true);
         } else {
           throw new Error('Failed to delete image from repository');
         }
@@ -376,9 +373,6 @@ async function handleImageUpload(file, popup, progressContainer, imageGallery) {
 
     // Close popup
     popup.remove();
-
-    // Show success message
-    showAlertBar('Image uploaded successfully!', true);
   } catch (error) {
     console.error('Error handling image upload:', error);
     progressContainer.style.display = 'none';
