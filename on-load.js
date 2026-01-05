@@ -690,12 +690,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           "You have unsaved changes. Are you sure you want to go back? All unsaved changes will be lost."
         )
       ) {
-        goBackToSiteSelection();
+        window.location.href = document.location.origin;
       } else {
         document.getElementById("backButton").blur();
       }
     } else {
-      goBackToSiteSelection();
+      window.location.href = document.location.origin;
     }
   });
 
@@ -1003,43 +1003,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       });
     });
 });
-
-function goBackToSiteSelection() {
-  console.log("Returning to site selection");
-
-  // Clear existing intervals if any
-  if (lastDeployTimeInterval) {
-    clearInterval(lastDeployTimeInterval);
-    lastDeployTimeInterval = null;
-  }
-
-  if (siteAvailabilityInterval) {
-    clearInterval(siteAvailabilityInterval);
-    siteAvailabilityInterval = null;
-    console.log("Cleared site availability check interval");
-  }
-
-  // Reset state
-  currentSiteId = null;
-  currentSitePathFull = null;
-  currentSitePath = null;
-  markdownCache = [];
-  imageCache = [];
-  modified = false;
-
-  // Hide editor container
-  const editorContainer = document.getElementById("editorContainer");
-  editorContainer.style.display = "none";
-
-  // Show sites list panel
-  const sitesListPanel = document.getElementById("sites-list-panel");
-  sitesListPanel.style.display = "block";
-
-  // Repopulate sites list from cache
-  populateSitesList(sitesCache, sharedSitesCache);
-
-  console.log("Back to site selection complete");
-}
 
 async function triggerCreateNewSiteGitlab(displayName) {
   if (displayName) {
