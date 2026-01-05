@@ -1228,7 +1228,7 @@ function populateSitesList(ownedSites, sharedSites = []) {
   // Add shared sites section if there are any
   if (sharedSites.length > 0) {
     // Add section header
-    var sharedHeader = document.createElement("h4");
+    var sharedHeader = document.createElement("h2");
     sharedHeader.textContent = "Shared with You";
     sharedHeader.style.marginTop = "20px";
     sharedHeader.style.marginBottom = "10px";
