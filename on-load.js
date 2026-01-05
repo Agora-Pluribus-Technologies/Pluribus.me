@@ -1195,7 +1195,7 @@ function populateSitesList(ownedSites, sharedSites = []) {
     sharedHeader.textContent = "Shared with You";
     sharedHeader.style.marginTop = "20px";
     sharedHeader.style.marginBottom = "10px";
-    sharedHeader.style.color = "#888";
+    sharedHeader.style.color = "white";
     sharedHeader.style.borderTop = "1px solid #555";
     sharedHeader.style.paddingTop = "15px";
     sitesList.appendChild(sharedHeader);
