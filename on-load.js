@@ -84,6 +84,72 @@ function isImageInCache(filename) {
 // Interval for checking site availability
 let siteAvailabilityInterval = null;
 
+// Handle edit context from /edit route
+async function handleEditContext(username) {
+  const editContext = window.PLURIBUS_EDIT_CONTEXT;
+  if (!editContext) return;
+
+  console.log("Handling edit context:", editContext);
+
+  // Clear the edit context from sessionStorage since we're handling it now
+  sessionStorage.removeItem("pluribus.me.edit_context");
+  window.PLURIBUS_EDIT_CONTEXT = null;
+
+  // Check permission: user's username must match site owner
+  if (editContext.username !== username) {
+    console.error("Permission denied: user", username, "cannot edit site owned by", editContext.username);
+    showAlertBar("You don't have permission to edit this site.", false);
+    return;
+  }
+
+  // Find the site in sitesCache
+  const site = sitesCache.find(s => s.siteId === editContext.siteId);
+  if (!site) {
+    console.error("Site not found in user's sites:", editContext.siteId);
+    showAlertBar("Site not found or you don't have access to it.", false);
+    return;
+  }
+
+  // Click the site button to open it
+  const siteButton = document.getElementById(editContext.siteId);
+  if (siteButton) {
+    console.log("Opening site:", editContext.siteId);
+    siteButton.click();
+
+    // Wait for the editor to load, then navigate to the specific page
+    setTimeout(() => {
+      const pagePath = editContext.pagePath || "index";
+      const fileName = `public/${pagePath}.md`;
+
+      // Find and click the matching page tab
+      const menubarItems = document.querySelectorAll(".menubar-item");
+      let pageFound = false;
+
+      for (const item of menubarItems) {
+        const text = item.querySelector("span");
+        if (text) {
+          // Check if this menubar item matches the requested page
+          const cacheItem = markdownCache.find(c =>
+            c.fileName === fileName ||
+            c.displayName.toLowerCase() === pagePath.toLowerCase()
+          );
+
+          if (cacheItem && text.textContent === cacheItem.displayName) {
+            console.log("Opening page:", cacheItem.displayName);
+            text.click();
+            pageFound = true;
+            break;
+          }
+        }
+      }
+
+      if (!pageFound && pagePath !== "index") {
+        console.log("Page not found:", pagePath, "- staying on current page");
+      }
+    }, 500);
+  }
+}
+
 // Load sites for a specific user
 async function loadSitesForUser(username) {
   console.log("Loading sites for user:", username);
@@ -101,6 +167,25 @@ async function loadSitesForUser(username) {
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
+  // Check for edit context - either from injected script or from sessionStorage
+  if (window.PLURIBUS_EDIT_CONTEXT) {
+    // Save to sessionStorage so it persists through OAuth redirect
+    sessionStorage.setItem("pluribus.me.edit_context", JSON.stringify(window.PLURIBUS_EDIT_CONTEXT));
+    console.log("Saved edit context to sessionStorage");
+  } else {
+    // Try to restore from sessionStorage
+    const savedContext = sessionStorage.getItem("pluribus.me.edit_context");
+    if (savedContext) {
+      try {
+        window.PLURIBUS_EDIT_CONTEXT = JSON.parse(savedContext);
+        console.log("Restored edit context from sessionStorage:", window.PLURIBUS_EDIT_CONTEXT);
+      } catch (e) {
+        console.error("Failed to parse saved edit context:", e);
+        sessionStorage.removeItem("pluribus.me.edit_context");
+      }
+    }
+  }
+
   if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null && getOauthTokenGoogle() === null) {
     console.log("Access tokens missing or expired");
     displayLoginButtons();
@@ -126,6 +211,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       setStoredUsername(existingUser.username);
       showUserMenu(existingUser.username);
       await loadSitesForUser(existingUser.username);
+
+      // Check if we have an edit context (from /edit route)
+      if (window.PLURIBUS_EDIT_CONTEXT) {
+        await handleEditContext(existingUser.username);
+      }
     } else {
       // User needs to select a username
       console.log("New user, showing username selection modal");
