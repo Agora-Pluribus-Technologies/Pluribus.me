@@ -84,6 +84,65 @@ function isImageInCache(filename) {
 // Interval for checking site availability
 let siteAvailabilityInterval = null;
 
+// Helper function to refresh and display collaborators list
+async function refreshCollaboratorsList(siteId, isOwner) {
+  const collaboratorsList = document.getElementById("collaboratorsList");
+
+  try {
+    const collaborators = await getCollaborators(siteId);
+
+    if (collaborators.length === 0) {
+      collaboratorsList.innerHTML = "<p style='color: #888;'>No collaborators yet.</p>";
+      return;
+    }
+
+    let html = '<ul class="list-group">';
+    for (const collab of collaborators) {
+      html += `<li class="list-group-item" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>${collab.username}</span>`;
+
+      if (isOwner) {
+        html += `<button class="btn btn-danger btn-xs remove-collaborator-btn" data-user-id="${collab.userId}" data-username="${collab.username}">Remove</button>`;
+      }
+
+      html += '</li>';
+    }
+    html += '</ul>';
+
+    collaboratorsList.innerHTML = html;
+
+    // Add event listeners for remove buttons
+    if (isOwner) {
+      const removeButtons = collaboratorsList.querySelectorAll(".remove-collaborator-btn");
+      removeButtons.forEach(btn => {
+        btn.addEventListener("click", async function () {
+          const userId = this.dataset.userId;
+          const username = this.dataset.username;
+
+          if (!confirm(`Remove ${username} as a collaborator?`)) {
+            return;
+          }
+
+          this.disabled = true;
+          this.textContent = "...";
+
+          try {
+            await removeCollaborator(siteId, userId);
+            await refreshCollaboratorsList(siteId, isOwner);
+          } catch (error) {
+            alert("Failed to remove collaborator: " + error.message);
+            this.disabled = false;
+            this.textContent = "Remove";
+          }
+        });
+      });
+    }
+  } catch (error) {
+    console.error("Error loading collaborators:", error);
+    collaboratorsList.innerHTML = "<p style='color: #ff4444;'>Failed to load collaborators.</p>";
+  }
+}
+
 // Open a site in the editor
 async function openSiteInEditor(site, initialPage = "index") {
   console.log(`Loading site: ${site.displayName || site.repo} (ID: ${site.siteId})`);
@@ -283,18 +342,32 @@ async function handleEditContext(username) {
   sessionStorage.removeItem("pluribus.me.edit_context");
   window.PLURIBUS_EDIT_CONTEXT = null;
 
-  // Check permission: user's username must match site owner
-  if (editContext.username !== username) {
-    console.error("Permission denied: user", username, "cannot edit site owned by", editContext.username);
+  // Check permission: user must be owner or collaborator
+  const permission = await checkUserCanEditSite(editContext.siteId, username);
+  if (!permission.canEdit) {
+    console.error("Permission denied: user", username, "cannot edit site", editContext.siteId);
     showAlertBar("You don't have permission to edit this site.", false);
     return;
   }
 
-  // Find the site in sitesCache
-  const site = sitesCache.find(s => s.siteId === editContext.siteId);
+  // Find the site in sitesCache, or fetch it if not found (for collaborators)
+  let site = sitesCache.find(s => s.siteId === editContext.siteId);
+
   if (!site) {
-    console.error("Site not found in user's sites:", editContext.siteId);
-    showAlertBar("Site not found or you don't have access to it.", false);
+    // User might be a collaborator - fetch the site config
+    try {
+      const response = await fetch(`/api/sites?siteId=${encodeURIComponent(editContext.siteId)}`);
+      if (response.ok) {
+        site = await response.json();
+      }
+    } catch (error) {
+      console.error("Error fetching site config:", error);
+    }
+  }
+
+  if (!site) {
+    console.error("Site not found:", editContext.siteId);
+    showAlertBar("Site not found.", false);
     return;
   }
 
@@ -715,6 +788,98 @@ document.addEventListener("DOMContentLoaded", async function () {
       // Fetch and display commit history
       const historyHtml = await formatCommitHistory(currentSiteId);
       historyList.innerHTML = historyHtml;
+    });
+
+  // Handle site settings button click
+  document
+    .getElementById("siteSettingsButton")
+    .addEventListener("click", async function () {
+      if (!currentSiteId) {
+        console.error("No site selected");
+        return;
+      }
+
+      // Get site info
+      const site = sitesCache.find(s => s.siteId === currentSiteId);
+      const username = getStoredUsername();
+      const isOwner = site && site.owner.toLowerCase() === username.toLowerCase();
+
+      // Update modal content
+      document.getElementById("siteSettingsName").textContent = site ? (site.displayName || site.repo) : currentSiteId;
+      document.getElementById("siteSettingsOwner").textContent = site ? site.owner : currentSiteId.split("/")[0];
+
+      // Show/hide add collaborator section based on ownership
+      const addCollaboratorSection = document.getElementById("addCollaboratorSection");
+      addCollaboratorSection.style.display = isOwner ? "block" : "none";
+
+      // Clear any previous error/success messages
+      document.getElementById("collaboratorError").style.display = "none";
+      document.getElementById("collaboratorSuccess").style.display = "none";
+      document.getElementById("collaboratorUsernameInput").value = "";
+
+      // Show modal with loading state
+      const collaboratorsList = document.getElementById("collaboratorsList");
+      collaboratorsList.innerHTML = "<p style='color: #888;'>Loading collaborators...</p>";
+      $("#siteSettingsModal").modal("show");
+
+      // Load and display collaborators
+      await refreshCollaboratorsList(currentSiteId, isOwner);
+    });
+
+  // Handle add collaborator button click
+  document
+    .getElementById("addCollaboratorButton")
+    .addEventListener("click", async function () {
+      const usernameInput = document.getElementById("collaboratorUsernameInput");
+      const errorElement = document.getElementById("collaboratorError");
+      const successElement = document.getElementById("collaboratorSuccess");
+      const username = usernameInput.value.trim();
+
+      // Reset messages
+      errorElement.style.display = "none";
+      successElement.style.display = "none";
+
+      if (!username) {
+        errorElement.textContent = "Please enter a username.";
+        errorElement.style.display = "block";
+        return;
+      }
+
+      if (!currentSiteId) {
+        errorElement.textContent = "No site selected.";
+        errorElement.style.display = "block";
+        return;
+      }
+
+      const addButton = document.getElementById("addCollaboratorButton");
+      addButton.disabled = true;
+      addButton.textContent = "Adding...";
+
+      try {
+        await addCollaborator(currentSiteId, username);
+        successElement.textContent = `Added ${username} as a collaborator.`;
+        successElement.style.display = "block";
+        usernameInput.value = "";
+
+        // Refresh the list
+        await refreshCollaboratorsList(currentSiteId, true);
+      } catch (error) {
+        errorElement.textContent = error.message || "Failed to add collaborator.";
+        errorElement.style.display = "block";
+      } finally {
+        addButton.disabled = false;
+        addButton.textContent = "Add";
+      }
+    });
+
+  // Handle Enter key in collaborator username input
+  document
+    .getElementById("collaboratorUsernameInput")
+    .addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("addCollaboratorButton").click();
+      }
     });
 
   // Handle click on commit links in history (event delegation)

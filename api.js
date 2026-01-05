@@ -900,3 +900,69 @@ async function deleteImage(siteId, filename) {
   return result;
 }
 
+// ==================== Collaborator API Functions ====================
+
+async function getCollaborators(siteId) {
+  const params = new URLSearchParams({ siteId });
+  const response = await fetch(`/api/collaborators?${params.toString()}`);
+
+  if (!response.ok) {
+    console.error("Failed to fetch collaborators:", response.status);
+    return [];
+  }
+
+  return await response.json();
+}
+
+async function addCollaborator(siteId, username) {
+  const headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+
+  const response = await fetch("/api/collaborators", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ siteId, username }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+async function removeCollaborator(siteId, userId) {
+  const params = new URLSearchParams({ siteId, userId });
+  const headers = await getHeadersWithTurnstile();
+
+  const response = await fetch(`/api/collaborators?${params.toString()}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+async function checkUserCanEditSite(siteId, username) {
+  // Check if user is owner
+  const siteOwner = siteId.split("/")[0];
+  if (siteOwner.toLowerCase() === username.toLowerCase()) {
+    return { canEdit: true, isOwner: true };
+  }
+
+  // Check if user is a collaborator
+  const collaborators = await getCollaborators(siteId);
+  const isCollaborator = collaborators.some(
+    c => c.username.toLowerCase() === username.toLowerCase()
+  );
+
+  return { canEdit: isCollaborator, isOwner: false };
+}
+
