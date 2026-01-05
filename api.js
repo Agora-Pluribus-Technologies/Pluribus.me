@@ -54,6 +54,7 @@ async function getTurnstileToken() {
 
   return new Promise((resolve) => {
     let attempts = 0;
+
     const maxAttempts = 150;
     const checkToken = setInterval(() => {
       attempts++;
