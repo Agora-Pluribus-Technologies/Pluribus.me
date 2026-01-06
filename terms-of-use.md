@@ -30,9 +30,8 @@ We do not issue usernames or passwords directly.
 
 You are responsible for:
 
-Maintaining the security of your authentication provider account
-
-All activity performed through your authenticated session
+* Maintaining the security of your authentication provider account
+* All activity performed through your authenticated session
 
 ## 4. User Content and Ownership
 
@@ -42,9 +41,8 @@ By publishing content, you grant the Service a limited, non-exclusive license to
 
 You are responsible for the content you publish, including ensuring that it:
 
-Complies with applicable laws
-
-Does not infringe on the rights of others
+* Complies with applicable laws
+* Does not infringe on the rights of others
 
 ## 5. Public Content
 
@@ -52,21 +50,17 @@ Content published through the Service may be publicly accessible by default.
 
 You understand and agree that:
 
-Published content may be viewed, indexed, or shared by third parties
-
-The Service is not responsible for how third parties use publicly available content
+* Published content may be viewed, indexed, or shared by third parties
+* The Service is not responsible for how third parties use publicly available content
 
 ## 6. Acceptable Use
 
 You agree not to use the Service to:
 
-Publish unlawful content
-
-Engage in harassment, abuse, or exploitation
-
-Distribute malware or attempt to compromise the Service
-
-Interfere with the operation or security of the platform
+* Publish unlawful content
+* Engage in harassment, abuse, or exploitation
+* Distribute malware or attempt to compromise the Service
+* Interfere with the operation or security of the platform
 
 We reserve the right to suspend or terminate access for violations of these Terms.
 
@@ -82,11 +76,9 @@ You may stop using the Service at any time.
 
 We may suspend or terminate access if:
 
-These Terms are violated
-
-The Service is used in a way that threatens its integrity or users
-
-Required by law
+* These Terms are violated
+* The Service is used in a way that threatens its integrity or users
+* Required by law
 
 Upon termination, associated authentication data and service-stored data will be deleted within a reasonable timeframe.
 
