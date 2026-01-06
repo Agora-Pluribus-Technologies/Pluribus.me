@@ -102,3 +102,55 @@ Continued use of the Service after changes become effective constitutes acceptan
 
 For questions about these Terms, contact us at:
 [https://forms.gle/f748mnWptBjNmsJw7](https://forms.gle/f748mnWptBjNmsJw7)
+
+# Pluribus.me DMCA Copyright Policy
+
+Effective date: January 6, 2026
+
+Pluribus.me (the “Service”) is operated by Agora Pluribus Technologies (“Company”). The Company respects the intellectual property rights of others and expects users of the Service to do the same.
+
+In accordance with the Digital Millennium Copyright Act (“DMCA”), 17 U.S.C. § 512, the Company has adopted the following policy regarding claims of copyright infringement. The Company’s designated agent to receive notifications of claimed infringement (“Designated Agent”) is listed at the end of this policy.
+
+## Procedure for Reporting Copyright Infringement
+
+If you believe that material residing on or accessible through the Service infringes a copyright, please submit a written DMCA takedown notice to the Designated Agent that includes all of the following information:
+
+* A physical or electronic signature of a person authorized to act on behalf of the owner of the copyright that has allegedly been infringed;
+* Identification of the copyrighted work claimed to have been infringed, or, if multiple copyrighted works are covered by a single notification, a representative list of such works;
+* Identification of the material that is claimed to be infringing and information reasonably sufficient to permit the Company to locate the material (including the specific URL or URLs);
+* Contact information for the notifying party, including name, mailing address, telephone number, and email address;
+* A statement that the notifying party has a good-faith belief that use of the material in the manner complained of is not authorized by the copyright owner, its agent, or the law; and
+* A statement, made under penalty of perjury, that the information in the notification is accurate and that the notifying party is authorized to act on behalf of the copyright owner.
+
+Failure to include all required information may result in the notice being delayed or not processed.
+
+## Counter-Notification
+
+If you believe that material you posted was removed or disabled as a result of mistake or misidentification, you may submit a counter-notification in accordance with the DMCA.
+
+A valid counter-notification must include:
+
+* Your physical or electronic signature;
+* Identification of the material that has been removed or disabled and the location at which the material appeared before it was removed or disabled;
+* A statement under penalty of perjury that you have a good-faith belief that the material was removed or disabled as a result of mistake or misidentification; and
+* Your name, address, telephone number, and a statement that you consent to the jurisdiction of the Federal District Court for the judicial district in which your address is located (or, if outside the United States, the Northern District of California), and that you will accept service of process from the person who submitted the original DMCA notification.
+
+Upon receipt of a valid counter-notification, the Company may forward it to the original complaining party. If the Company does not receive notice that a legal action has been filed within the time period specified by the DMCA, the material may be restored.
+
+## Repeat Infringers
+
+In appropriate circumstances, the Company reserves the right to terminate or restrict access to the Service for users who are determined to be repeat infringers.
+
+## No Legal Determinations
+
+The Company does not make legal determinations regarding copyright ownership, infringement, or fair use. The Company’s role is limited to responding to valid DMCA notices and counter-notifications in accordance with applicable law.
+
+## Designated DMCA Agent
+
+Michael Yee
+
+Agora Pluribus Technologies
+
+Mailing Address: 7244 Castor Ave #1316, Philadelphia, PA 19149
+
+Contact: [https://forms.gle/f748mnWptBjNmsJw7](https://forms.gle/f748mnWptBjNmsJw7)
