@@ -175,6 +175,13 @@ nav {
   background-color: #404040;
 }
 
+/* Fix input-group button alignment */
+.input-group .input-group-btn .btn {
+  margin: 0;
+  height: 34px;
+  padding: 6px 12px;
+}
+
 #sidebar {
   display: flex;
   flex-direction: column;
