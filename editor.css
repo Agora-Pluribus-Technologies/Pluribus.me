@@ -29,6 +29,13 @@ body {
   overflow: hidden;
 }
 
+#userMenuContainer {
+  position: fixed;
+  top: 10px;
+  right: 20px;
+  z-index: 1000;
+}
+
 #sites-list-panel {
   text-align: center;
   min-width: 40%;
@@ -716,6 +723,16 @@ nav {
 }
 
 @media (max-width: 768px) {
+
+  #userMenuContainer {
+    position: static;
+    text-align: right;
+    padding: 10px 20px;
+  }
+
+  .dropdown {
+    display: inline-block;
+  }
   
   .toastui-editor-tooltip {
     display: none !important;
