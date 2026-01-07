@@ -30,9 +30,11 @@
 <body>
   <div id="turnstile-container"></div>
 
+  <div id="alertBar" class="alert-bar"></div>
+
   <!-- User Menu (top right) -->
-  <div id="userMenuContainer" style="display: none; position: fixed; top: 10px; right: 20px; z-index: 1000;">
-    <div class="dropdown">
+  <div id="userMenuContainer" style="display: none; text-align: right; padding: 10px 20px;">
+    <div class="dropdown" style="display: inline-block;">
       <button id="userMenuButton" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
         Welcome back, <span id="userMenuUsername"></span> <span class="caret"></span>
       </button>
@@ -43,8 +45,6 @@
       </ul>
     </div>
   </div>
-
-  <div id="alertBar" class="alert-bar"></div>
   <main id="main" class="content-area" style="margin: 0 20px 0 20px;">
     <div id="mainContent" style="display: flex; flex: 1; overflow: hidden;">
       <div id="editorSection" style="flex: 1;">
