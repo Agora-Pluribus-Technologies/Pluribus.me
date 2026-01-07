@@ -580,9 +580,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       try {
         const siteName = document.getElementById("siteName").value;
-        const siteDescription = document.getElementById("siteDescription").value;
 
-        console.log("Creating new site:", siteName, siteDescription);
+        console.log("Creating new site:", siteName);
 
         // Get stored username (set during login)
         const owner = getStoredUsername();
