@@ -22,7 +22,7 @@ function getCacheByDisplayName(displayName) {
   return markdownCache.find(item => item.displayName === displayName);
 }
 
-function addOrUpdateCache(fileName, displayName, content, metadata = null) {
+function addOrUpdateCache(fileName, displayName, content) {
   const existing = getCacheByFileName(fileName);
   if (existing) {
     if (displayName) {
@@ -35,24 +35,11 @@ function addOrUpdateCache(fileName, displayName, content, metadata = null) {
     } else {
       content = existing.content;
     }
-    // Update metadata if provided, but preserve existing if not
-    if (metadata) {
-      existing.metadata = { ...existing.metadata, ...metadata };
-    }
   } else {
-    // Create new entry with metadata
-    const now = new Date().toISOString();
-    const author = getStoredUsername() || "unknown";
-    const defaultMetadata = {
-      author: author,
-      createdAt: now,
-      modifiedAt: now,
-    };
     markdownCache.push({
       displayName,
       fileName,
       content,
-      metadata: metadata || defaultMetadata
     });
   }
 }
@@ -217,20 +204,7 @@ async function openSiteInEditor(site, initialPage = "index") {
     for (const file of markdownFiles) {
       console.log("Loading file into cache:", file);
       const content = await getFileContent(currentSiteId, file);
-
-      // Try to load metadata from .md.meta file
-      let metadata = null;
-      try {
-        const metaContent = await getFileContent(currentSiteId, file + ".meta");
-        if (metaContent) {
-          metadata = JSON.parse(metaContent);
-          console.log("Loaded metadata for:", file, metadata);
-        }
-      } catch (e) {
-        console.log("No metadata found for:", file);
-      }
-
-      addOrUpdateCache(file, null, content, metadata);
+      addOrUpdateCache(file, null, content);
     }
 
     // Initialize imageCache from images.json
@@ -564,6 +538,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
+  // Set username prefix when create site modal is shown
+  $("#createSiteModal").on("show.bs.modal", function () {
+    const username = getStoredUsername();
+    document.getElementById("siteNamePrefix").textContent = username + "/";
+    document.getElementById("siteName").value = "";
+  });
+
   // Handle create site form submission
   document
     .getElementById("createSiteForm")
@@ -579,7 +560,18 @@ document.addEventListener("DOMContentLoaded", async function () {
       submitButton.style.cursor = "not-allowed";
 
       try {
-        const siteName = document.getElementById("siteName").value;
+        const siteName = document.getElementById("siteName").value.trim().toLowerCase();
+
+        // Validate site name: lowercase letters, numbers, hyphens, 2-30 chars, no double hyphens
+        const siteNameRegex = /^[a-z][a-z0-9-]{0,28}[a-z0-9]$/;
+        if (!siteNameRegex.test(siteName) || siteName.includes("--")) {
+          alert("Invalid site name. Use lowercase letters, numbers, and hyphens only. 2-30 characters, no double hyphens, cannot start or end with a hyphen.");
+          submitButton.disabled = false;
+          submitButton.innerText = originalButtonText;
+          submitButton.style.opacity = "";
+          submitButton.style.cursor = "";
+          return;
+        }
 
         console.log("Creating new site:", siteName);
 
@@ -594,8 +586,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         const providerInfo = await getCurrentProviderInfo();
         const provider = providerInfo ? providerInfo.provider : "unknown";
 
-        // Sanitize site name for use as repo name
-        const repo = siteName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+        // Site name is already validated and sanitized
+        const repo = siteName;
 
         const siteId = `${owner}/${repo}`;
 

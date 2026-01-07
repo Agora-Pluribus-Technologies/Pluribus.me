@@ -749,12 +749,10 @@ async function deployChanges(siteId) {
       console.log("Preparing to delete file:", existingFile);
       files.push({ filePath: existingFile.replace(".md", ".html"), action: "delete" });
       files.push({ filePath: existingFile, action: "delete" });
-      files.push({ filePath: existingFile + ".meta", action: "delete" });
     }
   }
 
   // Handle creates and updates: files in cache
-  const now = new Date().toISOString();
   for (const cacheItem of markdownCache) {
     console.log("Preparing to update file:", cacheItem.fileName);
     files.push({
@@ -766,22 +764,6 @@ async function deployChanges(siteId) {
       filePath: cacheItem.fileName,
       content: cacheItem.content,
       contentType: "text/markdown",
-    });
-
-    // Update modifiedAt and save metadata file
-    if (cacheItem.metadata) {
-      cacheItem.metadata.modifiedAt = now;
-    } else {
-      cacheItem.metadata = {
-        author: getStoredUsername() || "unknown",
-        createdAt: now,
-        modifiedAt: now,
-      };
-    }
-    files.push({
-      filePath: cacheItem.fileName + ".meta",
-      content: JSON.stringify(cacheItem.metadata, null, 2),
-      contentType: "application/json",
     });
   }
 

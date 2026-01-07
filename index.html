@@ -92,7 +92,11 @@
           <form id="createSiteForm">
             <div class="form-group">
               <label for="siteName">Site Name</label>
-              <input type="text" class="form-control" id="siteName" placeholder="Enter site name" required>
+              <div class="input-group">
+                <span class="input-group-addon" id="siteNamePrefix"></span>
+                <input type="text" class="form-control" id="siteName" placeholder="my-site" required pattern="[a-z][a-z0-9-]{0,28}[a-z0-9]" maxlength="30">
+              </div>
+              <p class="help-block" style="margin-top: 5px; font-size: 12px;">Lowercase letters, numbers, and hyphens only. 2-30 characters.</p>
             </div>
           </form>
         </div>
