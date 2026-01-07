@@ -1051,10 +1051,10 @@ function showAlertBar(message, isSuccess) {
   alertBar.textContent = message;
   alertBar.className = "alert-bar show " + (isSuccess ? "success" : "error");
 
-  // Auto-hide after 5 seconds
+  // Auto-hide after 3 seconds
   setTimeout(() => {
     alertBar.className = "alert-bar";
-  }, 5000);
+  }, 3000);
 }
 
 async function checkSiteAvailability() {
