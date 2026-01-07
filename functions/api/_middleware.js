@@ -33,6 +33,12 @@ export async function onRequest(context) {
     return next();
   }
 
+  // Skip Turnstile validation for collaborators endpoints
+  const url = new URL(request.url);
+  if (url.pathname === "/api/collaborators") {
+    return next();
+  }
+
   // Get the Turnstile secret key from environment
   const secretKey = env.TURNSTILE_SECRET_KEY;
   if (!secretKey) {

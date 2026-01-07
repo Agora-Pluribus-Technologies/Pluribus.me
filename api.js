@@ -898,13 +898,9 @@ async function getCollaborators(siteId) {
 }
 
 async function addCollaborator(siteId, username) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/collaborators", {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ siteId, username }),
   });
 
@@ -918,11 +914,9 @@ async function addCollaborator(siteId, username) {
 
 async function removeCollaborator(siteId, userId) {
   const params = new URLSearchParams({ siteId, userId });
-  const headers = await getHeadersWithTurnstile();
 
   const response = await fetch(`/api/collaborators?${params.toString()}`, {
     method: "DELETE",
-    headers,
   });
 
   if (!response.ok) {
