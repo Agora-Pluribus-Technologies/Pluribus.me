@@ -39,24 +39,20 @@ export async function onRequestGet(context) {
 
   console.log("File path:", filePath);
 
-  // Look up site configuration in KV to verify the site exists
-  const cfgJson = await env.SITES.get(`site:${siteId}`);
-  if (!cfgJson) {
+  // Look up site configuration in D1 to verify the site exists
+  const cfg = await env.USERS_DB.prepare(
+    "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
+  ).bind(siteId).first();
+
+  if (!cfg) {
     // Fail closed: if we don't know this site, return 404
     return new Response("Unknown site", { status: 404 });
   }
 
-  let cfg;
-  try {
-    cfg = JSON.parse(cfgJson);
-  } catch {
-    return new Response("Invalid site config", { status: 500 });
-  }
-
   console.log("Site config:", cfg);
 
-  // Get basePath from config (defaults to "/public")
-  let basePath = cfg.basePath || "/public";
+  // basePath is always "/public"
+  let basePath = "/public";
 
   // Normalize basePath
   if (basePath.startsWith("/")) basePath = basePath.slice(1);

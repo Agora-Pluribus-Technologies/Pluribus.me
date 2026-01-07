@@ -44,17 +44,13 @@ export async function onRequestGet(context) {
     return new Response("Invalid path characters", { status: 400 });
   }
 
-  // Verify the site exists in KV
-  const cfgJson = await env.SITES.get(`site:${siteId}`);
-  if (!cfgJson) {
-    return new Response("Site not found", { status: 404 });
-  }
+  // Verify the site exists in D1
+  const cfg = await env.USERS_DB.prepare(
+    "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
+  ).bind(siteId).first();
 
-  let cfg;
-  try {
-    cfg = JSON.parse(cfgJson);
-  } catch {
-    return new Response("Invalid site config", { status: 500 });
+  if (!cfg) {
+    return new Response("Site not found", { status: 404 });
   }
 
   // Fetch the base index.html to serve the editor
@@ -73,7 +69,7 @@ export async function onRequestGet(context) {
     username,
     siteName: site,
     pagePath,
-    displayName: cfg.displayName || site,
+    displayName: cfg.repo || site,
   };
 
   // Escape < and > to prevent script tag breakout (defense-in-depth)

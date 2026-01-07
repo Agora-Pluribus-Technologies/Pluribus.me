@@ -29,16 +29,13 @@ export async function onRequestGet(context) {
       sites: [],
     };
 
-    // Get all user's sites from KV
-    const sitePrefix = `site:${usernameLower}/`;
-    const sitesList = await env.SITES.list({ prefix: sitePrefix });
+    // Get all user's sites from D1
+    const sitesResult = await env.USERS_DB.prepare(
+      "SELECT siteId, owner, repo FROM Sites WHERE owner = ?"
+    ).bind(usernameLower).all();
 
-    for (const key of sitesList.keys) {
-      const siteConfigJson = await env.SITES.get(key.name);
-      if (!siteConfigJson) continue;
-
-      const siteConfig = JSON.parse(siteConfigJson);
-      const siteId = key.name.replace("site:", "");
+    for (const siteConfig of sitesResult.results || []) {
+      const siteId = siteConfig.siteId;
 
       const siteData = {
         config: siteConfig,

@@ -16,9 +16,8 @@ The Service is intended for individuals 13 years of age or older.
 
 By using the Service, you represent that:
 
-You are at least 13 years old, and
-
-You meet the minimum age requirements of the OAuth authentication provider you use to sign in.
+* You are at least 13 years old, and
+* You meet the minimum age requirements of the OAuth authentication provider you use to sign in.
 
 If we become aware that a user is under 13, we will terminate the account and delete associated data.
 

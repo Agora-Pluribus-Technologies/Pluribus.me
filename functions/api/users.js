@@ -136,12 +136,13 @@ export async function onRequestDelete(context) {
   }
 
   try {
-    // 1. Delete all user's sites from KV and R2
-    const sitePrefix = `site:${usernameLower}/`;
-    const sitesList = await env.SITES.list({ prefix: sitePrefix });
+    // 1. Delete all user's sites from D1 and R2
+    const sitesResult = await env.USERS_DB.prepare(
+      "SELECT siteId FROM Sites WHERE owner = ?"
+    ).bind(usernameLower).all();
 
-    for (const key of sitesList.keys) {
-      const siteId = key.name.replace("site:", "");
+    for (const site of sitesResult.results || []) {
+      const siteId = site.siteId;
 
       // Delete all R2 files for this site
       try {
@@ -156,9 +157,16 @@ export async function onRequestDelete(context) {
         console.error(`Error deleting R2 files for site ${siteId}:`, r2Error);
       }
 
-      // Delete site config from KV
-      await env.SITES.delete(key.name);
-      console.log(`Deleted site config: ${key.name}`);
+      // Delete collaborators for this site
+      await env.USERS_DB.prepare(
+        "DELETE FROM Collaborators WHERE siteId = ?"
+      ).bind(siteId).run();
+
+      // Delete site config from D1
+      await env.USERS_DB.prepare(
+        "DELETE FROM Sites WHERE siteId = ?"
+      ).bind(siteId).run();
+      console.log(`Deleted site config: ${siteId}`);
     }
 
     // 2. Delete user from database

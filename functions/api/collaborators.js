@@ -26,12 +26,15 @@ export async function onRequestGet(context) {
         SELECT siteId FROM Collaborators WHERE userId = ?
       `).bind(user.id).all();
 
-      // Fetch full site configs for each site
+      // Fetch full site configs for each site from D1
       const sharedSites = [];
       for (const row of result.results || []) {
-        const siteConfig = await env.SITES.get(`site:${row.siteId}`);
-        if (siteConfig) {
-          sharedSites.push(JSON.parse(siteConfig));
+        const site = await env.USERS_DB.prepare(
+          "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
+        ).bind(row.siteId).first();
+        if (site) {
+          site.displayName = site.repo;
+          sharedSites.push(site);
         }
       }
 
@@ -97,9 +100,16 @@ export async function onRequestPost(context) {
     }
 
     // Check if site exists
-    const siteConfig = await env.SITES.get(`site:${siteId}`);
-    if (!siteConfig) {
+    const site = await env.USERS_DB.prepare(
+      "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
+    ).bind(siteId).first();
+    if (!site) {
       return new Response("Site not found", { status: 404 });
+    }
+
+    // Check if user is the site owner (can't add owner as collaborator)
+    if (site.owner.toLowerCase() === username.toLowerCase()) {
+      return new Response("Cannot add site owner as collaborator", { status: 400 });
     }
 
     // Check if already a collaborator
@@ -109,12 +119,6 @@ export async function onRequestPost(context) {
 
     if (existing) {
       return new Response("User is already a collaborator", { status: 409 });
-    }
-
-    // Check if user is the site owner (can't add owner as collaborator)
-    const site = JSON.parse(siteConfig);
-    if (site.owner.toLowerCase() === username.toLowerCase()) {
-      return new Response("Cannot add site owner as collaborator", { status: 400 });
     }
 
     // Add the collaborator
