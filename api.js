@@ -225,14 +225,14 @@ const GITLAB_CLIENT_ID = "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf
 const GITLAB_REDIRECT_URI = "https://pluribus.me/gitlab/oauth/callback";
 const GITLAB_DEV_CLIENT_ID = "31f7d88be4728aeffa2afa1ec6075b959aadf4e4015cd4afa725815a083ece66";
 const GITLAB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/gitlab/oauth/callback";
-const GITLAB_CLIENT_SCOPE = "api";
+const GITLAB_CLIENT_SCOPE = "read_user";
 
 const GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize";
 const GITHUB_CLIENT_ID = "Ov23liqELtwrv29MS9Wc";
 const GITHUB_REDIRECT_URI = "https://pluribus.me/github/oauth/callback";
 const GITHUB_DEV_CLIENT_ID = "Ov23liwXpCsvFNlZJ0x8";
 const GITHUB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/github/oauth/callback";
-const GITHUB_CLIENT_SCOPE = "repo user delete_repo";
+const GITHUB_CLIENT_SCOPE = "read:user";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_CLIENT_ID = "8624161102-4guo9djint6glfkl2e6detjhlgoe3iv2.apps.googleusercontent.com";
