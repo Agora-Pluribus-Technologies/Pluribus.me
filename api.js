@@ -294,7 +294,7 @@ function displayLoginButtons() {
   // GitHub login button
   var githubLoginButton = document.createElement("button");
   githubLoginButton.classList.add("btn");
-  githubLoginButton.innerText = "Sign in with GitHub";
+  githubLoginButton.innerHTML = '<img src="/assets/Octicons-mark-github.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle; filter: invert(1);"> Sign in with GitHub';
   githubLoginButton.style.padding = "10px 18px";
   githubLoginButton.style.cursor = "pointer";
 
@@ -323,7 +323,7 @@ function displayLoginButtons() {
   // GitLab login button
   var gitlabLoginButton = document.createElement("button");
   gitlabLoginButton.classList.add("btn");
-  gitlabLoginButton.innerText = "Sign in with GitLab";
+  gitlabLoginButton.innerHTML = '<img src="/assets/GitLab_icon.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;"> Sign in with GitLab';
   gitlabLoginButton.style.padding = "10px 18px";
   gitlabLoginButton.style.cursor = "pointer";
 
@@ -354,7 +354,7 @@ function displayLoginButtons() {
   // Google login button
   var googleLoginButton = document.createElement("button");
   googleLoginButton.classList.add("btn");
-  googleLoginButton.innerText = "Sign in with Google";
+  googleLoginButton.innerHTML = '<img src="/assets/Google_G_logo.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;"> Sign in with Google';
   googleLoginButton.style.padding = "10px 18px";
   googleLoginButton.style.cursor = "pointer";
 
