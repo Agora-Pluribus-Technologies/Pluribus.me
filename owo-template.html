@@ -101,6 +101,35 @@
       max-width: 100%;
     }
 
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      background-color: #252525;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #404040;
+    }
+
+    th {
+      background-color: #383838;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover {
+      background-color: #2a2a2a;
+    }
+
     @media (max-width: 768px) {
       .menu-link {
         font-size: 14pt;
