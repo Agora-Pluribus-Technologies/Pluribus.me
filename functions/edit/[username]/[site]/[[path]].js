@@ -53,9 +53,9 @@ export async function onRequestGet(context) {
     return new Response("Site not found", { status: 404 });
   }
 
-  // Fetch the base index.html to serve the editor
+  // Fetch the builder.html to serve the editor
   // We'll inject the edit context as a script
-  const indexHtmlResponse = await env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)));
+  const indexHtmlResponse = await env.ASSETS.fetch(new Request(new URL("/builder.html", url.origin)));
 
   if (!indexHtmlResponse.ok) {
     return new Response("Failed to load editor", { status: 500 });

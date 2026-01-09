@@ -245,11 +245,14 @@ async function formatCommitHistory(siteId) {
 
   let html = "";
 
-  for (const commit of commits) {
+  for (let i = 0; i < commits.length; i++) {
+    const commit = commits[i];
     const date = new Date(commit.commit.author.timestamp * 1000);
     const dateStr = date.toLocaleDateString() + " " + date.toLocaleTimeString();
     const shortSha = commit.oid.substring(0, 7);
+    const messageFirstLine = commit.commit.message.split('\n')[0];
     const message = escapeHtml(commit.commit.message);
+    const messageAttr = escapeHtml(messageFirstLine);
     const author = escapeHtml(commit.commit.author.name);
 
     html += `<div style="border-bottom: 1px solid #ddd; padding: 10px 0;">`;
@@ -258,7 +261,13 @@ async function formatCommitHistory(siteId) {
     html += `<span style="color: #888; font-size: 12px;">${dateStr}</span>`;
     html += `</div>`;
     html += `<div style="margin-top: 5px;">${message}</div>`;
-    html += `<div style="color: #888; font-size: 12px; margin-top: 3px;">by ${author}</div>`;
+    html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">`;
+    html += `<span style="color: #888; font-size: 12px;">by ${author}</span>`;
+    // Don't show revert button for the most recent commit (index 0)
+    if (i > 0) {
+      html += `<button class="btn btn-xs btn-warning revert-btn" data-commit-oid="${commit.oid}" data-commit-message="${messageAttr}">Revert to this</button>`;
+    }
+    html += `</div>`;
     html += `</div>`;
   }
 
@@ -342,6 +351,47 @@ async function getTreeFiles(dir, treeOid, basePath) {
   }
 
   return files;
+}
+
+// Get all markdown files at a specific commit with their content
+async function getMarkdownFilesAtCommit(siteId, commitOid) {
+  const dir = getRepoDir(siteId);
+  const markdownFiles = [];
+
+  try {
+    // Get the commit
+    const commitObj = await git.readCommit({ fs, dir, oid: commitOid });
+    const treeOid = commitObj.commit.tree;
+
+    // Get all files in the tree
+    const files = await getTreeFiles(dir, treeOid, "");
+
+    // Filter for markdown files in public/ directory and read their content
+    for (const [filepath, blobOid] of Object.entries(files)) {
+      if (filepath.startsWith("public/") && filepath.endsWith(".md")) {
+        try {
+          const { blob } = await git.readBlob({ fs, dir, oid: blobOid });
+          const content = new TextDecoder().decode(blob);
+
+          // Extract display name from filename
+          const fileName = filepath.replace("public/", "").replace(".md", "");
+          const displayName = fileName === "index" ? "Home" : fileName;
+
+          markdownFiles.push({
+            fileName: filepath,
+            displayName: displayName,
+            content: content
+          });
+        } catch (blobError) {
+          console.error("Error reading blob for", filepath, blobError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error getting markdown files at commit:", error);
+  }
+
+  return markdownFiles;
 }
 
 // Format commit changes for display

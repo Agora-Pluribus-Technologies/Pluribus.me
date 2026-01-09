@@ -310,7 +310,12 @@
       });
 
       // https://pluribus.me/s/username/sitename/path/to/page.html --> path/to/page
-      var pathName = window.location.pathname.split('/').slice(4).join("/").replace(".html", "");
+      let pathName;
+      if (document.location.origin.contains("pluribus.me") || document.location.origin.contains("pluribus-me.pages.dev")) {
+        pathName = window.location.pathname.split('/').slice(4).join("/").replace(".html", "");
+      } else {
+        pathName = window.location.pathname.substring(1).replace(".html", "");
+      }
       if (!pathName) {
         pathName = "index";
       }

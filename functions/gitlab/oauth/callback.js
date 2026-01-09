@@ -51,7 +51,7 @@ export async function onRequestGet(context) {
   }
 
   // Pass token info via fragment (#token=...) so it doesn't get logged in server logs
-  const redirectUrl = new URL(url.origin);
+  const redirectUrl = new URL("/builder.html", url.origin);
   redirectUrl.hash = `gitlab_access_token=${tokenData.access_token}`;
 
   return Response.redirect(redirectUrl.toString(), 302);

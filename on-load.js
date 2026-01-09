@@ -681,12 +681,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           "You have unsaved changes. Are you sure you want to go back? All unsaved changes will be lost."
         )
       ) {
-        window.location.href = document.location.origin;
+        window.location.href = document.location.origin + "/builder.html";
       } else {
         document.getElementById("backButton").blur();
       }
     } else {
-      window.location.href = document.location.origin;
+      window.location.href = document.location.origin + "/builder.html";
     }
   });
 
@@ -933,6 +933,92 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
 
+  // Handle revert button click (event delegation)
+  document
+    .getElementById("historyList")
+    .addEventListener("click", async function (e) {
+      const revertBtn = e.target.closest(".revert-btn");
+      if (!revertBtn) return;
+
+      e.preventDefault();
+
+      const commitOid = revertBtn.dataset.commitOid;
+      const commitMessage = revertBtn.dataset.commitMessage;
+      const shortSha = commitOid.substring(0, 7);
+
+      if (!commitOid || !currentSiteId) return;
+
+      // Confirm with the user
+      if (!confirm(`Are you sure you want to revert to commit ${shortSha}?\n\nThis will replace your current content with the content from that commit and deploy immediately.`)) {
+        return;
+      }
+
+      // Disable the button and show loading state
+      revertBtn.disabled = true;
+      revertBtn.textContent = "Reverting...";
+
+      try {
+        // Get markdown files at the target commit
+        const markdownFiles = await getMarkdownFilesAtCommit(currentSiteId, commitOid);
+
+        if (markdownFiles.length === 0) {
+          alert("No content found at this commit.");
+          revertBtn.disabled = false;
+          revertBtn.textContent = "Revert to this";
+          return;
+        }
+
+        // Clear the current cache and repopulate with files from the commit
+        markdownCache.length = 0;
+        for (const file of markdownFiles) {
+          addOrUpdateCache(file.fileName, file.displayName, file.content);
+        }
+
+        // Close the history modal
+        $("#historyModal").modal("hide");
+
+        // Create revert commit message
+        const revertMessage = `Revert to commit ${shortSha}: ${commitMessage}`;
+
+        // Create git commit with the revert message
+        const commitSha = await gitCommit(currentSiteId, revertMessage);
+        console.log("Revert commit created:", commitSha);
+
+        // Deploy changes to R2 storage
+        const deploySuccess = await deployChanges(currentSiteId);
+
+        // Save git history to R2 for persistence
+        if (deploySuccess) {
+          await saveGitHistoryToR2(currentSiteId);
+          console.log("Git history saved to R2");
+        }
+
+        // Reset modified flag after successful deployment
+        modified = false;
+        updateDeployButtonState();
+
+        // Update the page menubar with the new pages
+        await populateMenubar(currentSiteId);
+
+        // Select the first page by clicking on it
+        const firstMenuItem = document.querySelector(".menubar-item .menubar-item-text");
+        if (firstMenuItem) {
+          firstMenuItem.click();
+        }
+
+        if (deploySuccess) {
+          showAlertBar("Successfully reverted to commit " + shortSha, true);
+        } else {
+          showAlertBar("Revert commit created but deploy failed", false);
+        }
+      } catch (error) {
+        console.error("Error reverting to commit:", error);
+        alert("Failed to revert: " + error.message);
+        revertBtn.disabled = false;
+        revertBtn.textContent = "Revert to this";
+      }
+    });
+
   // Handle add new page button click
   document
     .getElementById("addNewPageButton")
@@ -989,13 +1075,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         }
 
-        await triggerCreateNewSiteGitlab(displayName);
+        await triggerCreateNewSite(displayName);
         await populateMenubar(currentSiteId);
       });
     });
 });
 
-async function triggerCreateNewSiteGitlab(displayName) {
+async function triggerCreateNewSite(displayName) {
   if (displayName) {
     // Sanitize for file name: lowercase and replace spaces with hyphens
     const sanitizedFileName = displayName.toLowerCase().replace(/\s+/g, "-");

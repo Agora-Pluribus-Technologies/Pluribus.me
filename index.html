@@ -4,317 +4,209 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pluribus.me Website Builder</title>
+  <title>Pluribus.me - Collaborative Website Builder & Publisher</title>
   <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css?family=Montserrat:400,700" rel="stylesheet" type="text/css" />
-  <link href="https://fonts.googleapis.com/css?family=Crimson+Text:400,400italic" rel="stylesheet" type="text/css" />
-  <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
-  <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/theme/toastui-editor-dark.min.css" />
-  <link rel="stylesheet" href="/editor.css" />
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
-  <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
-  <script src="https://bundle.run/buffer@6.0.3"></script>
-  <script>window.Buffer = buffer.Buffer;</script>
-  <script src="https://unpkg.com/@isomorphic-git/lightning-fs"></script>
-  <script src="https://unpkg.com/isomorphic-git"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
-  <script src="/local-dev.js"></script>
-  <script src="/api.js"></script>
-  <script src="/git.js"></script>
-  <script src="/site-builder.js"></script>
-  <script src="/on-load.js"></script>
+  <style>
+    body {
+      background-color: #181818;
+      color: #fff;
+      font-family: 'Montserrat', Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 60px 20px 0px;
+    }
+
+    .brand {
+      font-size: 56px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: gold;
+    }
+
+    .subheading {
+      font-size: 24px;
+      font-weight: 400;
+      color: #b0b0b0;
+      margin-bottom: 40px;
+    }
+
+    .tagline {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      line-height: 1.3;
+    }
+
+    .description {
+      font-size: 18px;
+      color: #b0b0b0;
+      max-width: 640px;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    .audience {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 40px;
+      font-style: italic;
+    }
+
+    .btn-login {
+      background-color: gold;
+      color: black;
+      margin: 32px 0px 32px 0px;
+      padding: 16px 48px;
+      font-size: 18px;
+      font-weight: 700;
+      border: none;
+      border-radius: 4px;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-login:hover {
+      background-color: #ffe780;
+      color: black;
+      text-decoration: none;
+    }
+
+    .features {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 24px;
+      padding: 40px 20px 60px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .feature {
+      background-color: #252525;
+      border-radius: 8px;
+      padding: 24px;
+      width: 340px;
+      text-align: left;
+    }
+
+    .feature h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #fff;
+      text-align: center;
+    }
+
+    .feature p {
+      font-size: 14px;
+      color: #a0a0a0;
+      margin: 0;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: #888;
+      font-size: 14px;
+      margin-top: auto;
+    }
+
+    footer a {
+      color: gold;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: #ffe780;
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      .brand {
+        font-size: 40px;
+      }
+
+      .subheading {
+        font-size: 18px;
+      }
+
+      .tagline {
+        font-size: 26px;
+      }
+
+      .description {
+        font-size: 16px;
+      }
+
+      .btn-login {
+        margin: 22px 0px 22px 0px;
+        padding: 14px 36px;
+        font-size: 16px;
+      }
+
+      .feature {
+        width: 100%;
+        max-width: 400px;
+      }
+    }
+  </style>
 </head>
 
 <body>
-  <div id="turnstile-container"></div>
-
-  <div id="alertBar" class="alert-bar"></div>
-
-  <!-- User Menu (top right) -->
-  <div id="userMenuContainer" style="display: none;">
-    <div class="dropdown">
-      <button id="userMenuButton" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-        Welcome back, <span id="userMenuUsername"></span> <span class="caret"></span>
-      </button>
-      <ul class="dropdown-menu dropdown-menu-right">
-        <li><a href="#" id="userSettingsLink" data-toggle="modal" data-target="#userSettingsModal">User Settings</a></li>
-        <li role="separator" class="divider"></li>
-        <li><a href="#" id="signOutLink">Sign Out</a></li>
-      </ul>
-    </div>
+  <div class="hero">
+    <div class="brand">Pluribus.me</div>
+    <div class="subheading">Collaborative Website Builder & Publisher</div>
+    <h1 class="tagline">Build websites together<br>Fast, simple, and versioned</h1>
+    <p class="description">A collaborative website builder for teams, communities, and creators who want Markdown, version history, and friction-free publishing.</p>
+    <a href="/builder.html" class="btn-login">Get Started</a>
   </div>
-  <main id="main" class="content-area" style="margin: 0 20px 0 20px;">
-    <div id="mainContent" style="display: flex; flex: 1; overflow: hidden;">
-      <div id="editorSection" style="flex: 1;">
-        <div id="sites-list-panel">
-          <div id="sites-list-header" style="display: none">
-            <h2>Your Sites</h2>
-            <div style="display: flex; margin-bottom: 8px;">
-              <button id="createSiteButton" class="site-button btn btn-primary" style="flex: 1;" data-toggle="modal" data-target="#createSiteModal">Create New Site</button>
-            </div>
-          </div>
-          <div id="sites-list"></div>
-        </div>
-        <div id="editorContainer" style="display: none">
-          <div id="editor-topbar" style="text-align: center; margin-bottom: 10px; margin-top: 10px;">
-            <button id="backButton" class="btn btn-warning">Back</button>
-            <button id="visitSiteButton" class="btn btn-info">Visit Site</button>
-            <button id="historyButton" class="btn btn-default">History</button>
-            <button id="siteSettingsButton" class="btn btn-default">Settings</button>
-            <button id="deployButton" class="btn btn-success">Deploy Site</button>
-          </div>
-          <div id="last-updated-time-label" style="text-align: right; display: inline-block"></div>
-          <div id="pageMenubar">
-            <div id="pageMenubarContent">
-              <button id="addNewPageButton" class="menubar-item">+</button>
-            </div>
-          </div>
-          <div id="editor">
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
 
-  <!-- Create Site Modal -->
-  <div class="modal fade" id="createSiteModal" tabindex="-1" role="dialog" aria-labelledby="createSiteModalLabel">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title" id="createSiteModalLabel">Create New Site</h4>
-        </div>
-        <div class="modal-body">
-          <form id="createSiteForm">
-            <div class="form-group">
-              <label for="siteName">Site Name</label>
-              <div class="input-group">
-                <span class="input-group-addon" id="siteNamePrefix"></span>
-                <input type="text" class="form-control" id="siteName" placeholder="my-site" required pattern="[a-z][a-z0-9-]{0,28}[a-z0-9]" maxlength="30">
-              </div>
-              <p class="help-block" style="margin-top: 5px; font-size: 12px;">Lowercase letters, numbers, and hyphens only. 2-30 characters.</p>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button id="create-site-button" type="submit" form="createSiteForm" class="btn btn-primary">Create Site</button>
-          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-        </div>
-      </div>
+  <div class="features">
+    <div class="feature">
+      <h3>Rich Text Editing</h3>
+      <p>Write content like a document, not a database.</p>
+    </div>
+    <div class="feature">
+      <h3>Built-In Version History</h3>
+      <p>Every edit is saved. Roll back instantly.</p>
+    </div>
+    <div class="feature">
+      <h3>Collaboration</h3>
+      <p>Work together to build your site.</p>
+    </div>
+    <div class="feature">
+      <h3>Instant Publishing</h3>
+      <p>Changes go live the moment you're ready.</p>
+    </div>
+    <div class="feature">
+      <h3>Portable by Design</h3>
+      <p>Your content isn't trapped — export anytime.</p>
     </div>
   </div>
 
-  <!-- Commit Modal -->
-  <div class="modal fade" id="commitModal" tabindex="-1" role="dialog" aria-labelledby="commitModalLabel">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title" id="commitModalLabel">Review Changes & Deploy</h4>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="commitMessage">Commit Message</label>
-            <input type="text" class="form-control" id="commitMessage" placeholder="Describe your changes..." required>
-          </div>
-          <div class="form-group">
-            <label>Changes to be committed:</label>
-            <div id="changesPreview" style="max-height: 300px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px;">
-              <p style="color: #888;">Loading changes...</p>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button id="confirmCommitButton" type="button" class="btn btn-success">Commit & Deploy</button>
-          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Commit History Modal -->
-  <div class="modal fade" id="historyModal" tabindex="-1" role="dialog" aria-labelledby="historyModalLabel">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title" id="historyModalLabel">Commit History</h4>
-        </div>
-        <div class="modal-body">
-          <div id="historyList" style="max-height: 400px; overflow-y: auto;">
-            <p style="color: #888;">Loading commit history...</p>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Username Selection Modal -->
-  <div class="modal fade" id="usernameModal" tabindex="-1" role="dialog" aria-labelledby="usernameModalLabel" data-backdrop="static" data-keyboard="false">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4 class="modal-title" id="usernameModalLabel">Choose Your Username</h4>
-        </div>
-        <div class="modal-body">
-          <p>Welcome! Please choose a username. This will be used to identify your sites and <strong>cannot be changed later</strong>.</p>
-          <form id="usernameForm">
-            <div class="form-group">
-              <label for="usernameInput">Username</label>
-              <input type="text" class="form-control" id="usernameInput" placeholder="Enter username" required pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,28}[a-zA-Z0-9]" minlength="3" maxlength="30">
-              <p class="help-block">3-30 characters. Letters, numbers, and hyphens only. Cannot start or end with a hyphen.</p>
-              <p id="usernameError" class="text-danger" style="display: none;"></p>
-              <p id="usernameSuccess" class="text-success" style="display: none;"></p>
-            </div>
-            <div class="checkbox">
-              <label>
-                <input type="checkbox" id="acceptTermsCheckbox" required>
-                I agree to the <a href="terms-of-use.html" target="_blank">Terms of Use</a> and <a href="privacy-policy.html" target="_blank">Privacy Policy</a>
-              </label>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button id="submitUsernameButton" type="submit" form="usernameForm" class="btn btn-primary" disabled>Confirm Username</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- User Settings Modal -->
-  <div class="modal fade" id="userSettingsModal" tabindex="-1" role="dialog" aria-labelledby="userSettingsModalLabel">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title" id="userSettingsModalLabel">User Settings</h4>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Username</label>
-            <p id="settingsUsername" class="form-control-static" style="font-weight: bold;"></p>
-          </div>
-          <hr>
-          <div class="form-group">
-            <label>Download Your Data</label>
-            <p class="help-block">Download all your sites and data as a ZIP file.</p>
-            <button id="downloadDataButton" class="btn btn-info">Download All Data</button>
-          </div>
-          <hr>
-          <div class="form-group">
-            <label class="text-danger">Danger Zone</label>
-            <p class="help-block">Permanently delete your account and all associated data. This action cannot be undone.</p>
-            <button id="deleteAccountButton" class="btn btn-danger">Delete Account</button>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Delete Account Confirmation Modal -->
-  <div class="modal fade" id="deleteAccountModal" tabindex="-1" role="dialog" aria-labelledby="deleteAccountModalLabel">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title text-danger" id="deleteAccountModalLabel">Delete Account</h4>
-        </div>
-        <div class="modal-body">
-          <p><strong>Warning:</strong> This will permanently delete:</p>
-          <ul>
-            <li>Your user account</li>
-            <li>All your sites and their content</li>
-            <li>All uploaded images</li>
-            <li>All commit history</li>
-          </ul>
-          <p class="text-danger"><strong>This action cannot be undone.</strong></p>
-          <div class="form-group">
-            <label for="deleteConfirmInput">Type your username <strong><span id="deleteConfirmUsername"></span></strong> to confirm:</label>
-            <input type="text" class="form-control" id="deleteConfirmInput" placeholder="Enter your username">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-          <button id="confirmDeleteAccountButton" class="btn btn-danger" disabled>Delete My Account</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Site Settings Modal -->
-  <div class="modal fade" id="siteSettingsModal" tabindex="-1" role="dialog" aria-labelledby="siteSettingsModalLabel">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title" id="siteSettingsModalLabel">Site Settings</h4>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Site Name</label>
-            <p id="siteSettingsName" class="form-control-static" style="font-weight: bold;"></p>
-          </div>
-          <div class="form-group">
-            <label>Owner</label>
-            <p id="siteSettingsOwner" class="form-control-static"></p>
-          </div>
-          <hr>
-          <div class="form-group">
-            <label>Collaborators</label>
-            <p class="help-block">Collaborators can edit this site.</p>
-            <div id="collaboratorsList" style="margin-bottom: 10px;">
-              <p style="color: #888;">Loading collaborators...</p>
-            </div>
-            <div id="addCollaboratorSection" style="display: none;">
-              <div class="input-group">
-                <input type="text" class="form-control" id="collaboratorUsernameInput" placeholder="Enter username">
-                <span class="input-group-btn">
-                  <button id="addCollaboratorButton" class="btn btn-primary" type="button">Add</button>
-                </span>
-              </div>
-              <p id="collaboratorError" class="text-danger" style="display: none; margin-top: 5px;"></p>
-              <p id="collaboratorSuccess" class="text-success" style="display: none; margin-top: 5px;"></p>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="footer" style="text-align: center;">
+  <footer>
     <p>
-      Pluribus.me Site Builder v2026.1.6 (pre-Alpha)
+      <a href="https://codeberg.org/Agora-Pluribus-Technologies/Pluribus.me" target="_blank">Source code</a> &bull;
+      <a href="/about.html" target="_blank">About</a> &bull;
+      <a href="https://agorapluribus.com/#support-me" target="_blank">Support Me</a>
     </p>
     <p>
-      <a href="https://codeberg.org/Agora-Pluribus-Technologies/Pluribus.me" target="_blank">Source code</a> • <a href="/about.html" target="_blank">About</a> • <a href="https://agorapluribus.com/#support-me" target="_blank">Support Me</a>
+      <a href="/terms-of-use.html">Terms of Use</a> &bull;
+      <a href="/privacy-policy.html">Privacy Policy</a>
     </p>
-    <p>
-      <a href="/terms-of-use.html">Terms of Use</a> • <a href="/privacy-policy.html">Privacy Policy</a>
-    </p>
-  </div>
+  </footer>
 </body>
 
 </html>
