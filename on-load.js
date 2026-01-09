@@ -977,6 +977,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Close the history modal
         $("#historyModal").modal("hide");
 
+        // Sync cache to git working directory before committing
+        await syncCacheToGit(currentSiteId, markdownCache, imageCache);
+
         // Create revert commit message
         const revertMessage = `Revert to commit ${shortSha}: ${commitMessage}`;
 
