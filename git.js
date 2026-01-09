@@ -227,7 +227,7 @@ async function gitLog(siteId, depth = 10) {
   const dir = getRepoDir(siteId);
 
   try {
-    const commits = await git.log({ fs, dir, depth });
+    const commits = await git.log({ fs, dir, depth, ref: "HEAD" });
     return commits;
   } catch (error) {
     console.error("Error getting git log:", error);
