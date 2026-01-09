@@ -996,10 +996,6 @@ document.addEventListener("DOMContentLoaded", async function () {
           console.log("Git history saved to R2");
         }
 
-        // Reset modified flag after successful deployment
-        modified = false;
-        updateDeployButtonState();
-
         // Update the page menubar with the new pages
         await populateMenubar(currentSiteId);
 
@@ -1008,6 +1004,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (firstMenuItem) {
           firstMenuItem.click();
         }
+
+        // Reset modified flag after successful deployment
+        modified = false;
+        updateDeployButtonState();
 
         if (deploySuccess) {
           showAlertBar("Successfully reverted to commit " + shortSha, true);
