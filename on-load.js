@@ -188,7 +188,7 @@ async function openSiteInEditor(site, initialPage = "index") {
     addOrUpdateCache(
       "public/index.md",
       "Home",
-      "# Welcome to your Pluribus OwO Site!\n\nThis is your site's homepage. Edit this file to customize your site."
+      "# Welcome to your Agora Site!\n\nThis is your site's homepage. Edit this file to customize your site."
     );
     // Initialize empty imageCache
     imageCache = [];
