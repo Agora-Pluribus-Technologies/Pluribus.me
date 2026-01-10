@@ -513,7 +513,7 @@ nav {
 .image-upload-dropzone {
   border: 2px dashed #555;
   border-radius: 8px;
-  padding: 40px 20px;
+  padding: 10px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -854,5 +854,9 @@ nav {
   .html-embed-popup {
     min-width: 300px;
     max-width: 90vw;
+  }
+
+  .dropzone-icon {
+    font-size: 24px;
   }
 }
