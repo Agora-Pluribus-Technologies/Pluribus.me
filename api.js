@@ -222,21 +222,21 @@ async function deleteAllFilesFromR2(siteId) {
 
 const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
 const GITLAB_CLIENT_ID = "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf07e8800656";
-const GITLAB_REDIRECT_URI = "https://pluribus.me/gitlab/oauth/callback";
+const GITLAB_REDIRECT_URI = "https://agorapages.com/gitlab/oauth/callback";
 const GITLAB_DEV_CLIENT_ID = "31f7d88be4728aeffa2afa1ec6075b959aadf4e4015cd4afa725815a083ece66";
 const GITLAB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/gitlab/oauth/callback";
 const GITLAB_CLIENT_SCOPE = "read_user";
 
 const GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize";
 const GITHUB_CLIENT_ID = "Ov23liqELtwrv29MS9Wc";
-const GITHUB_REDIRECT_URI = "https://pluribus.me/github/oauth/callback";
+const GITHUB_REDIRECT_URI = "https://agorapages.com/github/oauth/callback";
 const GITHUB_DEV_CLIENT_ID = "Ov23liwXpCsvFNlZJ0x8";
 const GITHUB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/github/oauth/callback";
 const GITHUB_CLIENT_SCOPE = "read:user";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_CLIENT_ID = "8624161102-4guo9djint6glfkl2e6detjhlgoe3iv2.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = "https://pluribus.me/google/oauth/callback";
+const GOOGLE_REDIRECT_URI = "https://agorapages.com/google/oauth/callback";
 const GOOGLE_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/google/oauth/callback";
 const GOOGLE_CLIENT_SCOPE = "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
 
@@ -245,10 +245,10 @@ var GITHUB_USERNAME = null;
 var GOOGLE_USER_ID = null;
 var CURRENT_USERNAME = null;
 
-const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "pluribus.me.gitlab.oauth_token";
-const STORAGE_KEY_GITHUB_OAUTH_TOKEN = "pluribus.me.github.oauth_token";
-const STORAGE_KEY_GOOGLE_OAUTH_TOKEN = "pluribus.me.google.oauth_token";
-const STORAGE_KEY_USERNAME = "pluribus.me.username";
+const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "agorapages.com.gitlab.oauth_token";
+const STORAGE_KEY_GITHUB_OAUTH_TOKEN = "agorapages.com.github.oauth_token";
+const STORAGE_KEY_GOOGLE_OAUTH_TOKEN = "agorapages.com.google.oauth_token";
+const STORAGE_KEY_USERNAME = "agorapages.com.username";
 
 // Check if we have a token in the URL hash (from OAuth callback redirect)
 if (window.location.hash) {
@@ -533,68 +533,6 @@ function getStoredUsername() {
 function setStoredUsername(username) {
   CURRENT_USERNAME = username;
   sessionStorage.setItem(STORAGE_KEY_USERNAME, username);
-}
-
-async function getSitesGitLab() {
-  const gitlabUserId = await getGitlabUserId();
-  const gitlabSitesUrl = `https://gitlab.com/api/v4/users/${gitlabUserId}/projects`;
-  const payload = {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGitlab()}`,
-      "Cache-Control": "no-cache",
-    },
-  };
-
-  const response = await fetch(gitlabSitesUrl, payload);
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const responseJson = await response.json();
-
-  var sites = [];
-  for (const site of responseJson) {
-    const name = site.name.toLowerCase();
-    const description = site.description.toLowerCase();
-    if (description.includes("pluribus owo") && !name.includes("deletion_scheduled")) {
-      sites.push(site);
-    }
-  }
-
-  return sites;
-}
-
-async function getSitesGitHub() {
-  const githubUsername = await getGithubUsername();
-  const githubSitesUrl = `https://api.github.com/users/${githubUsername}/repos`;
-  const payload = {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGithub()}`
-    },
-  };
-
-  const response = await fetch(githubSitesUrl, payload);
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const responseJson = await response.json();
-
-  console.log("GitHub Repos:", responseJson);
-
-  var sites = [];
-  for (const site of responseJson) {
-    const description = site.description.toLowerCase();
-    if (description.includes("pluribus owo")) {
-      sites.push(site);
-    }
-  }
-
-  return sites;
 }
 
 async function getSites(owner) {

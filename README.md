@@ -1,4 +1,4 @@
-# Pluribus.me
+# AgoraPages
 
 Web-based simple all-in-one website building and publishing tool
 
@@ -10,7 +10,7 @@ Oauth2 login to GitHub or GitLab for cloud storage of generated site source code
 
 This repo is to be deployed on Cloudflare Pages.
 
-The users site(s) are created, edited, and generated entirely in-browser and deployed to pluribus.me through the Cloudflare Pages function.
+The users site(s) are created, edited, and generated entirely in-browser and deployed to agorapages.com through the Cloudflare Pages function.
 
 See the About page for more details on the file formats and folder structure: [about.md](about.md)
 
@@ -30,11 +30,11 @@ The application will be able to generate a downloadable zip file containing the 
 * Netlify (link the GitHub or GitLab repository directly, or do a zip file upload)
 * GitLab Pages (TODO: Add gitlab-ci.yml for GitLab Pages deployment)
 
-Website: [https://pluribus.me](https://pluribus.me)
+Website: [https://agorapages.com](https://agorapages.com)
 
 ## Mirrors:
-* [Codeberg](https://codeberg.org/Agora-Pluribus-Technologies/Pluribus.me)
-* [Framagit](https://framagit.org/agora-pluribus-technologies/pluribus.me)
-* [Disroot](https://git.disroot.org/Agora-Pluribus-Technologies/Pluribus.me)
-* [GitLab](https://gitlab.com/agora-pluribus-technologies/Pluribus-me)
-* [GitHub](https://github.com/Agora-Pluribus-Technologies/Pluribus.me)
+* [Codeberg](https://codeberg.org/Agora-Pluribus-Technologies/AgoraPages)
+* [Framagit](https://framagit.org/agora-pluribus-technologies/agorapages)
+* [Disroot](https://git.disroot.org/Agora-Pluribus-Technologies/AgoraPages)
+* [GitLab](https://gitlab.com/agora-pluribus-technologies/AgoraPages)
+* [GitHub](https://github.com/Agora-Pluribus-Technologies/AgoraPages)

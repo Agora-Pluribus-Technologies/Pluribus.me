@@ -339,12 +339,17 @@
 <body>
   <script>
     document.addEventListener("DOMContentLoaded", async function () {
-      // https://pluribus.me
+      // https://agorapages.com
       const origin = document.location.origin;
 
       // /s/username/sitename/path/to/page.html --> /s/username/sitename
-      const basePath = document.location.pathname.split('/').slice(0, 4).join("/");
-
+      let basePath;
+      if (document.location.origin.includes("agorapages.com") || document.location.origin.includes("pluribus-me.pages.dev")) {
+        basePath = document.location.pathname.split('/').slice(0, 4).join("/");
+      } else {
+        basePath = '';
+      }
+      
       const pagesJson = await fetchPagesJson(origin, basePath);
       const siteJson = await fetchSiteJson(origin, basePath);
       const siteName = siteJson ? siteJson.siteName : null;
@@ -487,9 +492,9 @@
         breaks: false,
       });
 
-      // https://pluribus.me/s/username/sitename/path/to/page.html --> path/to/page
+      // https://agorapages.com/s/username/sitename/path/to/page.html --> path/to/page
       let pathName;
-      if (document.location.origin.includes("pluribus.me") || document.location.origin.includes("pluribus-me.pages.dev")) {
+      if (document.location.origin.includes("agorapages.com") || document.location.origin.includes("pluribus-me.pages.dev")) {
         pathName = window.location.pathname.split('/').slice(4).join("/").replace(".html", "");
       } else {
         pathName = window.location.pathname.substring(1).replace(".html", "");
@@ -589,7 +594,7 @@
 
       // Powered by text
       const poweredBy = document.createElement("span");
-      poweredBy.innerHTML = 'This site is powered by <a href="https://pluribus.me" target="_blank">Pluribus.me</a>';
+      poweredBy.innerHTML = 'This site is powered by <a href="https://agorapages.com" target="_blank">AgoraPages.com</a>';
       footer.appendChild(poweredBy);
 
       // History link (only if enabled)

@@ -102,11 +102,11 @@ Continued use of the Service after changes become effective constitutes acceptan
 For questions about these Terms, contact us at:
 [https://forms.gle/f748mnWptBjNmsJw7](https://forms.gle/f748mnWptBjNmsJw7)
 
-# Pluribus.me DMCA Copyright Policy
+# AgoraPages DMCA Copyright Policy
 
 Effective date: January 6, 2026
 
-Pluribus.me (the “Service”) is operated by Agora Pluribus Technologies (“Company”). The Company respects the intellectual property rights of others and expects users of the Service to do the same.
+AgoraPages (the “Service”) is operated by Agora Pluribus Technologies (“Company”). The Company respects the intellectual property rights of others and expects users of the Service to do the same.
 
 In accordance with the Digital Millennium Copyright Act (“DMCA”), 17 U.S.C. § 512, the Company has adopted the following policy regarding claims of copyright infringement. The Company’s designated agent to receive notifications of claimed infringement (“Designated Agent”) is listed at the end of this policy.
 

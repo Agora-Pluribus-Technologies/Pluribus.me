@@ -2,15 +2,13 @@
 
 This website builder is intended to be a mobile-friendly web app that allows the user to create and edit webpages easily.
 
-How it works: This Oauth2 application can operate on behalf of a user's GitHub or GitLab account, and it allows for the creation, modification, and deletion of markdown files that are persisted in public git repositories on the user's account. When creating a Pluribus site, this app uses a Cloudflare Pages function to link to the user's files. In other words, for each Pluribus site, where the site is served (Cloudflare Pages function) is different from the location of the site's contents (the user's git repository). This distributed model is inspired by a tool created in Taiwan's g0v movement called [hackfoldr](https://github.com/hackfoldr/hackfoldr).
+How it works: This Oauth2 application can operate on behalf of a user's GitHub or GitLab account, and it allows for the creation, modification, and deletion of markdown files that are persisted in public git repositories on the user's account. When creating an Agora site, this app uses a Cloudflare Pages function to link to the user's files. In other words, for each Agora site, where the site is served (Cloudflare Pages function) is different from the location of the site's contents (the user's git repository). This distributed model is inspired by a tool created in Taiwan's g0v movement called [hackfoldr](https://github.com/hackfoldr/hackfoldr).
 
 Eventually, it will adhere to the below WIP specification.
 
-This application is not affiliated with the Apple TV original "Pluribus."
-
 ***
 
-## **Pluribus Openweb Object (OwO) Specification — v0.1 (Work in Progress)**
+## **Agora Openweb Object (OwO) Specification — v0.1 (Work in Progress)**
 
 **Author:** Michael Yee (Agora Pluribus Technologies)
 
@@ -18,13 +16,13 @@ This application is not affiliated with the Apple TV original "Pluribus."
 
 **License:** *Public Domain / CC0 1.0 Universal Dedication*
 
-**Website:** [pluribus.me](https://pluribus.me/)
+**Website:** [AgoraPages](https://agorapages.com/)
 
 ***
 
 ### **Overview**
 
-The **Pluribus Openweb Object (OwO)** format is a proposed open specification for a lightweight, decentralized, static-first, modular web publishing framework. Its purpose is to make it radically simple for anyone to create, host, and share portable websites without relying on centralized platforms, databases, or proprietary formats.
+The **Agora Openweb Object (OwO)** format is a proposed open specification for a lightweight, decentralized, static-first, modular web publishing framework. Its purpose is to make it radically simple for anyone to create, host, and share portable websites without relying on centralized platforms, databases, or proprietary formats.
 
 Each OwO site is made of plaintext, images, and a lightweight manifest that describes how to render the content. **The text and images themselves aren't stored directly in the page; they're linked and loaded on demand**, allowing smarter use of CDN caching and faster load times. The purpose is to cleanly separate a website's content from its presentation.
 

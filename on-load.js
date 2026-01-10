@@ -314,7 +314,7 @@ async function handleEditContext(username) {
   console.log("Handling edit context:", editContext);
 
   // Clear the edit context from sessionStorage since we're handling it now
-  sessionStorage.removeItem("pluribus.me.edit_context");
+  sessionStorage.removeItem("agorapages.com.edit_context");
   window.PLURIBUS_EDIT_CONTEXT = null;
 
   // Check permission: user must be owner or collaborator
@@ -380,18 +380,18 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Check for edit context - either from injected script or from sessionStorage
   if (window.PLURIBUS_EDIT_CONTEXT) {
     // Save to sessionStorage so it persists through OAuth redirect
-    sessionStorage.setItem("pluribus.me.edit_context", JSON.stringify(window.PLURIBUS_EDIT_CONTEXT));
+    sessionStorage.setItem("agorapages.com.edit_context", JSON.stringify(window.PLURIBUS_EDIT_CONTEXT));
     console.log("Saved edit context to sessionStorage");
   } else {
     // Try to restore from sessionStorage
-    const savedContext = sessionStorage.getItem("pluribus.me.edit_context");
+    const savedContext = sessionStorage.getItem("agorapages.com.edit_context");
     if (savedContext) {
       try {
         window.PLURIBUS_EDIT_CONTEXT = JSON.parse(savedContext);
         console.log("Restored edit context from sessionStorage:", window.PLURIBUS_EDIT_CONTEXT);
       } catch (e) {
         console.error("Failed to parse saved edit context:", e);
-        sessionStorage.removeItem("pluribus.me.edit_context");
+        sessionStorage.removeItem("agorapages.com.edit_context");
       }
     }
   }
@@ -1613,10 +1613,10 @@ document.addEventListener("DOMContentLoaded", function() {
       event.preventDefault();
 
       // Clear all OAuth tokens from session storage
-      sessionStorage.removeItem("pluribus.me.gitlab.oauth_token");
-      sessionStorage.removeItem("pluribus.me.github.oauth_token");
-      sessionStorage.removeItem("pluribus.me.google.oauth_token");
-      sessionStorage.removeItem("pluribus.me.username");
+      sessionStorage.removeItem("agorapages.com.gitlab.oauth_token");
+      sessionStorage.removeItem("agorapages.com.github.oauth_token");
+      sessionStorage.removeItem("agorapages.com.google.oauth_token");
+      sessionStorage.removeItem("agorapages.com.username");
 
       console.log("Signed out - tokens cleared");
 
@@ -1780,10 +1780,10 @@ document.addEventListener("DOMContentLoaded", function() {
         console.log("Account deleted successfully");
 
         // Clear all session data
-        sessionStorage.removeItem("pluribus.me.gitlab.oauth_token");
-        sessionStorage.removeItem("pluribus.me.github.oauth_token");
-        sessionStorage.removeItem("pluribus.me.google.oauth_token");
-        sessionStorage.removeItem("pluribus.me.username");
+        sessionStorage.removeItem("agorapages.com.gitlab.oauth_token");
+        sessionStorage.removeItem("agorapages.com.github.oauth_token");
+        sessionStorage.removeItem("agorapages.com.google.oauth_token");
+        sessionStorage.removeItem("agorapages.com.username");
 
         alert("Your account has been deleted.");
 

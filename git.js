@@ -210,7 +210,7 @@ async function gitCommit(siteId, message) {
       message,
       author: {
         name: username,
-        email: `${username}@noreply.pluribus.me`,
+        email: `${username}@noreply.agorapages.com`,
       },
     });
 
