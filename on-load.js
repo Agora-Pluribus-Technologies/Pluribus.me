@@ -736,6 +736,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       confirmButton.disabled = true;
       confirmButton.textContent = "Deploying...";
 
+      // Close modal and show deploy overlay
+      $("#commitModal").modal("hide");
+      showDeployOverlay("Deploying site...");
+
       try {
         // Create git commit
         const commitSha = await gitCommit(currentSiteId, commitMessage);
@@ -749,9 +753,6 @@ document.addEventListener("DOMContentLoaded", async function () {
           await saveGitHistoryToR2(currentSiteId);
           console.log("Git history saved to R2");
         }
-
-        // Close modal
-        $("#commitModal").modal("hide");
 
         // Reset modified flag after successful deployment
         modified = false;
@@ -767,6 +768,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.error("Deploy error:", error);
         showAlertBar("Deploy failed: " + error.message, false);
       } finally {
+        hideDeployOverlay();
         confirmButton.disabled = false;
         confirmButton.textContent = originalText;
       }
@@ -974,8 +976,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           addOrUpdateCache(file.fileName, file.displayName, file.content);
         }
 
-        // Close the history modal
+        // Close the history modal and show deploy overlay
         $("#historyModal").modal("hide");
+        showDeployOverlay("Reverting to previous version...");
 
         // Sync cache to git working directory before committing
         await syncCacheToGit(currentSiteId, markdownCache, imageCache);
@@ -1009,6 +1012,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         modified = false;
         updateDeployButtonState();
 
+        // Hide overlay before showing alert
+        hideDeployOverlay();
+
         if (deploySuccess) {
           showAlertBar("Successfully reverted to commit " + shortSha, true);
         } else {
@@ -1016,6 +1022,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       } catch (error) {
         console.error("Error reverting to commit:", error);
+        hideDeployOverlay();
         alert("Failed to revert: " + error.message);
         revertBtn.disabled = false;
         revertBtn.textContent = "Revert to this";
@@ -1135,6 +1142,20 @@ function showAlertBar(message, isSuccess) {
   setTimeout(() => {
     alertBar.className = "alert-bar";
   }, 3000);
+}
+
+function showDeployOverlay(message = "Deploying site...") {
+  const overlay = document.getElementById("deployOverlay");
+  const messageEl = overlay.querySelector(".deploy-message");
+  if (messageEl) {
+    messageEl.textContent = message;
+  }
+  overlay.style.display = "flex";
+}
+
+function hideDeployOverlay() {
+  const overlay = document.getElementById("deployOverlay");
+  overlay.style.display = "none";
 }
 
 async function checkSiteAvailability() {
