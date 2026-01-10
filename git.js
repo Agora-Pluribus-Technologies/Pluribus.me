@@ -399,15 +399,16 @@ async function formatCommitChanges(siteId, commitOid) {
   const dir = getRepoDir(siteId);
   const changes = await getCommitChanges(siteId, commitOid);
 
-  if (changes.length === 0) {
-    return "<p style='color: #888;'>No changes in this commit.</p>";
+  // Filter to only markdown files
+  const mdChanges = changes.filter(c => c.filepath.endsWith(".md"));
+
+  if (mdChanges.length === 0) {
+    return "<p style='color: #888;'>No content changes in this commit.</p>";
   }
 
   let html = "";
 
-  for (const change of changes) {
-    // Skip .git files
-    if (change.filepath.startsWith(".git")) continue;
+  for (const change of mdChanges) {
 
     const statusColor =
       change.status === "added"
@@ -422,8 +423,15 @@ async function formatCommitChanges(siteId, commitOid) {
         ? "-"
         : "M";
 
+    // Display a cleaner file name (e.g., "public/index.md" -> "Home")
+    let displayPath = change.filepath;
+    if (change.filepath.startsWith("public/") && change.filepath.endsWith(".md")) {
+      const fileName = change.filepath.replace("public/", "").replace(".md", "");
+      displayPath = fileName === "index" ? "Home" : fileName;
+    }
+
     html += `<div style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;">`;
-    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${change.filepath}</strong></div>`;
+    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${displayPath}</strong></div>`;
 
     try {
       if (change.status === "added" && change.newOid) {
@@ -559,13 +567,16 @@ function generateSimpleDiff(oldContent, newContent) {
 async function formatChangesForDisplay(siteId) {
   const changes = await gitStatus(siteId);
 
-  if (changes.length === 0) {
+  // Filter to only markdown files
+  const mdChanges = changes.filter(c => c.filepath.endsWith(".md"));
+
+  if (mdChanges.length === 0) {
     return "<p style='color: #888;'>No changes to commit.</p>";
   }
 
   let html = "";
 
-  for (const change of changes) {
+  for (const change of mdChanges) {
     const statusColor =
       change.status === "added"
         ? "#4ec9b0"
@@ -579,8 +590,15 @@ async function formatChangesForDisplay(siteId) {
         ? "-"
         : "M";
 
+    // Display a cleaner file name (e.g., "public/index.md" -> "Home")
+    let displayPath = change.filepath;
+    if (change.filepath.startsWith("public/") && change.filepath.endsWith(".md")) {
+      const fileName = change.filepath.replace("public/", "").replace(".md", "");
+      displayPath = fileName === "index" ? "Home" : fileName;
+    }
+
     html += `<div style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;">`;
-    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${change.filepath}</strong></div>`;
+    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${displayPath}</strong></div>`;
 
     // Show diff for modified files
     if (change.status === "modified") {
