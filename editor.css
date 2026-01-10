@@ -327,8 +327,7 @@ nav {
 }
 
 .toastui-editor-popup,
-.toastui-editor-popup-add-link,
-.image-upload-popup {
+.toastui-editor-popup-add-link {
   position: relative !important;
   max-width: 90% !important;
   top: 50% !important;
@@ -466,13 +465,20 @@ nav {
 
 /* Image upload popup styles */
 .image-upload-popup {
-  position: relative !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
   background-color: #1e1e1e;
   border: 1px solid #555;
   border-radius: 8px;
   padding: 20px;
-  max-width: 90%;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 10001 !important;
 }
 
 .image-upload-container {
@@ -667,14 +673,20 @@ nav {
 
 /* HTML embed popup styles */
 .html-embed-popup {
-  position: relative !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
   background-color: #1e1e1e;
   border: 1px solid #555;
   border-radius: 8px;
   padding: 20px;
-  min-width: 500px;
-  max-width: 90%;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 10001 !important;
 }
 
 .html-embed-container {
@@ -847,13 +859,15 @@ nav {
   }
 
   .image-upload-popup {
-    min-width: 300px;
-    max-width: 90vw;
+    width: 95%;
+    max-width: none;
+    padding: 15px;
   }
 
   .html-embed-popup {
-    min-width: 300px;
-    max-width: 90vw;
+    width: 95%;
+    max-width: none;
+    padding: 15px;
   }
 
   .dropzone-icon {
