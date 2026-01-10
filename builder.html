@@ -154,11 +154,11 @@
           <button type="button" class="close" data-dismiss="modal" aria-label="Close">
             <span aria-hidden="true">&times;</span>
           </button>
-          <h4 class="modal-title" id="historyModalLabel">Commit History</h4>
+          <h4 class="modal-title" id="historyModalLabel">Edit History</h4>
         </div>
         <div class="modal-body">
           <div id="historyList" style="max-height: 400px; overflow-y: auto;">
-            <p style="color: #888;">Loading commit history...</p>
+            <p style="color: #888;">Loading edit history...</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -251,7 +251,7 @@
             <li>Your user account</li>
             <li>All your sites and their content</li>
             <li>All uploaded images</li>
-            <li>All commit history</li>
+            <li>All edit history</li>
           </ul>
           <p class="text-danger"><strong>This action cannot be undone.</strong></p>
           <div class="form-group">
@@ -304,8 +304,20 @@
               <p id="collaboratorSuccess" class="text-success" style="display: none; margin-top: 5px;"></p>
             </div>
           </div>
+          <hr>
+          <div class="form-group">
+            <label>Site Options</label>
+            <div class="checkbox">
+              <label>
+                <input type="checkbox" id="showHistoryCheckbox">
+                Show edit history on published site
+              </label>
+              <p class="help-block">When enabled, visitors can view the site's edit history.</p>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
+          <button id="saveSiteSettingsButton" type="button" class="btn btn-primary">Save Settings</button>
           <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
         </div>
       </div>

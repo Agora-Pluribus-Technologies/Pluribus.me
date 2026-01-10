@@ -785,7 +785,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Show modal with loading state
       const historyList = document.getElementById("historyList");
-      historyList.innerHTML = "<p style='color: #888;'>Loading commit history...</p>";
+      historyList.innerHTML = "<p style='color: #888;'>Loading edit history...</p>";
       $("#historyModal").modal("show");
 
       // Fetch and display commit history
@@ -819,6 +819,20 @@ document.addEventListener("DOMContentLoaded", async function () {
       document.getElementById("collaboratorError").style.display = "none";
       document.getElementById("collaboratorSuccess").style.display = "none";
       document.getElementById("collaboratorUsernameInput").value = "";
+
+      // Load site.json settings
+      try {
+        const siteJsonContent = await getFileContent(currentSiteId, "public/site.json");
+        if (siteJsonContent) {
+          const siteJson = JSON.parse(siteJsonContent);
+          document.getElementById("showHistoryCheckbox").checked = siteJson.showHistory || false;
+        } else {
+          document.getElementById("showHistoryCheckbox").checked = false;
+        }
+      } catch (error) {
+        console.error("Error loading site.json:", error);
+        document.getElementById("showHistoryCheckbox").checked = false;
+      }
 
       // Show modal with loading state
       const collaboratorsList = document.getElementById("collaboratorsList");
@@ -885,6 +899,56 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
 
+  // Handle save site settings button click
+  document
+    .getElementById("saveSiteSettingsButton")
+    .addEventListener("click", async function () {
+      if (!currentSiteId) {
+        console.error("No site selected");
+        return;
+      }
+
+      const saveButton = document.getElementById("saveSiteSettingsButton");
+      const originalText = saveButton.textContent;
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving...";
+
+      try {
+        // Load existing site.json
+        let siteJson = {};
+        try {
+          const siteJsonContent = await getFileContent(currentSiteId, "public/site.json");
+          if (siteJsonContent) {
+            siteJson = JSON.parse(siteJsonContent);
+          }
+        } catch (error) {
+          console.error("Error loading site.json:", error);
+        }
+
+        // Update showHistory setting
+        const showHistory = document.getElementById("showHistoryCheckbox").checked;
+        siteJson.showHistory = showHistory;
+
+        // Save to git working directory
+        await gitWriteFile(currentSiteId, "public/site.json", JSON.stringify(siteJson, null, 2));
+
+        // Mark as modified so user needs to deploy
+        modified = true;
+        updateDeployButtonState();
+
+        // Close modal
+        $("#siteSettingsModal").modal("hide");
+
+        showAlertBar("Settings saved. Deploy to apply changes.", true);
+      } catch (error) {
+        console.error("Error saving site settings:", error);
+        showAlertBar("Failed to save settings: " + error.message, false);
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = originalText;
+      }
+    });
+
   // Handle click on commit links in history (event delegation)
   document
     .getElementById("historyList")
@@ -928,7 +992,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         e.preventDefault();
 
         const historyList = document.getElementById("historyList");
-        historyList.innerHTML = "<p style='color: #888;'>Loading commit history...</p>";
+        historyList.innerHTML = "<p style='color: #888;'>Loading edit history...</p>";
 
         const historyHtml = await formatCommitHistory(currentSiteId);
         historyList.innerHTML = historyHtml;

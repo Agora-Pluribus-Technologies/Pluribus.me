@@ -733,6 +733,25 @@ async function getPublicFiles(siteId) {
   }
 }
 
+async function generateHistoryJson(siteId) {
+  try {
+    const commits = await gitLog(siteId, 50);
+    return commits.map(commit => {
+      const date = new Date(commit.commit.author.timestamp * 1000);
+      const dateStr = date.toLocaleDateString() + " " + date.toLocaleTimeString();
+      return {
+        shortSha: commit.oid.substring(0, 7),
+        date: dateStr,
+        message: commit.commit.message.split('\n')[0],
+        author: commit.commit.author.name
+      };
+    });
+  } catch (error) {
+    console.error("Error generating history JSON:", error);
+    return [];
+  }
+}
+
 async function deployChanges(siteId) {
   modified = false;
   updateDeployButtonState();
@@ -793,6 +812,28 @@ async function deployChanges(siteId) {
     content: JSON.stringify(imageCache),
     contentType: "application/json",
   });
+
+  // Generate history.json from git log
+  const historyJson = await generateHistoryJson(siteId);
+  files.push({
+    filePath: "public/history.json",
+    content: JSON.stringify(historyJson),
+    contentType: "application/json",
+  });
+
+  // Update site.json from git working directory
+  try {
+    const siteJsonContent = await gitReadFile(siteId, "public/site.json");
+    if (siteJsonContent) {
+      files.push({
+        filePath: "public/site.json",
+        content: siteJsonContent,
+        contentType: "application/json",
+      });
+    }
+  } catch (error) {
+    console.log("No site.json found in git, skipping");
+  }
 
   if (files.length > 0) {
     const result = await saveFilesToR2(siteId, files);

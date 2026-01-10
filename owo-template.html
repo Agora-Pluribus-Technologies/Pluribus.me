@@ -130,6 +130,124 @@
       background-color: #2a2a2a;
     }
 
+    /* Floating footer */
+    .pluribus-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: rgba(48, 48, 48, 0.95);
+      padding: 8px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+      border-top: 1px solid #404040;
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .pluribus-footer a {
+      color: gold;
+    }
+
+    .pluribus-footer a:hover {
+      color: #ffe780;
+    }
+
+    .history-link {
+      cursor: pointer;
+      color: #888;
+    }
+
+    .history-link:hover {
+      color: #fff;
+      text-decoration: underline;
+    }
+
+    /* History modal */
+    .history-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .history-modal {
+      background-color: #1e1e1e;
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .history-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #555;
+      padding-bottom: 10px;
+    }
+
+    .history-modal-header h3 {
+      margin: 0;
+      color: #fff;
+    }
+
+    .history-close {
+      background: transparent;
+      border: none;
+      color: #ff4444;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .history-item {
+      border-bottom: 1px solid #404040;
+      padding: 10px 0;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-sha {
+      color: gold;
+      font-family: monospace;
+    }
+
+    .history-date {
+      color: #888;
+      font-size: 12px;
+    }
+
+    .history-message {
+      margin-top: 5px;
+    }
+
+    .history-author {
+      color: #888;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    /* Add padding to body to account for fixed footer */
+    body {
+      padding-bottom: 50px;
+    }
+
     @media (max-width: 768px) {
       .menu-link {
         font-size: 14pt;
@@ -173,10 +291,12 @@
       const pagesJson = await fetchPagesJson(origin, basePath);
       const siteJson = await fetchSiteJson(origin, basePath);
       const siteName = siteJson ? siteJson.siteName : null;
+      const showHistory = siteJson ? siteJson.showHistory : false;
       await createMenubar(origin, basePath, pagesJson);
       await fetchPageContent(origin, basePath, siteName, pagesJson);
       decodeEmbeds();
       centerImages();
+      createFooter(origin, basePath, showHistory);
     });
 
     function centerImages() {
@@ -427,6 +547,103 @@
       }
 
       document.body.appendChild(panel);
+    }
+
+    function createFooter(origin, basePath, showHistory) {
+      // Create footer
+      const footer = document.createElement("footer");
+      footer.classList.add("pluribus-footer");
+
+      // Powered by text
+      const poweredBy = document.createElement("span");
+      poweredBy.innerHTML = 'This site is powered by <a href="https://pluribus.me" target="_blank">Pluribus.me</a>';
+      footer.appendChild(poweredBy);
+
+      // History link (only if enabled)
+      if (showHistory) {
+        const historyLink = document.createElement("span");
+        historyLink.classList.add("history-link");
+        historyLink.textContent = "View History";
+        historyLink.addEventListener("click", function() {
+          showHistoryModal(origin, basePath);
+        });
+        footer.appendChild(historyLink);
+      }
+
+      document.body.appendChild(footer);
+
+      // Create history modal overlay (hidden by default)
+      const overlay = document.createElement("div");
+      overlay.classList.add("history-overlay");
+      overlay.id = "historyOverlay";
+      overlay.innerHTML = `
+        <div class="history-modal">
+          <div class="history-modal-header">
+            <h3>Site History</h3>
+            <button class="history-close" onclick="closeHistoryModal()">&times;</button>
+          </div>
+          <div id="historyContent">
+            <p style="color: #888;">Loading history...</p>
+          </div>
+        </div>
+      `;
+      overlay.addEventListener("click", function(e) {
+        if (e.target === overlay) {
+          closeHistoryModal();
+        }
+      });
+      document.body.appendChild(overlay);
+    }
+
+    async function showHistoryModal(origin, basePath) {
+      const overlay = document.getElementById("historyOverlay");
+      const content = document.getElementById("historyContent");
+      overlay.style.display = "flex";
+
+      try {
+        const historyJson = await fetch(`${origin}${basePath}/history.json`, {
+          method: "GET",
+          headers: {
+            "Cache-Control": "no-cache, must-revalidate",
+          },
+        });
+
+        if (historyJson.ok) {
+          const history = await historyJson.json();
+          if (history.length === 0) {
+            content.innerHTML = '<p style="color: #888;">No history available.</p>';
+          } else {
+            let html = "";
+            for (const commit of history) {
+              html += `<div class="history-item">`;
+              html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
+              html += `<span class="history-sha">${commit.shortSha}</span>`;
+              html += `<span class="history-date">${commit.date}</span>`;
+              html += `</div>`;
+              html += `<div class="history-message">${escapeHtmlForHistory(commit.message)}</div>`;
+              html += `<div class="history-author">by ${escapeHtmlForHistory(commit.author)}</div>`;
+              html += `</div>`;
+            }
+            content.innerHTML = html;
+          }
+        } else {
+          content.innerHTML = '<p style="color: #888;">History not available.</p>';
+        }
+      } catch (error) {
+        console.error("Error fetching history:", error);
+        content.innerHTML = '<p style="color: #ff4444;">Failed to load history.</p>';
+      }
+    }
+
+    function closeHistoryModal() {
+      const overlay = document.getElementById("historyOverlay");
+      overlay.style.display = "none";
+    }
+
+    function escapeHtmlForHistory(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
     }
   </script>
 </body>
