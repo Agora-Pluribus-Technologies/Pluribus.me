@@ -488,7 +488,8 @@
           },
         });
         if (content.ok) {
-          const text = await content.text().replace("<br>", "");
+          let text = await content.text();
+          text = text.replace("<br>", "");
           const parsedMarkdown = await marked.parse(text);
           const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
 
