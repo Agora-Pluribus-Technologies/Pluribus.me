@@ -431,6 +431,7 @@
     async function fetchPageContent(origin, basePath, siteName, pagesJson) {
       marked.setOptions({
         gfm: true,
+        breaks: false,
       });
 
       // https://pluribus.me/s/username/sitename/path/to/page.html --> path/to/page
@@ -480,16 +481,10 @@
             "Cache-Control": "no-cache, must-revalidate",
           },
         });
-        const contentMetadata = await fetch(fetchPathName + ".meta", {
-          method: "GET",
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-cache, must-revalidate",
-          },
-        });
         if (content.ok) {
           let text = await content.text();
           text = text.replace("<br>", "");
+          console.log(text);
           const parsedMarkdown = await marked.parse(text);
           const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
 
@@ -514,26 +509,6 @@
                   sectionArticle.appendChild(title);
                   section = section.substring(section.indexOf("</h" + hNum + ">") + 5).trim();
                 }
-              }
-
-              if (contentMetadata.ok) {
-                let author = document.createElement("span");
-                author.classList.add("p-author");
-                const metadata = await contentMetadata.json();
-                author.textContent = "By " + (metadata.author || "Unknown Author");
-                sectionArticle.appendChild(author);
-
-                let published = document.createElement("time");
-                published.classList.add("dt-published");
-                published.dateTime = metadata.createdAt;
-                published.textContent = "Published " + new Date(published.dateTime).toLocaleString();
-                sectionArticle.appendChild(published);
-
-                let modified = document.createElement("time");
-                modified.classList.add("dt-updated");
-                modified.dateTime = metadata.modifiedAt;
-                modified.textContent = "Updated " + new Date(modified.dateTime).toLocaleString();
-                sectionArticle.appendChild(modified);
               }
 
               let article = document.createElement("div");
