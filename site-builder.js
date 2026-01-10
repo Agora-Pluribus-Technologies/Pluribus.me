@@ -80,7 +80,10 @@ async function processAndUploadImage(file) {
     const processedBlob = await processImage(file);
 
     // Generate filename (sanitize to lowercase letters and dashes, then change extension to .avif)
-    const originalName = file.name.replace(/\.[^/.]+$/, '');
+    let originalName = file.name.replace(/\.[^/.]+$/, '');
+    if (originalName === "image") {
+      originalName = `uploaded-image-${Date.now()}`;
+    }
     const sanitizedName = originalName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric chars with dashes
