@@ -8,51 +8,79 @@
   <script defer src="https://cdn.jsdelivr.net/npm/marked@latest/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js"></script>
   <style>
+    /* Theme CSS Variables */
+    :root {
+      --bg-primary: #181818;
+      --bg-secondary: #303030;
+      --bg-tertiary: #252525;
+      --text-primary: #fff;
+      --text-secondary: #ccc;
+      --text-muted: #888;
+      --border-color: #404040;
+      --accent-color: gold;
+      --accent-hover: #ffe780;
+    }
+
+    /* Light mode overrides */
+    body.light-mode {
+      --bg-primary: #f5f5f5;
+      --bg-secondary: #e0e0e0;
+      --bg-tertiary: #ffffff;
+      --text-primary: #1a1a1a;
+      --text-secondary: #444;
+      --text-muted: #666;
+      --border-color: #ccc;
+      --accent-color: #b8860b;
+      --accent-hover: #996515;
+    }
+
     body {
-      background-color: #181818;
+      background-color: var(--bg-primary);
       margin: 0;
-      color: #fff;
+      color: var(--text-primary);
       font-size: 14px;
       line-height: 1.6;
       font-family: Arial, Helvetica, sans-serif;
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
 
     a {
-      color: #1890ff;
+      color: var(--accent-color);
       text-decoration: none;
     }
 
     a:hover {
-      color: #1890ff;
+      color: var(--accent-hover);
       text-decoration: underline;
       cursor: pointer;
     }
 
     nav {
-      background-color: #303030;
+      background-color: var(--bg-secondary);
       padding: 0;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       margin-bottom: 20px;
       position: sticky;
       top: 0;
       z-index: 1000;
+      transition: background-color 0.3s ease;
     }
 
     .menu-link {
       display: inline-block;
-      color: #fff;
+      color: var(--text-primary);
       text-decoration: none;
       padding: 15px 20px;
       font-size: 20pt;
-      transition: background-color 0.3s ease;
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
 
     .menu-link:hover {
-      background-color: #555;
+      background-color: var(--border-color);
     }
 
     .menu-link:active {
-      background-color: #1890ff;
+      background-color: var(--accent-color);
       text-decoration: none;
     }
 
@@ -60,9 +88,10 @@
       margin-left: 10%;
       margin-right: 10%;
       margin-bottom: 20px;
-      background-color: #303030;
+      background-color: var(--bg-secondary);
       border-radius: 8px;
       padding: 20px;
+      transition: background-color 0.3s ease;
     }
 
     .h-entry h1 {
@@ -105,21 +134,23 @@
       width: auto;
       border-collapse: collapse;
       margin: 16px auto;
-      background-color: #252525;
+      background-color: var(--bg-tertiary);
       border-radius: 4px;
       overflow: hidden;
+      transition: background-color 0.3s ease;
     }
 
     th, td {
       padding: 12px 16px;
       text-align: left;
-      border-bottom: 1px solid #404040;
+      border-bottom: 1px solid var(--border-color);
     }
 
     th {
-      background-color: #383838;
+      background-color: var(--bg-secondary);
       font-weight: bold;
-      color: #fff;
+      color: var(--text-primary);
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
 
     tr:last-child td {
@@ -127,7 +158,7 @@
     }
 
     tr:hover {
-      background-color: #2a2a2a;
+      background-color: var(--border-color);
     }
 
     /* Floating footer */
@@ -136,35 +167,53 @@
       bottom: 0;
       left: 0;
       right: 0;
-      background-color: rgba(48, 48, 48, 0.95);
+      background-color: var(--bg-secondary);
       padding: 8px 20px;
       text-align: center;
       font-size: 14pt;
-      color: #ccc;
-      border-top: 1px solid #404040;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--border-color);
       z-index: 1000;
       display: flex;
       justify-content: center;
       align-items: center;
       gap: 20px;
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
     }
 
     .pluribus-footer a {
-      color: gold;
+      color: var(--accent-color);
     }
 
     .pluribus-footer a:hover {
-      color: #ffe780;
+      color: var(--accent-hover);
     }
 
     .history-link {
       cursor: pointer;
-      color: #ccc;
+      color: var(--text-secondary);
     }
 
     .history-link:hover {
-      color: #fff;
+      color: var(--text-primary);
       text-decoration: underline;
+    }
+
+    /* Theme toggle in footer */
+    .theme-toggle {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+    }
+
+    .theme-toggle:hover {
+      background-color: var(--border-color);
+      color: var(--text-primary);
     }
 
     /* History modal */
@@ -182,14 +231,15 @@
     }
 
     .history-modal {
-      background-color: #1e1e1e;
-      border: 1px solid #555;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 20px;
       max-width: 600px;
       width: 90%;
       max-height: 80vh;
       overflow-y: auto;
+      transition: background-color 0.3s ease, border-color 0.3s ease;
     }
 
     .history-modal-header {
@@ -197,13 +247,13 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 15px;
-      border-bottom: 1px solid #555;
+      border-bottom: 1px solid var(--border-color);
       padding-bottom: 10px;
     }
 
     .history-modal-header h3 {
       margin: 0;
-      color: #fff;
+      color: var(--text-primary);
     }
 
     .history-close {
@@ -215,7 +265,7 @@
     }
 
     .history-item {
-      border-bottom: 1px solid #404040;
+      border-bottom: 1px solid var(--border-color);
       padding: 10px 0;
     }
 
@@ -224,12 +274,12 @@
     }
 
     .history-sha {
-      color: gold;
+      color: var(--accent-color);
       font-family: monospace;
     }
 
     .history-date {
-      color: #888;
+      color: var(--text-muted);
       font-size: 12px;
     }
 
@@ -238,7 +288,7 @@
     }
 
     .history-author {
-      color: #888;
+      color: var(--text-muted);
       font-size: 12px;
       margin-top: 5px;
     }
@@ -550,6 +600,14 @@
         footer.appendChild(historyLink);
       }
 
+      // Theme toggle button
+      const themeToggle = document.createElement("button");
+      themeToggle.classList.add("theme-toggle");
+      themeToggle.id = "themeToggle";
+      themeToggle.innerHTML = '<span id="themeIcon">🌙</span>';
+      themeToggle.addEventListener("click", toggleTheme);
+      footer.appendChild(themeToggle);
+
       document.body.appendChild(footer);
 
       // Create history modal overlay (hidden by default)
@@ -625,6 +683,31 @@
       div.textContent = text;
       return div.innerHTML;
     }
+
+    // Theme toggle functionality
+    function initTheme() {
+      const savedTheme = localStorage.getItem('pluribus-site-theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-mode');
+        updateThemeIcon(true);
+      }
+    }
+
+    function toggleTheme() {
+      const isLight = document.body.classList.toggle('light-mode');
+      localStorage.setItem('pluribus-site-theme', isLight ? 'light' : 'dark');
+      updateThemeIcon(isLight);
+    }
+
+    function updateThemeIcon(isLight) {
+      const icon = document.getElementById('themeIcon');
+      if (icon) {
+        icon.textContent = isLight ? '☀️' : '🌙';
+      }
+    }
+
+    // Initialize theme on page load
+    initTheme();
   </script>
 </body>
 

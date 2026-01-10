@@ -334,7 +334,45 @@
     <p>
       <a href="/terms-of-use.html">Terms of Use</a> • <a href="/privacy-policy.html">Privacy Policy</a>
     </p>
+    <p>
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">
+        <span class="theme-toggle-icon" id="themeIcon">🌙</span>
+        <span id="themeText">Dark</span>
+      </button>
+    </p>
   </div>
+
+  <script>
+    // Theme toggle functionality
+    function initTheme() {
+      const savedTheme = localStorage.getItem('pluribus-theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-mode');
+        updateThemeButton(true);
+      }
+    }
+
+    function toggleTheme() {
+      const isLight = document.body.classList.toggle('light-mode');
+      localStorage.setItem('pluribus-theme', isLight ? 'light' : 'dark');
+      updateThemeButton(isLight);
+    }
+
+    function updateThemeButton(isLight) {
+      const icon = document.getElementById('themeIcon');
+      const text = document.getElementById('themeText');
+      if (isLight) {
+        icon.textContent = '☀️';
+        text.textContent = 'Light';
+      } else {
+        icon.textContent = '🌙';
+        text.textContent = 'Dark';
+      }
+    }
+
+    // Initialize theme on page load
+    initTheme();
+  </script>
 </body>
 
 </html>
