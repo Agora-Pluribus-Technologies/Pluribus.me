@@ -489,7 +489,7 @@
         });
         if (content.ok) {
           const text = await content.text();
-          const parsedMarkdown = await marked.parse(text);
+          const parsedMarkdown = await marked.parse(text).replace("<br>", "");
           const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
 
           const markdownSections = sanitizedMarkdown.split('<hr>');
