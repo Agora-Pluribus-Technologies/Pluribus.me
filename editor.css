@@ -137,6 +137,31 @@ nav {
   color: #fff;
 }
 
+.input-group-addon {
+  background-color: #303030;
+  border: 1px solid #555;
+  color: #fff;
+}
+
+.dropdown-menu {
+  background-color: #1e1e1e;
+  border: 1px solid #555;
+}
+
+.dropdown-menu li a {
+  color: #fff;
+}
+
+.dropdown-menu li a:hover,
+.dropdown-menu li a:focus {
+  background-color: #303030;
+  color: #fff;
+}
+
+.dropdown-menu .divider {
+  background-color: #555;
+}
+
 .modal-content {
   background-color: #1e1e1e;
   color: #fff;
