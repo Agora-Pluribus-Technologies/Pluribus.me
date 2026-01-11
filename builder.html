@@ -71,7 +71,7 @@
             <button id="visitSiteButton" class="btn btn-info">Visit Site</button>
             <button id="historyButton" class="btn btn-default">History</button>
             <button id="siteSettingsButton" class="btn btn-default">Settings</button>
-            <button id="deployButton" class="btn btn-success">Publish Site</button>
+            <button id="deployButton" class="btn btn-success">Deploy Site</button>
           </div>
           <div id="last-updated-time-label" style="text-align: right; display: inline-block"></div>
           <div id="pageMenubar">
@@ -261,82 +261,6 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
           <button id="confirmDeleteAccountButton" class="btn btn-danger" disabled>Delete My Account</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create Account Modal -->
-  <div class="modal fade" id="createAccountModal" tabindex="-1" role="dialog" aria-labelledby="createAccountModalLabel">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title" id="createAccountModalLabel">Create New Account</h4>
-        </div>
-        <div class="modal-body">
-          <form id="createAccountForm">
-            <div class="form-group">
-              <label for="createAccountUsername">Username</label>
-              <input type="text" class="form-control" id="createAccountUsername" placeholder="Enter username" required pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,28}[a-zA-Z0-9]" minlength="3" maxlength="30">
-              <p class="help-block">3-30 characters. Letters, numbers, and hyphens only. Cannot start or end with a hyphen.</p>
-              <p id="createAccountUsernameError" class="text-danger" style="display: none;"></p>
-              <p id="createAccountUsernameSuccess" class="text-success" style="display: none;"></p>
-            </div>
-            <div class="form-group">
-              <label for="createAccountPassword">Password</label>
-              <input type="password" class="form-control" id="createAccountPassword" placeholder="Enter password" required minlength="8">
-              <p class="help-block">Minimum 8 characters.</p>
-            </div>
-            <div class="form-group">
-              <label for="createAccountPasswordConfirm">Confirm Password</label>
-              <input type="password" class="form-control" id="createAccountPasswordConfirm" placeholder="Confirm password" required minlength="8">
-              <p id="createAccountPasswordError" class="text-danger" style="display: none;"></p>
-            </div>
-            <div class="checkbox">
-              <label>
-                <input type="checkbox" id="createAccountTermsCheckbox" required>
-                I agree to the <a href="terms-of-use.html" target="_blank">Terms of Use</a> and <a href="privacy-policy.html" target="_blank">Privacy Policy</a>
-              </label>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button id="submitCreateAccountButton" type="submit" form="createAccountForm" class="btn btn-primary" disabled>Create Account</button>
-          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sign In Modal -->
-  <div class="modal fade" id="signInModal" tabindex="-1" role="dialog" aria-labelledby="signInModalLabel">
-    <div class="modal-dialog" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-          <h4 class="modal-title" id="signInModalLabel">Sign In</h4>
-        </div>
-        <div class="modal-body">
-          <form id="signInForm">
-            <div class="form-group">
-              <label for="signInUsername">Username</label>
-              <input type="text" class="form-control" id="signInUsername" placeholder="Enter username" required>
-            </div>
-            <div class="form-group">
-              <label for="signInPassword">Password</label>
-              <input type="password" class="form-control" id="signInPassword" placeholder="Enter password" required>
-            </div>
-            <p id="signInError" class="text-danger" style="display: none;"></p>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button id="submitSignInButton" type="submit" form="signInForm" class="btn btn-success">Sign In</button>
-          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
         </div>
       </div>
     </div>

@@ -248,7 +248,6 @@ var CURRENT_USERNAME = null;
 const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "agorapages.com.gitlab.oauth_token";
 const STORAGE_KEY_GITHUB_OAUTH_TOKEN = "agorapages.com.github.oauth_token";
 const STORAGE_KEY_GOOGLE_OAUTH_TOKEN = "agorapages.com.google.oauth_token";
-const STORAGE_KEY_AGORAPAGES_TOKEN = "agorapages.com.agorapages.auth_token";
 const STORAGE_KEY_USERNAME = "agorapages.com.username";
 
 // Check if we have a token in the URL hash (from OAuth callback redirect)
@@ -284,69 +283,18 @@ function getOauthTokenGoogle() {
   return sessionStorage.getItem(STORAGE_KEY_GOOGLE_OAUTH_TOKEN);
 }
 
-function getAgoraPagesAuthToken() {
-  return sessionStorage.getItem(STORAGE_KEY_AGORAPAGES_TOKEN);
-}
-
-function setAgoraPagesAuthToken(token) {
-  sessionStorage.setItem(STORAGE_KEY_AGORAPAGES_TOKEN, token);
-}
-
 function displayLoginButtons() {
-  // Create main container
-  const mainContainer = document.createElement("div");
-  mainContainer.style.display = "flex";
-  mainContainer.style.flexDirection = "column";
-  mainContainer.style.gap = "20px";
-  mainContainer.style.alignItems = "center";
-
-  // AgoraPages account section
-  const agoraPagesSection = document.createElement("div");
-  agoraPagesSection.style.display = "flex";
-  agoraPagesSection.style.gap = "10px";
-  agoraPagesSection.style.justifyContent = "center";
-  agoraPagesSection.style.flexWrap = "wrap";
-
-  // Create Account button
-  var createAccountButton = document.createElement("button");
-  createAccountButton.classList.add("btn", "btn-primary");
-  createAccountButton.innerHTML = 'Create New Account';
-  createAccountButton.style.padding = "10px 18px";
-  createAccountButton.style.cursor = "pointer";
-  createAccountButton.setAttribute("data-toggle", "modal");
-  createAccountButton.setAttribute("data-target", "#createAccountModal");
-
-  // Sign In button
-  var signInButton = document.createElement("button");
-  signInButton.classList.add("btn", "btn-success");
-  signInButton.innerHTML = 'Sign In';
-  signInButton.style.padding = "10px 18px";
-  signInButton.style.cursor = "pointer";
-  signInButton.setAttribute("data-toggle", "modal");
-  signInButton.setAttribute("data-target", "#signInModal");
-
-  agoraPagesSection.appendChild(createAccountButton);
-  agoraPagesSection.appendChild(signInButton);
-
-  // Divider
-  const divider = document.createElement("div");
-  divider.style.display = "flex";
-  divider.style.alignItems = "center";
-  divider.style.width = "100%";
-  divider.style.maxWidth = "400px";
-  divider.innerHTML = '<hr style="flex: 1; border-color: #555;"><span style="padding: 0 15px; color: #888;">or sign in with</span><hr style="flex: 1; border-color: #555;">';
-
-  // OAuth buttons container
-  const oauthContainer = document.createElement("div");
-  oauthContainer.style.display = "flex";
-  oauthContainer.style.gap = "10px";
-  oauthContainer.style.justifyContent = "center";
-  oauthContainer.style.flexWrap = "wrap";
+  // Create container for both buttons
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.display = "flex";
+  buttonContainer.style.gap = "10px";
+  buttonContainer.style.justifyContent = "center";
+  buttonContainer.style.flexWrap = "wrap";
 
   // GitHub login button
   var githubLoginButton = document.createElement("button");
   githubLoginButton.classList.add("btn");
-  githubLoginButton.innerHTML = '<img src="/assets/Octicons-mark-github.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px; filter: invert(1);"> GitHub';
+  githubLoginButton.innerHTML = '<img src="/assets/Octicons-mark-github.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px; filter: invert(1);"> Sign in with GitHub';
   githubLoginButton.style.padding = "10px 18px";
   githubLoginButton.style.cursor = "pointer";
   githubLoginButton.style.display = "inline-flex";
@@ -377,13 +325,15 @@ function displayLoginButtons() {
   // GitLab login button
   var gitlabLoginButton = document.createElement("button");
   gitlabLoginButton.classList.add("btn");
-  gitlabLoginButton.innerHTML = '<img src="/assets/GitLab_icon.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px;"> GitLab';
+  gitlabLoginButton.innerHTML = '<img src="/assets/GitLab_icon.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px;"> Sign in with GitLab';
   gitlabLoginButton.style.padding = "10px 18px";
   gitlabLoginButton.style.cursor = "pointer";
   gitlabLoginButton.style.display = "inline-flex";
   gitlabLoginButton.style.alignItems = "center";
 
   gitlabLoginButton.addEventListener("click", () => {
+    // Build the authorization URL
+    
     // Build the authorization URL
     let clientId;
     let redirectUri;
@@ -408,7 +358,7 @@ function displayLoginButtons() {
   // Google login button
   var googleLoginButton = document.createElement("button");
   googleLoginButton.classList.add("btn");
-  googleLoginButton.innerHTML = '<img src="/assets/Google_G_logo.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px;"> Google';
+  googleLoginButton.innerHTML = '<img src="/assets/Google_G_logo.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px;"> Sign in with Google';
   googleLoginButton.style.padding = "10px 18px";
   googleLoginButton.style.cursor = "pointer";
   googleLoginButton.style.display = "inline-flex";
@@ -436,16 +386,12 @@ function displayLoginButtons() {
     window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`;
   });
 
-  oauthContainer.appendChild(googleLoginButton);
-  oauthContainer.appendChild(githubLoginButton);
-  oauthContainer.appendChild(gitlabLoginButton);
-
-  mainContainer.appendChild(agoraPagesSection);
-  mainContainer.appendChild(divider);
-  mainContainer.appendChild(oauthContainer);
+  buttonContainer.appendChild(googleLoginButton);
+  buttonContainer.appendChild(githubLoginButton);
+  buttonContainer.appendChild(gitlabLoginButton);
 
   const sitesListPanel = document.getElementById("sites-list-panel");
-  sitesListPanel.appendChild(mainContainer);
+  sitesListPanel.appendChild(buttonContainer);
 }
 
 async function getGitlabUserId() {
@@ -520,11 +466,7 @@ async function getGoogleUserId() {
 
 // Get current provider and provider ID
 async function getCurrentProviderInfo() {
-  if (getAgoraPagesAuthToken() !== null) {
-    // For agorapages auth, the token contains the username
-    const username = getStoredUsername();
-    return { provider: "agorapages", providerId: username };
-  } else if (getOauthTokenGitlab() !== null) {
+  if (getOauthTokenGitlab() !== null) {
     const providerId = await getGitlabUserId();
     return { provider: "gitlab", providerId: String(providerId) };
   } else if (getOauthTokenGithub() !== null) {
@@ -535,54 +477,6 @@ async function getCurrentProviderInfo() {
     return { provider: "google", providerId: providerId };
   }
   return null;
-}
-
-// Create a new user with username and password (agorapages provider)
-async function createUserWithPassword(username, password) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
-  const response = await fetch("/api/users", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ username, password, provider: "agorapages" }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText);
-  }
-
-  const user = await response.json();
-  CURRENT_USERNAME = user.username;
-  sessionStorage.setItem(STORAGE_KEY_USERNAME, user.username);
-  setAgoraPagesAuthToken(user.token);
-  return user;
-}
-
-// Login with username and password
-async function loginWithPassword(username, password) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
-  const response = await fetch("/api/users/login", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ username, password }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText);
-  }
-
-  const user = await response.json();
-  CURRENT_USERNAME = user.username;
-  sessionStorage.setItem(STORAGE_KEY_USERNAME, user.username);
-  setAgoraPagesAuthToken(user.token);
-  return user;
 }
 
 // Check if username is available
