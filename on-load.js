@@ -560,12 +560,23 @@ document.addEventListener("DOMContentLoaded", async function () {
       submitButton.style.cursor = "not-allowed";
 
       try {
-        const siteName = document.getElementById("siteName").value.trim().toLowerCase();
+        const rawSiteName = document.getElementById("siteName").value.trim();
 
-        // Validate site name: lowercase letters, numbers, hyphens, 2-30 chars, no double hyphens
-        const siteNameRegex = /^[a-z][a-z0-9-]{0,28}[a-z0-9]$/;
-        if (!siteNameRegex.test(siteName) || siteName.includes("--")) {
-          alert("Invalid site name. Use lowercase letters, numbers, and hyphens only. 2-30 characters, no double hyphens, cannot start or end with a hyphen.");
+        // Sanitize site name: lowercase, only letters, numbers, and hyphens
+        let siteName = rawSiteName
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '-')  // Replace invalid chars with hyphens
+          .replace(/-+/g, '-')           // Collapse multiple hyphens into one
+          .replace(/^-+|-+$/g, '');      // Trim hyphens from start and end
+
+        // Truncate to 30 chars max, then trim any trailing hyphen from truncation
+        if (siteName.length > 30) {
+          siteName = siteName.substring(0, 30).replace(/-+$/, '');
+        }
+
+        // Validate that we have a usable site name after sanitization
+        if (siteName.length < 2) {
+          alert("Site name is too short. Please enter at least 2 valid characters (letters or numbers).");
           submitButton.disabled = false;
           submitButton.innerText = originalButtonText;
           submitButton.style.opacity = "";
