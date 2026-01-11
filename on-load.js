@@ -396,7 +396,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   }
 
-  if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null && getOauthTokenGoogle() === null) {
+  if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null && getOauthTokenGoogle() === null && getAgoraPagesAuthToken() === null) {
     console.log("Access tokens missing or expired");
     displayLoginButtons();
   } else {
@@ -1627,12 +1627,163 @@ document.addEventListener("DOMContentLoaded", function() {
       sessionStorage.removeItem("agorapages.com.gitlab.oauth_token");
       sessionStorage.removeItem("agorapages.com.github.oauth_token");
       sessionStorage.removeItem("agorapages.com.google.oauth_token");
+      sessionStorage.removeItem("agorapages.com.agorapages.auth_token");
       sessionStorage.removeItem("agorapages.com.username");
 
       console.log("Signed out - tokens cleared");
 
       // Reload the page
       window.location.reload();
+    });
+  }
+
+  // Create Account form handlers
+  const createAccountUsername = document.getElementById("createAccountUsername");
+  const createAccountPassword = document.getElementById("createAccountPassword");
+  const createAccountPasswordConfirm = document.getElementById("createAccountPasswordConfirm");
+  const createAccountTermsCheckbox = document.getElementById("createAccountTermsCheckbox");
+  const submitCreateAccountButton = document.getElementById("submitCreateAccountButton");
+  const createAccountUsernameError = document.getElementById("createAccountUsernameError");
+  const createAccountUsernameSuccess = document.getElementById("createAccountUsernameSuccess");
+  const createAccountPasswordError = document.getElementById("createAccountPasswordError");
+
+  let createAccountUsernameCheckTimeout = null;
+  let createAccountUsernameIsValid = false;
+
+  function updateCreateAccountButtonState() {
+    const passwordsMatch = createAccountPassword && createAccountPasswordConfirm &&
+      createAccountPassword.value === createAccountPasswordConfirm.value &&
+      createAccountPassword.value.length >= 8;
+    const termsAccepted = createAccountTermsCheckbox && createAccountTermsCheckbox.checked;
+
+    if (submitCreateAccountButton) {
+      submitCreateAccountButton.disabled = !(createAccountUsernameIsValid && passwordsMatch && termsAccepted);
+    }
+
+    // Show password mismatch error
+    if (createAccountPasswordError && createAccountPasswordConfirm && createAccountPasswordConfirm.value.length > 0) {
+      if (createAccountPassword.value !== createAccountPasswordConfirm.value) {
+        createAccountPasswordError.textContent = "Passwords do not match.";
+        createAccountPasswordError.style.display = "block";
+      } else {
+        createAccountPasswordError.style.display = "none";
+      }
+    }
+  }
+
+  if (createAccountUsername) {
+    createAccountUsername.addEventListener("input", function() {
+      const username = createAccountUsername.value.trim();
+
+      if (createAccountUsernameCheckTimeout) {
+        clearTimeout(createAccountUsernameCheckTimeout);
+      }
+
+      createAccountUsernameError.style.display = "none";
+      createAccountUsernameSuccess.style.display = "none";
+      createAccountUsernameIsValid = false;
+      updateCreateAccountButtonState();
+
+      const usernameRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,28}[a-zA-Z0-9]$/;
+      if (username.length < 3) {
+        return;
+      }
+
+      if (!usernameRegex.test(username)) {
+        createAccountUsernameError.textContent = "Invalid format. Use letters, numbers, and hyphens only. Cannot start or end with hyphen.";
+        createAccountUsernameError.style.display = "block";
+        return;
+      }
+
+      createAccountUsernameCheckTimeout = setTimeout(async () => {
+        const isAvailable = await checkUsernameAvailable(username);
+        if (isAvailable) {
+          createAccountUsernameSuccess.textContent = "Username is available!";
+          createAccountUsernameSuccess.style.display = "block";
+          createAccountUsernameError.style.display = "none";
+          createAccountUsernameIsValid = true;
+        } else {
+          createAccountUsernameError.textContent = "Username is already taken.";
+          createAccountUsernameError.style.display = "block";
+          createAccountUsernameSuccess.style.display = "none";
+          createAccountUsernameIsValid = false;
+        }
+        updateCreateAccountButtonState();
+      }, 500);
+    });
+  }
+
+  if (createAccountPassword) {
+    createAccountPassword.addEventListener("input", updateCreateAccountButtonState);
+  }
+  if (createAccountPasswordConfirm) {
+    createAccountPasswordConfirm.addEventListener("input", updateCreateAccountButtonState);
+  }
+  if (createAccountTermsCheckbox) {
+    createAccountTermsCheckbox.addEventListener("change", updateCreateAccountButtonState);
+  }
+
+  // Create Account form submission
+  const createAccountForm = document.getElementById("createAccountForm");
+  if (createAccountForm) {
+    createAccountForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      const username = createAccountUsername.value.trim();
+      const password = createAccountPassword.value;
+
+      submitCreateAccountButton.disabled = true;
+      submitCreateAccountButton.textContent = "Creating...";
+
+      try {
+        const user = await createUserWithPassword(username, password);
+        console.log("User created:", user);
+
+        // Close modal and reload
+        $("#createAccountModal").modal("hide");
+        showUserMenu(user.username);
+        await loadSitesForUser(user.username);
+      } catch (error) {
+        console.error("Error creating account:", error);
+        createAccountUsernameError.textContent = error.message || "Failed to create account. Please try again.";
+        createAccountUsernameError.style.display = "block";
+        submitCreateAccountButton.disabled = false;
+        submitCreateAccountButton.textContent = "Create Account";
+      }
+    });
+  }
+
+  // Sign In form submission
+  const signInForm = document.getElementById("signInForm");
+  const signInError = document.getElementById("signInError");
+  const submitSignInButton = document.getElementById("submitSignInButton");
+
+  if (signInForm) {
+    signInForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      const username = document.getElementById("signInUsername").value.trim();
+      const password = document.getElementById("signInPassword").value;
+
+      signInError.style.display = "none";
+      submitSignInButton.disabled = true;
+      submitSignInButton.textContent = "Signing in...";
+
+      try {
+        const user = await loginWithPassword(username, password);
+        console.log("User logged in:", user);
+
+        // Close modal and reload
+        $("#signInModal").modal("hide");
+        showUserMenu(user.username);
+        await loadSitesForUser(user.username);
+      } catch (error) {
+        console.error("Error signing in:", error);
+        signInError.textContent = error.message || "Invalid username or password.";
+        signInError.style.display = "block";
+        submitSignInButton.disabled = false;
+        submitSignInButton.textContent = "Sign In";
+      }
     });
   }
 
@@ -1794,6 +1945,7 @@ document.addEventListener("DOMContentLoaded", function() {
         sessionStorage.removeItem("agorapages.com.gitlab.oauth_token");
         sessionStorage.removeItem("agorapages.com.github.oauth_token");
         sessionStorage.removeItem("agorapages.com.google.oauth_token");
+        sessionStorage.removeItem("agorapages.com.agorapages.auth_token");
         sessionStorage.removeItem("agorapages.com.username");
 
         alert("Your account has been deleted.");

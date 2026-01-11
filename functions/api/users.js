@@ -1,3 +1,68 @@
+// Password hashing utilities using Web Crypto API
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const hash = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: salt,
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    256
+  );
+  // Combine salt and hash, then base64 encode
+  const combined = new Uint8Array(salt.length + hash.byteLength);
+  combined.set(salt);
+  combined.set(new Uint8Array(hash), salt.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function verifyPassword(password, storedHash) {
+  const encoder = new TextEncoder();
+  const combined = Uint8Array.from(atob(storedHash), c => c.charCodeAt(0));
+  const salt = combined.slice(0, 16);
+  const storedHashBytes = combined.slice(16);
+
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const hash = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: salt,
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    256
+  );
+
+  const hashBytes = new Uint8Array(hash);
+  if (hashBytes.length !== storedHashBytes.length) return false;
+  for (let i = 0; i < hashBytes.length; i++) {
+    if (hashBytes[i] !== storedHashBytes[i]) return false;
+  }
+  return true;
+}
+
+function generateToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes));
+}
+
 // GET /api/users - Check if username exists or get user by provider ID
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -57,11 +122,11 @@ export async function onRequestPost(context) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { username, provider, providerId } = data;
+  const { username, provider, providerId, password } = data;
 
-  // Validate required fields
-  if (!username || !provider || !providerId) {
-    return new Response("Missing required fields: username, provider, providerId", { status: 400 });
+  // Validate username
+  if (!username) {
+    return new Response("Missing required field: username", { status: 400 });
   }
 
   // Validate username format (alphanumeric and hyphens, 3-30 chars)
@@ -79,6 +144,50 @@ export async function onRequestPost(context) {
 
   if (existingUsername) {
     return new Response("Username already taken", { status: 409 });
+  }
+
+  // Handle agorapages provider (username/password auth)
+  if (provider === "agorapages") {
+    if (!password) {
+      return new Response("Missing required field: password", { status: 400 });
+    }
+
+    if (password.length < 8) {
+      return new Response("Password must be at least 8 characters", { status: 400 });
+    }
+
+    // Hash the password
+    const passwordHash = await hashPassword(password);
+
+    // Generate UUID and token for the new user
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const token = generateToken();
+
+    // Insert new user into database with password hash
+    // providerId is the same as username for agorapages provider
+    await env.USERS_DB.prepare(
+      "INSERT INTO Users (id, provider, providerId, username, passwordHash, createdAt) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(id, "agorapages", usernameLower, usernameLower, passwordHash, createdAt).run();
+
+    const user = {
+      id,
+      provider: "agorapages",
+      providerId: usernameLower,
+      username: usernameLower,
+      createdAt,
+      token,
+    };
+
+    return new Response(JSON.stringify(user), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Handle OAuth providers (existing flow)
+  if (!provider || !providerId) {
+    return new Response("Missing required fields: provider, providerId", { status: 400 });
   }
 
   // Check if this provider ID already has a username
