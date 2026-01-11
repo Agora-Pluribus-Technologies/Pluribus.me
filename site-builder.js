@@ -406,12 +406,12 @@ function showHtmlEmbedPopup() {
           <button class="html-embed-close">×</button>
         </div>
         <div class="html-embed-form">
-          <div class="embed-type-selector">
-            <label style="margin-right: 15px; cursor: pointer;">
+          <div class="embed-type-selector" style="margin-bottom: 12px;">
+            <label style="display: inline; margin-right: 15px; cursor: pointer;">
               <input type="radio" name="embedType" value="youtube" checked style="margin-right: 5px;">
               YouTube
             </label>
-            <label style="cursor: pointer;">
+            <label style="display: inline; cursor: pointer;">
               <input type="radio" name="embedType" value="html" style="margin-right: 5px;">
               HTML
             </label>
