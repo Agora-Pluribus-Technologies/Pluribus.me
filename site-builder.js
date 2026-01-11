@@ -406,7 +406,7 @@ function showHtmlEmbedPopup() {
           <button class="html-embed-close">×</button>
         </div>
         <div class="html-embed-form">
-          <div class="embed-type-selector" style="margin-bottom: 12px;">
+          <div class="embed-type-selector">
             <label style="margin-right: 15px; cursor: pointer;">
               <input type="radio" name="embedType" value="youtube" checked style="margin-right: 5px;">
               YouTube
@@ -418,7 +418,7 @@ function showHtmlEmbedPopup() {
           </div>
           <div id="youtubeEmbedSection">
             <label for="youtubeUrlInput">Paste YouTube video URL:</label>
-            <input type="text" id="youtubeUrlInput" placeholder="https://www.youtube.com/watch?v=..." style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 4px; background: #2d2d2d; color: #fff;">
+            <input type="text" id="youtubeUrlInput" placeholder="https://youtu.be/..." style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 4px; background: #2d2d2d; color: #fff;">
           </div>
           <div id="htmlEmbedSection" style="display: none;">
             <label for="htmlEmbedTextarea">Paste your HTML code:</label>
