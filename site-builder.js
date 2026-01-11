@@ -130,7 +130,7 @@ function loadToastEditor() {
         },
         {
           el: createHtmlEmbedButton(),
-          tooltip: 'Insert embed (YouTube or HTML)',
+          tooltip: 'Insert embed (YouTube, SoundCloud, or HTML)',
           name: 'customHtmlEmbed'
         }
       ]
@@ -411,6 +411,10 @@ function showHtmlEmbedPopup() {
               <input type="radio" name="embedType" value="youtube" checked style="margin-right: 5px;">
               YouTube
             </label>
+            <label style="display: inline; margin-right: 15px; cursor: pointer;">
+              <input type="radio" name="embedType" value="soundcloud" style="margin-right: 5px;">
+              SoundCloud
+            </label>
             <label style="display: inline; cursor: pointer;">
               <input type="radio" name="embedType" value="html" style="margin-right: 5px;">
               HTML
@@ -419,6 +423,10 @@ function showHtmlEmbedPopup() {
           <div id="youtubeEmbedSection">
             <label for="youtubeUrlInput">Paste YouTube video URL:</label>
             <input type="text" id="youtubeUrlInput" placeholder="https://youtu.be/..." style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 4px; background: #2d2d2d; color: #fff;">
+          </div>
+          <div id="soundcloudEmbedSection" style="display: none;">
+            <label for="soundcloudUrlInput">Paste SoundCloud URL:</label>
+            <input type="text" id="soundcloudUrlInput" placeholder="https://soundcloud.com/artist/track" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 4px; background: #2d2d2d; color: #fff;">
           </div>
           <div id="htmlEmbedSection" style="display: none;">
             <label for="htmlEmbedTextarea">Paste your HTML code:</label>
@@ -440,7 +448,9 @@ function showHtmlEmbedPopup() {
   // Get elements
   const textarea = popup.querySelector('#htmlEmbedTextarea');
   const youtubeInput = popup.querySelector('#youtubeUrlInput');
+  const soundcloudInput = popup.querySelector('#soundcloudUrlInput');
   const youtubeSection = popup.querySelector('#youtubeEmbedSection');
+  const soundcloudSection = popup.querySelector('#soundcloudEmbedSection');
   const htmlSection = popup.querySelector('#htmlEmbedSection');
   const embedTypeRadios = popup.querySelectorAll('input[name="embedType"]');
   const closeButton = popup.querySelector('.html-embed-close');
@@ -450,12 +460,17 @@ function showHtmlEmbedPopup() {
   // Handle embed type radio change
   embedTypeRadios.forEach(radio => {
     radio.addEventListener('change', (e) => {
+      youtubeSection.style.display = 'none';
+      soundcloudSection.style.display = 'none';
+      htmlSection.style.display = 'none';
+
       if (e.target.value === 'youtube') {
         youtubeSection.style.display = 'block';
-        htmlSection.style.display = 'none';
         youtubeInput.focus();
+      } else if (e.target.value === 'soundcloud') {
+        soundcloudSection.style.display = 'block';
+        soundcloudInput.focus();
       } else {
-        youtubeSection.style.display = 'none';
         htmlSection.style.display = 'block';
         textarea.focus();
       }
@@ -483,8 +498,14 @@ function showHtmlEmbedPopup() {
         alert('Please enter a YouTube URL');
         return;
       }
-      // Just store the URL - decoding happens in owo-template.html
       embedContent = youtubeUrl;
+    } else if (selectedType === 'soundcloud') {
+      const soundcloudUrl = soundcloudInput.value.trim();
+      if (!soundcloudUrl) {
+        alert('Please enter a SoundCloud URL');
+        return;
+      }
+      embedContent = soundcloudUrl;
     } else {
       const htmlCode = textarea.value.trim();
       if (!htmlCode) {
