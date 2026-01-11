@@ -130,7 +130,7 @@ function loadToastEditor() {
         },
         {
           el: createHtmlEmbedButton(),
-          tooltip: 'Insert HTML embed',
+          tooltip: 'Insert embed (YouTube or HTML)',
           name: 'customHtmlEmbed'
         }
       ]
@@ -402,14 +402,30 @@ function showHtmlEmbedPopup() {
     <div class="toastui-editor-popup-body">
       <div class="html-embed-container">
         <div class="html-embed-header">
-          <h3>Insert HTML Embed</h3>
+          <h3>Insert Embed</h3>
           <button class="html-embed-close">×</button>
         </div>
         <div class="html-embed-form">
-          <label for="htmlEmbedTextarea">Paste your HTML code:</label>
-          <textarea id="htmlEmbedTextarea" rows="3" placeholder="<iframe src=&quot;...&quot;></iframe>"></textarea>
+          <div class="embed-type-selector" style="margin-bottom: 12px;">
+            <label style="margin-right: 15px; cursor: pointer;">
+              <input type="radio" name="embedType" value="youtube" checked style="margin-right: 5px;">
+              YouTube
+            </label>
+            <label style="cursor: pointer;">
+              <input type="radio" name="embedType" value="html" style="margin-right: 5px;">
+              HTML
+            </label>
+          </div>
+          <div id="youtubeEmbedSection">
+            <label for="youtubeUrlInput">Paste YouTube video URL:</label>
+            <input type="text" id="youtubeUrlInput" placeholder="https://www.youtube.com/watch?v=..." style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 4px; background: #2d2d2d; color: #fff;">
+          </div>
+          <div id="htmlEmbedSection" style="display: none;">
+            <label for="htmlEmbedTextarea">Paste your HTML code:</label>
+            <textarea id="htmlEmbedTextarea" rows="3" placeholder="<iframe src=&quot;...&quot;></iframe>"></textarea>
+          </div>
           <div class="html-embed-buttons">
-            <button class="html-embed-insert-btn toastui-editor-ok-button">Insert HTML</button>
+            <button class="html-embed-insert-btn toastui-editor-ok-button">Insert</button>
             <button class="html-embed-cancel-btn toastui-editor-close-button">Cancel</button>
           </div>
         </div>
@@ -423,9 +439,28 @@ function showHtmlEmbedPopup() {
 
   // Get elements
   const textarea = popup.querySelector('#htmlEmbedTextarea');
+  const youtubeInput = popup.querySelector('#youtubeUrlInput');
+  const youtubeSection = popup.querySelector('#youtubeEmbedSection');
+  const htmlSection = popup.querySelector('#htmlEmbedSection');
+  const embedTypeRadios = popup.querySelectorAll('input[name="embedType"]');
   const closeButton = popup.querySelector('.html-embed-close');
   const insertButton = popup.querySelector('.html-embed-insert-btn');
   const cancelButton = popup.querySelector('.html-embed-cancel-btn');
+
+  // Handle embed type radio change
+  embedTypeRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      if (e.target.value === 'youtube') {
+        youtubeSection.style.display = 'block';
+        htmlSection.style.display = 'none';
+        youtubeInput.focus();
+      } else {
+        youtubeSection.style.display = 'none';
+        htmlSection.style.display = 'block';
+        textarea.focus();
+      }
+    });
+  });
 
   // Close button handler
   closeButton.addEventListener('click', () => {
@@ -439,17 +474,30 @@ function showHtmlEmbedPopup() {
 
   // Insert button handler
   insertButton.addEventListener('click', () => {
-    const htmlCode = textarea.value.trim();
+    const selectedType = popup.querySelector('input[name="embedType"]:checked').value;
+    let embedContent;
 
-    if (!htmlCode) {
-      alert('Please enter HTML code');
-      return;
+    if (selectedType === 'youtube') {
+      const youtubeUrl = youtubeInput.value.trim();
+      if (!youtubeUrl) {
+        alert('Please enter a YouTube URL');
+        return;
+      }
+      // Just store the URL - decoding happens in owo-template.html
+      embedContent = youtubeUrl;
+    } else {
+      const htmlCode = textarea.value.trim();
+      if (!htmlCode) {
+        alert('Please enter HTML code');
+        return;
+      }
+      embedContent = htmlCode;
     }
 
-    // Insert HTML into editor as code-block-enclosed HTML block
+    // Insert into editor as code-block-enclosed embed
     let currentMarkdown = editor.getMarkdown();
     const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
-    const htmlEmbed = `\`\`\`embed\n${htmlCode}\n\`\`\``;
+    const htmlEmbed = `\`\`\`embed\n${embedContent}\n\`\`\``;
 
     editor.setMarkdown(`${cleanMarkdown}\n\n\n${htmlEmbed}`);
 

@@ -371,20 +371,65 @@
       }
     }
 
+    // Extract YouTube video ID from various URL formats
+    function extractYouTubeVideoId(url) {
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?.*&v=)([^&\n?#]+)/,
+        /^([a-zA-Z0-9_-]{11})$/ // Just the video ID
+      ];
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) {
+          return match[1];
+        }
+      }
+      return null;
+    }
+
+    // Check if content is a YouTube URL
+    function isYouTubeUrl(content) {
+      const trimmed = content.trim();
+      return trimmed.includes('youtube.com') || trimmed.includes('youtu.be');
+    }
+
+    // Convert YouTube URL to embed iframe HTML
+    function youtubeUrlToEmbed(url) {
+      const videoId = extractYouTubeVideoId(url);
+      if (!videoId) {
+        return null;
+      }
+      return `<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+    }
+
     function decodeEmbeds() {
       const preList = document.getElementsByTagName("pre");
       for (let i = 0; i < preList.length; i++) {
         const pre = preList[i];
-        let embedHtml;
+        let embedContent;
         for (let j = 0; j < pre.children.length; j++) {
           const preChild = pre.children[j];
           if (preChild.classList.contains("language-embed")) {
-            embedHtml = preChild.innerText;
+            embedContent = preChild.innerText;
             break;
           }
         };
-        if (embedHtml) {
-          console.log("Embed HTML" + embedHtml)
+        if (embedContent) {
+          console.log("Embed content: " + embedContent);
+          let embedHtml;
+
+          // Check if it's a YouTube URL and convert to iframe
+          if (isYouTubeUrl(embedContent)) {
+            embedHtml = youtubeUrlToEmbed(embedContent);
+            if (!embedHtml) {
+              console.error("Could not parse YouTube URL: " + embedContent);
+              continue;
+            }
+            console.log("Converted YouTube URL to embed");
+          } else {
+            // Treat as raw HTML
+            embedHtml = embedContent;
+          }
+
           let newDiv = document.createElement("div");
           newDiv.classList.add("embed-container");
           const sanitizedHtml = DOMPurify.sanitize(embedHtml, {
@@ -407,14 +452,16 @@
             FORBID_TAGS: ['script', 'style'],      // script already forbidden by default, but explicit is fine
             FORBID_ATTR: ['onerror', 'onload'],    // event handlers (DOMPurify strips these by default too)
           });
-          console.log("Sanitized: " + sanitizedHtml)
+          console.log("Sanitized: " + sanitizedHtml);
           newDiv.innerHTML = sanitizedHtml;
 
           let iframe = newDiv.children[0];
-          const w = iframe.width;
-          const h = iframe.height;
-          iframe.style.maxWidth = "100%";
-          iframe.style.aspectRatio = `${w / h}`;
+          if (iframe) {
+            const w = iframe.width || 560;
+            const h = iframe.height || 315;
+            iframe.style.maxWidth = "100%";
+            iframe.style.aspectRatio = `${w / h}`;
+          }
 
           pre.replaceWith(newDiv);
         }
