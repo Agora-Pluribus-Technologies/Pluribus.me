@@ -386,9 +386,9 @@ function displayLoginButtons() {
     window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`;
   });
 
+  buttonContainer.appendChild(googleLoginButton);
   buttonContainer.appendChild(githubLoginButton);
   buttonContainer.appendChild(gitlabLoginButton);
-  buttonContainer.appendChild(googleLoginButton);
 
   const sitesListPanel = document.getElementById("sites-list-panel");
   sitesListPanel.appendChild(buttonContainer);
