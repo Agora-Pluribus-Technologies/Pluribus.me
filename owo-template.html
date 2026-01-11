@@ -417,7 +417,7 @@
 
     function decodeEmbeds() {
       const preList = document.getElementsByTagName("pre");
-      for (let i = 0; i < preList.length; i++) {
+      for (let i = preList.length - 1; i >= 0; i--) {
         const pre = preList[i];
         let embedContent;
         for (let j = 0; j < pre.children.length; j++) {
