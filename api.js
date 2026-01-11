@@ -735,7 +735,9 @@ async function deployChanges(siteId) {
     const fileName = item.fileName.replace("public/", "").replace(".md", "");
     return {
       displayName: fileName === "index" ? "Home" : item.displayName,
-      fileName: fileName
+      fileName: fileName,
+      createdAt: item.createdAt || new Date().toISOString(),
+      modifiedAt: item.modifiedAt || new Date().toISOString(),
     };
   });
   files.push({

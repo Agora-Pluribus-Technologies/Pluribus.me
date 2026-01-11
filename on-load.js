@@ -1,4 +1,4 @@
-// Global cache for markdown files - Array of {displayName, fileName, content}
+// Global cache for markdown files - Array of {displayName, fileName, content, createdAt, modifiedAt}
 let markdownCache = [];
 let currentSitePath = null;
 let currentSiteId = null;
@@ -22,24 +22,33 @@ function getCacheByDisplayName(displayName) {
   return markdownCache.find(item => item.displayName === displayName);
 }
 
-function addOrUpdateCache(fileName, displayName, content) {
+function addOrUpdateCache(fileName, displayName, content, options = {}) {
   const existing = getCacheByFileName(fileName);
+  const now = new Date().toISOString();
+
   if (existing) {
     if (displayName) {
       existing.displayName = displayName;
     } else {
-      displayName = existing.displayName
+      displayName = existing.displayName;
     }
     if (content) {
       existing.content = content;
     } else {
       content = existing.content;
     }
+    // Update modifiedAt unless we're just loading from storage
+    if (!options.preserveTimestamps) {
+      existing.modifiedAt = now;
+    }
   } else {
+    // For new entries, use provided timestamps or current time
     markdownCache.push({
       displayName,
       fileName,
       content,
+      createdAt: options.createdAt || now,
+      modifiedAt: options.modifiedAt || now,
     });
   }
 }
@@ -200,11 +209,11 @@ async function openSiteInEditor(site, initialPage = "index") {
       markdownCache[i].fileName = `public/${fileName}.md`
     }
 
-    // Load all markdown files into cache
+    // Load all markdown files into cache (preserve timestamps from pages.json)
     for (const file of markdownFiles) {
       console.log("Loading file into cache:", file);
       const content = await getFileContent(currentSiteId, file);
-      addOrUpdateCache(file, null, content);
+      addOrUpdateCache(file, null, content, { preserveTimestamps: true });
     }
 
     // Initialize imageCache from images.json
@@ -262,6 +271,7 @@ async function openSiteInEditor(site, initialPage = "index") {
               if (cacheItem) {
                 let currentMarkdown = editor.getMarkdown();
                 cacheItem.content = currentMarkdown;
+                cacheItem.modifiedAt = new Date().toISOString();
                 console.log(`Cached content for ${currentSitePath}`);
                 modified = true;
                 updateDeployButtonState();
@@ -291,6 +301,7 @@ async function openSiteInEditor(site, initialPage = "index") {
               if (cacheItem) {
                 let currentMarkdown = editor.getMarkdown();
                 cacheItem.content = currentMarkdown;
+                cacheItem.modifiedAt = new Date().toISOString();
                 console.log(`Cached content for ${currentSitePath}`);
                 modified = true;
                 updateDeployButtonState();
@@ -1474,6 +1485,7 @@ async function populateMenubar(siteId) {
             if (existing) {
               existing.displayName = newPageName;
               existing.fileName = newFilePath;
+              existing.modifiedAt = new Date().toISOString();
             } else {
               // If not in cache yet, fetch it first then rename
               const content = await getFileContent(siteId, oldFilePath);
