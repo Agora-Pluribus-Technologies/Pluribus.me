@@ -1,6 +1,9 @@
 // functions/api/files.js
 // Handles file operations with Cloudflare R2 storage
 
+// Maximum file size (10 MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
 // PUT /api/files - Save a file to R2
 export async function onRequestPut(context) {
   const { request, env } = context;
@@ -39,13 +42,20 @@ export async function onRequestPut(context) {
     if (encoding === "base64") {
       // Decode base64 content
       const binaryString = atob(content);
+      // Check file size
+      if (binaryString.length > MAX_FILE_SIZE) {
+        return new Response("File exceeds maximum size of 10 MB", { status: 413 });
+      }
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
       body = bytes;
     } else {
-      // Plain text content
+      // Plain text content - check size
+      if (content.length > MAX_FILE_SIZE) {
+        return new Response("File exceeds maximum size of 10 MB", { status: 413 });
+      }
       body = content;
     }
 
@@ -123,12 +133,22 @@ export async function onRequestPost(context) {
         let body;
         if (encoding === "base64") {
           const binaryString = atob(content);
+          // Check file size
+          if (binaryString.length > MAX_FILE_SIZE) {
+            errors.push({ filePath, error: "File exceeds maximum size of 10 MB" });
+            continue;
+          }
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
           body = bytes;
         } else {
+          // Check file size for plain text
+          if (content.length > MAX_FILE_SIZE) {
+            errors.push({ filePath, error: "File exceeds maximum size of 10 MB" });
+            continue;
+          }
           body = content;
         }
 

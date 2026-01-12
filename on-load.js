@@ -633,55 +633,150 @@ const ALLOWED_EXTENSIONS = [
   "zip"
 ];
 
-// Handle file upload from dropzone
-async function handleFileUpload(files) {
-  if (!files || files.length === 0) return;
+// Maximum file size for uploads (10 MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+// Helper: Read all entries from a directory reader
+async function readAllDirectoryEntries(directoryReader) {
+  const entries = [];
+  let batch;
+  do {
+    batch = await new Promise((resolve, reject) => {
+      directoryReader.readEntries(resolve, reject);
+    });
+    entries.push(...batch);
+  } while (batch.length > 0);
+  return entries;
+}
+
+// Helper: Recursively get all files from a FileSystemEntry
+async function getAllFilesFromEntry(entry, relativePath = "") {
+  const files = [];
+
+  if (entry.isFile) {
+    try {
+      const file = await new Promise((resolve, reject) => {
+        entry.file(resolve, reject);
+      });
+      files.push({ file, relativePath: relativePath + file.name });
+    } catch (e) {
+      console.error("Error reading file entry:", e);
+    }
+  } else if (entry.isDirectory) {
+    const directoryReader = entry.createReader();
+    const entries = await readAllDirectoryEntries(directoryReader);
+    const newPath = relativePath + entry.name + "/";
+
+    for (const subEntry of entries) {
+      const subFiles = await getAllFilesFromEntry(subEntry, newPath);
+      files.push(...subFiles);
+    }
+  }
+
+  return files;
+}
+
+// Process dropped items (supports both files and folders)
+async function processDroppedItems(dataTransfer) {
+  const items = dataTransfer.items;
+  const allFiles = [];
+
+  if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === "function") {
+    // Use webkitGetAsEntry for folder support
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry();
+      if (entry) {
+        const files = await getAllFilesFromEntry(entry);
+        allFiles.push(...files);
+      }
+    }
+  } else {
+    // Fallback: regular file list (no folder support)
+    for (const file of dataTransfer.files) {
+      allFiles.push({ file, relativePath: file.name });
+    }
+  }
+
+  return allFiles;
+}
+
+// Handle file upload from dropzone (supports files with relative paths)
+async function handleFileUpload(filesInput) {
+  if (!filesInput || filesInput.length === 0) return;
 
   const fileList = document.getElementById("fileList");
 
-  // Filter files by allowed extensions
+  // Convert to array of {file, relativePath} if needed
+  let fileItems = [];
+  if (filesInput[0] && filesInput[0].file) {
+    // Already in {file, relativePath} format (from folder drop)
+    fileItems = Array.from(filesInput);
+  } else {
+    // Regular FileList (from file input or simple drop)
+    for (const file of filesInput) {
+      fileItems.push({ file, relativePath: file.name });
+    }
+  }
+
+  // Filter files by allowed extensions and size
   const allowedFiles = [];
   const rejectedFiles = [];
+  const tooLargeFiles = [];
 
-  for (const file of files) {
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (ALLOWED_EXTENSIONS.includes(ext)) {
-      allowedFiles.push(file);
+  for (const item of fileItems) {
+    const ext = item.file.name.split(".").pop().toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      rejectedFiles.push(item.relativePath);
+    } else if (item.file.size > MAX_FILE_SIZE) {
+      tooLargeFiles.push(`${item.relativePath} (${(item.file.size / (1024 * 1024)).toFixed(1)} MB)`);
     } else {
-      rejectedFiles.push(file.name);
+      allowedFiles.push(item);
     }
   }
 
   // Warn about rejected files
   if (rejectedFiles.length > 0) {
-    alert(`The following files were not uploaded (unsupported file type):\n${rejectedFiles.join("\n")}\n\nAllowed types: HTML, CSS, JS, JSON, Markdown, images, fonts, and ZIP files.`);
+    alert(`The following files were not uploaded (unsupported file type):\n${rejectedFiles.join("\n")}\n\nAllowed types: HTML, CSS, JSON, Markdown, images, fonts, PDF, and ZIP files.`);
+  }
+
+  // Warn about files that are too large
+  if (tooLargeFiles.length > 0) {
+    alert(`The following files exceed the 10 MB size limit:\n${tooLargeFiles.join("\n")}`);
   }
 
   if (allowedFiles.length === 0) return;
 
-  for (const file of allowedFiles) {
-    // Show upload progress
-    const uploadingItem = document.createElement("div");
-    uploadingItem.className = "file-item";
-    uploadingItem.innerHTML = `
-      <span class="file-item-icon">⏳</span>
-      <span class="file-item-name">Uploading ${file.name}...</span>
-    `;
-    fileList.insertBefore(uploadingItem, fileList.firstChild);
+  // Show upload progress indicator
+  const uploadingItem = document.createElement("div");
+  uploadingItem.className = "file-item";
+  uploadingItem.innerHTML = `
+    <span class="file-item-icon">⏳</span>
+    <span class="file-item-name">Uploading ${allowedFiles.length} file${allowedFiles.length > 1 ? 's' : ''}...</span>
+  `;
+  fileList.insertBefore(uploadingItem, fileList.firstChild);
 
-    try {
-      // Upload to current folder within public/
-      const folderPrefix = currentFolderPath ? `public/${currentFolderPath}` : "public";
-      const filePath = `${folderPrefix}/${file.name}`;
-      await uploadFileToR2(currentSiteId, filePath, file);
-      console.log("Uploaded:", filePath);
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      alert(`Failed to upload ${file.name}`);
+  try {
+    // Build file items with full paths
+    const folderPrefix = currentFolderPath ? `public/${currentFolderPath}` : "public";
+    const uploadItems = allowedFiles.map(item => ({
+      file: item.file,
+      filePath: `${folderPrefix}/${item.relativePath}`,
+    }));
+
+    // Upload all files in a single batch
+    const success = await uploadFilesToR2(currentSiteId, uploadItems);
+
+    if (success) {
+      console.log(`Uploaded ${allowedFiles.length} files`);
+    } else {
+      alert("Failed to upload files. Please try again.");
     }
+  } catch (error) {
+    console.error("Error uploading files:", error);
+    alert("Failed to upload files: " + error.message);
   }
 
-  // Refresh file list after all uploads
+  // Refresh file list after upload
   await refreshFileList();
 }
 
@@ -2253,9 +2348,9 @@ document.addEventListener("DOMContentLoaded", function() {
       });
     });
 
-    // Handle dropped files
+    // Handle dropped files and folders
     fileListSection.addEventListener("drop", async function(e) {
-      const files = e.dataTransfer.files;
+      const files = await processDroppedItems(e.dataTransfer);
       if (files.length > 0) {
         await handleFileUpload(files);
       }

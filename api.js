@@ -149,7 +149,7 @@ async function saveFilesToR2(siteId, files) {
   const headers = await getHeadersWithTurnstile({
     "Content-Type": "application/json",
   });
-  
+
   const response = await fetch("/api/files", {
     method: "POST",
     headers,
@@ -261,6 +261,39 @@ async function uploadFileToR2(siteId, filePath, file) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+// Upload multiple files to R2 in a single batch (for file manager)
+async function uploadFilesToR2(siteId, fileItems) {
+  // fileItems is an array of { file: File, filePath: string }
+
+  // Read all files in parallel
+  const fileDataPromises = fileItems.map(item => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const base64Content = e.target.result.split(',')[1];
+        resolve({
+          filePath: item.filePath,
+          content: base64Content,
+          encoding: "base64",
+          contentType: item.file.type || guessContentType(item.filePath),
+        });
+      };
+      reader.onerror = function() {
+        reject(new Error(`Failed to read file: ${item.filePath}`));
+      };
+      reader.readAsDataURL(item.file);
+    });
+  });
+
+  try {
+    const files = await Promise.all(fileDataPromises);
+    return await saveFilesToR2(siteId, files);
+  } catch (error) {
+    console.error("Error reading files for batch upload:", error);
+    return false;
+  }
 }
 
 const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
