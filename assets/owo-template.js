@@ -93,7 +93,7 @@ function decodeEmbeds(origin, basePath) {
         embedContent = preChild.innerText;
         break;
       }
-      if (preChild.classList.contains("language-pdf-attachment")) {
+      if (preChild.classList.contains("language-doc-attachment")) {
         pdfAttachment = preChild.innerText.trim();
         break;
       }

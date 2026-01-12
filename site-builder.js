@@ -135,7 +135,7 @@ function loadToastEditor() {
         },
         {
           el: createPdfAttachButton(),
-          tooltip: 'Attach PDF',
+          tooltip: 'Attach Document (PDF or DOCX)',
           name: 'customPdfAttach'
         }
       ]
@@ -754,7 +754,7 @@ async function handlePdfUpload(file, popup, progressContainer) {
     // Insert PDF attachment markdown into editor
     const currentMarkdown = editor.getMarkdown();
     const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
-    const pdfEmbed = `\`\`\`pdf-attachment\n${filename}\n\`\`\``;
+    const pdfEmbed = `\`\`\`doc-attachment\n${filename}\n\`\`\``;
 
     editor.setMarkdown(`${cleanMarkdown}\n\n\n${pdfEmbed}`);
 
