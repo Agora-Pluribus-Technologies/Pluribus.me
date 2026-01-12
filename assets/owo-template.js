@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const showHistory = siteJson ? siteJson.showHistory : false;
   await createMenubar(origin, basePath, pagesJson);
   await fetchPageContent(origin, basePath, siteName, pagesJson);
-  decodeEmbeds();
+  decodeEmbeds(origin, basePath);
   centerImages();
   createFooter(origin, basePath, showHistory);
 });
@@ -81,7 +81,7 @@ function soundcloudUrlToEmbed(url) {
   return `<iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>`;
 }
 
-function decodeEmbeds() {
+function decodeEmbeds(origin, basePath) {
   const preList = document.getElementsByTagName("pre");
   for (let i = preList.length - 1; i >= 0; i--) {
     const pre = preList[i];
