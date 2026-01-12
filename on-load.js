@@ -564,6 +564,7 @@ async function refreshFileList() {
       else if (["md"].includes(ext)) icon = "📝";
       else if (["woff", "woff2", "ttf", "eot", "otf"].includes(ext)) icon = "🔤";
       else if (["zip"].includes(ext)) icon = "📦";
+      else if (["pdf"].includes(ext)) icon = "📕";
 
       // Format file size
       let sizeStr = "";
@@ -580,7 +581,7 @@ async function refreshFileList() {
         <span class="file-item-name">${file.displayName}</span>
         <span class="file-item-size">${sizeStr}</span>
         <div class="file-item-actions">
-          <button class="file-item-download" title="Download file">⬇</button>
+          <button class="file-item-download" title="Download file">⬇️</button>
           <button class="file-item-delete" title="Delete file">×</button>
         </div>
       `;
@@ -626,6 +627,8 @@ const ALLOWED_EXTENSIONS = [
   "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "avif",
   // Fonts
   "woff", "woff2", "ttf", "eot", "otf",
+  // Documents
+  "pdf",
   // Archives
   "zip"
 ];
@@ -2270,6 +2273,55 @@ document.addEventListener("DOMContentLoaded", function() {
         await handleFileUpload(fileInput.files);
         // Clear input so the same file can be uploaded again
         fileInput.value = "";
+      }
+    });
+  }
+
+  // New folder button - create a new directory
+  const newFolderButton = document.getElementById("newFolderButton");
+  if (newFolderButton) {
+    newFolderButton.addEventListener("click", async function() {
+      const folderName = prompt("Enter folder name:");
+      if (!folderName || !folderName.trim()) return;
+
+      // Sanitize folder name: only allow letters, numbers, hyphens, underscores
+      const sanitizedName = folderName.trim()
+        .replace(/[^a-zA-Z0-9-_]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+      if (!sanitizedName) {
+        alert("Invalid folder name. Please use letters, numbers, hyphens, or underscores.");
+        return;
+      }
+
+      // Build the folder path
+      const folderPrefix = currentFolderPath ? `public/${currentFolderPath}` : "public";
+      const newFolderPath = `${folderPrefix}/${sanitizedName}`;
+
+      // Create a .keep file inside the folder to make it "exist" in R2
+      const keepFilePath = `${newFolderPath}/.keep`;
+
+      newFolderButton.disabled = true;
+      newFolderButton.textContent = "Creating...";
+
+      try {
+        const success = await saveFileToR2(currentSiteId, keepFilePath, "", {
+          contentType: "text/plain",
+        });
+
+        if (success) {
+          console.log("Created folder:", newFolderPath);
+          await refreshFileList();
+        } else {
+          alert("Failed to create folder.");
+        }
+      } catch (error) {
+        console.error("Error creating folder:", error);
+        alert("Failed to create folder.");
+      } finally {
+        newFolderButton.disabled = false;
+        newFolderButton.textContent = "New Folder";
       }
     });
   }
