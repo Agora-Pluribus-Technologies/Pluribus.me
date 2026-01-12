@@ -816,12 +816,15 @@ async function generateHistoryJson(siteId) {
       // Get detailed changes with line-level diffs for this commit
       const detailedChanges = await getDetailedCommitChanges(siteId, commit.oid);
 
+      // Filter to only show markdown files
+      const mdChanges = detailedChanges.filter(c => c.file.endsWith(".md"));
+
       historyItems.push({
         shortSha: commit.oid.substring(0, 7),
         date: dateStr,
         message: commit.commit.message.split('\n')[0],
         author: commit.commit.author.name,
-        changes: detailedChanges
+        changes: mdChanges
       });
     }
 
