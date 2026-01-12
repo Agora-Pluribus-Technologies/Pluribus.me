@@ -888,7 +888,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     // Check if user has a username
     const providerInfo = await getCurrentProviderInfo();
-    if (!providerInfo) {
+    if (!providerInfo || !providerInfo.provider || !providerInfo.providerId) {
       console.error("Could not get provider info");
       displayLoginButtons();
       return;
