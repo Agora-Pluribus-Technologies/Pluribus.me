@@ -389,6 +389,39 @@ tr:hover {
     margin-top: 4px;
 }
 
+/* PDF Download Button */
+.pdf-download-container {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.pdf-download-button {
+    display: inline-block;
+    padding: 12px 24px;
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--accent-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 16pt;
+    text-decoration: none;
+    transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+}
+
+.pdf-download-button:hover {
+    background-color: var(--accent-color);
+    color: var(--bg-primary);
+    text-decoration: none;
+    transform: scale(1.02);
+}
+
+.pdf-download-button:active {
+    transform: scale(0.98);
+}
+
+.pdf-icon {
+    margin-right: 8px;
+}
+
 /* Add padding to body to account for fixed footer */
 body {
     padding-bottom: 50px;

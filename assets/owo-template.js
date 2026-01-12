@@ -86,13 +86,39 @@ function decodeEmbeds() {
   for (let i = preList.length - 1; i >= 0; i--) {
     const pre = preList[i];
     let embedContent;
+    let pdfAttachment;
     for (let j = 0; j < pre.children.length; j++) {
       const preChild = pre.children[j];
       if (preChild.classList.contains("language-embed")) {
         embedContent = preChild.innerText;
         break;
       }
+      if (preChild.classList.contains("language-pdf-attachment")) {
+        pdfAttachment = preChild.innerText.trim();
+        break;
+      }
     }
+
+    // Handle PDF attachments
+    if (pdfAttachment) {
+      const filename = pdfAttachment;
+      const pdfUrl = `${origin}${basePath}/${filename}`;
+
+      const downloadContainer = document.createElement("div");
+      downloadContainer.classList.add("pdf-download-container");
+
+      const downloadButton = document.createElement("a");
+      downloadButton.href = pdfUrl;
+      downloadButton.classList.add("pdf-download-button");
+      downloadButton.setAttribute("download", filename);
+      downloadButton.setAttribute("target", "_blank");
+      downloadButton.innerHTML = `<span class="pdf-icon">📄</span> Download ${escapeHtmlForHistory(filename)}`;
+
+      downloadContainer.appendChild(downloadButton);
+      pre.replaceWith(downloadContainer);
+      continue;
+    }
+
     if (embedContent) {
       console.log("Embed content: " + embedContent);
       let embedHtml;

@@ -132,6 +132,11 @@ function loadToastEditor() {
           el: createHtmlEmbedButton(),
           tooltip: 'Insert embed (YouTube, SoundCloud, or HTML)',
           name: 'customHtmlEmbed'
+        },
+        {
+          el: createPdfAttachButton(),
+          tooltip: 'Attach PDF',
+          name: 'customPdfAttach'
         }
       ]
     ]
@@ -551,4 +556,200 @@ function showHtmlEmbedPopup() {
   setTimeout(() => {
     textarea.focus();
   }, 100);
+}
+
+// Create custom PDF attach toolbar button
+function createPdfAttachButton() {
+  const button = document.createElement('button');
+  button.classList.add('toastui-editor-toolbar-icons');
+  button.type = 'button';
+  button.innerHTML = '📎';
+  button.style.fontSize = '16px';
+
+  button.addEventListener('click', () => {
+    showPdfUploadPopup();
+  });
+
+  return button;
+}
+
+// Show PDF upload popup
+function showPdfUploadPopup() {
+  // Remove existing popup if any
+  const existingPopup = document.querySelector('.pdf-upload-popup');
+  if (existingPopup) {
+    existingPopup.remove();
+  }
+
+  // Create popup container
+  const popup = document.createElement('div');
+  popup.className = 'toastui-editor-popup pdf-upload-popup';
+  popup.style.display = 'block';
+  popup.style.zIndex = '10000';
+
+  // Create popup content
+  popup.innerHTML = `
+    <div class="toastui-editor-popup-body">
+      <div class="pdf-upload-container">
+        <div class="pdf-upload-header">
+          <h3>Attach PDF</h3>
+          <button class="pdf-upload-close">×</button>
+        </div>
+        <div class="pdf-upload-dropzone" id="pdfDropzone">
+          <input type="file" id="pdfFileInput" accept="application/pdf" style="display: none;" />
+          <div class="dropzone-content">
+            <p class="dropzone-icon">📄</p>
+            <p>Click to select a PDF or drag and drop here</p>
+            <p style="font-size: 12px; color: #888;">Max file size: 10 MB</p>
+          </div>
+        </div>
+        <div class="pdf-upload-progress" style="display: none;">
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+          <p class="progress-text">Uploading PDF...</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Append to editor container
+  const toolbarContainer = document.getElementsByClassName("toastui-editor-toolbar")[0];
+  toolbarContainer.appendChild(popup);
+
+  // Get elements
+  const dropzone = popup.querySelector('#pdfDropzone');
+  const fileInput = popup.querySelector('#pdfFileInput');
+  const closeButton = popup.querySelector('.pdf-upload-close');
+  const progressContainer = popup.querySelector('.pdf-upload-progress');
+
+  // Close button handler
+  closeButton.addEventListener('click', () => {
+    popup.remove();
+  });
+
+  // Blur event handler to hide popup when clicking outside
+  popup.addEventListener('blur', (e) => {
+    setTimeout(() => {
+      if (!popup.contains(document.activeElement)) {
+        popup.style.display = 'none';
+      }
+    }, 0);
+  }, true);
+
+  // Make popup focusable and focus it
+  popup.setAttribute('tabindex', '-1');
+  popup.focus();
+
+  // Prevent blur when clicking inside the popup
+  popup.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+
+  // Click to select file
+  dropzone.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fileInput.click();
+  });
+
+  // File input change handler
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      await handlePdfUpload(file, popup, progressContainer);
+    }
+  });
+
+  // Drag and drop handlers
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.borderColor = '#1890ff';
+    dropzone.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
+  });
+
+  dropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.borderColor = '#555';
+    dropzone.style.backgroundColor = 'transparent';
+  });
+
+  dropzone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropzone.style.borderColor = '#555';
+    dropzone.style.backgroundColor = 'transparent';
+
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') {
+      await handlePdfUpload(file, popup, progressContainer);
+    } else {
+      alert('Please drop a PDF file');
+    }
+  });
+}
+
+// Handle PDF upload
+async function handlePdfUpload(file, popup, progressContainer) {
+  // Check file size (10 MB max)
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    alert('File is too large. Maximum size is 10 MB.');
+    return;
+  }
+
+  try {
+    // Show progress
+    progressContainer.style.display = 'block';
+
+    // Sanitize filename
+    let originalName = file.name.replace(/\.pdf$/i, '');
+    const sanitizedName = originalName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
+    const filename = `${sanitizedName}.pdf`;
+
+    // Read file as base64
+    const base64Content = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64 = e.target.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    // Upload to R2 storage
+    const success = await saveFileToR2(currentSiteId, `public/${filename}`, base64Content, {
+      encoding: 'base64',
+      contentType: 'application/pdf'
+    });
+
+    if (!success) {
+      throw new Error('Failed to upload PDF');
+    }
+
+    // Hide progress
+    progressContainer.style.display = 'none';
+
+    // Insert PDF attachment markdown into editor
+    const currentMarkdown = editor.getMarkdown();
+    const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
+    const pdfEmbed = `\`\`\`pdf-attachment\n${filename}\n\`\`\``;
+
+    editor.setMarkdown(`${cleanMarkdown}\n\n\n${pdfEmbed}`);
+
+    // Close popup
+    popup.remove();
+
+    console.log('PDF uploaded successfully:', filename);
+  } catch (error) {
+    console.error('Error handling PDF upload:', error);
+    progressContainer.style.display = 'none';
+    alert('Failed to upload PDF: ' + error.message);
+  }
 }

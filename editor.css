@@ -821,6 +821,78 @@ nav {
   border-radius: 4px;
 }
 
+/* PDF upload popup styles */
+.pdf-upload-popup {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background-color: #1e1e1e;
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 20px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 10001 !important;
+}
+
+.pdf-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.pdf-upload-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.pdf-upload-header h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+.pdf-upload-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  line-height: 1;
+}
+
+.pdf-upload-close:hover {
+  color: #ff4444;
+}
+
+.pdf-upload-dropzone {
+  border: 2px dashed #555;
+  border-radius: 8px;
+  padding: 30px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.pdf-upload-dropzone:hover {
+  border-color: #1890ff;
+  background-color: rgba(24, 144, 255, 0.05);
+}
+
+.pdf-upload-progress {
+  text-align: center;
+}
+
 /* Theme toggle button */
 .theme-toggle {
   background: transparent;
