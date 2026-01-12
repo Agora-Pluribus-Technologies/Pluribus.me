@@ -374,8 +374,8 @@ tr:hover {
 }
 
 .diff-add {
-    background-color: rgba(76, 175, 80, 0.15);
-    color: #4caf50;
+    background-color: rgba(33, 150, 243, 0.15);
+    color: #2196f3;
 }
 
 .diff-del {
