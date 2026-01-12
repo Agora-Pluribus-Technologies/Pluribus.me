@@ -220,6 +220,49 @@ async function deleteAllFilesFromR2(siteId) {
   return response.ok;
 }
 
+// List all files for a site from R2
+async function listSiteFiles(siteId) {
+  const params = new URLSearchParams({
+    siteId,
+    list: "true",
+  });
+
+  const response = await fetch(`/api/files?${params.toString()}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    console.error("Failed to list files:", await response.text());
+    return [];
+  }
+
+  const data = await response.json();
+  return data.files || [];
+}
+
+// Upload a file to R2 (for file manager)
+async function uploadFileToR2(siteId, filePath, file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+      const base64Content = e.target.result.split(',')[1];
+      const result = await saveFileToR2(siteId, filePath, base64Content, {
+        encoding: "base64",
+        contentType: file.type || guessContentType(filePath),
+      });
+      if (result) {
+        resolve(true);
+      } else {
+        reject(new Error("Failed to upload file"));
+      }
+    };
+    reader.onerror = function() {
+      reject(new Error("Failed to read file"));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
 const GITLAB_CLIENT_ID = "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf07e8800656";
 const GITLAB_REDIRECT_URI = "https://agorapages.com/gitlab/oauth/callback";

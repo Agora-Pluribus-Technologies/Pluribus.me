@@ -317,6 +317,195 @@ async function openSiteInEditor(site, initialPage = "index") {
   }, 100);
 }
 
+// Store pending site info for mode selection
+let pendingSite = null;
+let pendingPagePath = "index";
+
+// Show mode selection panel
+function showModeSelection(site, pagePath = "index") {
+  pendingSite = site;
+  pendingPagePath = pagePath;
+
+  // Hide sites list panel
+  const sitesListPanel = document.getElementById("sites-list-panel");
+  sitesListPanel.style.display = "none";
+
+  // Show mode selection panel
+  const modeSelectionPanel = document.getElementById("modeSelectionPanel");
+  modeSelectionPanel.style.display = "block";
+
+  // Update site name
+  const modeSelectionSiteName = document.getElementById("modeSelectionSiteName");
+  modeSelectionSiteName.textContent = `${site.owner}/${site.displayName || site.repo}`;
+}
+
+// Open file manager for a site
+async function openFileManager(site) {
+  console.log("Opening file manager for site:", site.siteId);
+
+  currentSiteId = site.siteId;
+  currentSitePathFull = site.siteId;
+
+  // Hide mode selection panel
+  const modeSelectionPanel = document.getElementById("modeSelectionPanel");
+  modeSelectionPanel.style.display = "none";
+
+  // Show file manager
+  const fileManagerContainer = document.getElementById("fileManagerContainer");
+  fileManagerContainer.style.display = "block";
+
+  // Update site name
+  const fileManagerSiteName = document.getElementById("fileManagerSiteName");
+  fileManagerSiteName.textContent = `${site.owner}/${site.displayName || site.repo}`;
+
+  // Update Visit Site button
+  const visitSiteButton = document.getElementById("fileManagerVisitSiteButton");
+  const pluribusSiteUrl = `/s/${currentSitePathFull}`;
+  visitSiteButton.onclick = function () {
+    window.open(pluribusSiteUrl, "_blank");
+  };
+
+  // Load and display files
+  await refreshFileList();
+}
+
+// Refresh file list in file manager
+async function refreshFileList() {
+  const fileList = document.getElementById("fileList");
+  fileList.innerHTML = '<p class="file-list-loading">Loading files...</p>';
+
+  try {
+    const files = await listSiteFiles(currentSiteId);
+
+    if (files.length === 0) {
+      fileList.innerHTML = '<p class="file-list-empty">No files uploaded yet. Drag and drop files above to get started.</p>';
+      return;
+    }
+
+    fileList.innerHTML = "";
+
+    // Sort files by name
+    files.sort((a, b) => a.key.localeCompare(b.key));
+
+    for (const file of files) {
+      const fileItem = document.createElement("div");
+      fileItem.className = "file-item";
+
+      // File icon based on extension
+      const ext = file.key.split(".").pop().toLowerCase();
+      let icon = "📄";
+      if (["png", "jpg", "jpeg", "gif", "webp", "svg", "ico"].includes(ext)) icon = "🖼️";
+      else if (["html", "htm"].includes(ext)) icon = "🌐";
+      else if (["css"].includes(ext)) icon = "🎨";
+      else if (["js"].includes(ext)) icon = "⚡";
+      else if (["json"].includes(ext)) icon = "📋";
+      else if (["md"].includes(ext)) icon = "📝";
+
+      // Format file size
+      let sizeStr = "";
+      if (file.size < 1024) {
+        sizeStr = file.size + " B";
+      } else if (file.size < 1024 * 1024) {
+        sizeStr = (file.size / 1024).toFixed(1) + " KB";
+      } else {
+        sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
+      }
+
+      fileItem.innerHTML = `
+        <span class="file-item-icon">${icon}</span>
+        <span class="file-item-name">${file.key}</span>
+        <span class="file-item-size">${sizeStr}</span>
+        <button class="file-item-delete" title="Delete file">×</button>
+      `;
+
+      // Delete button handler
+      const deleteBtn = fileItem.querySelector(".file-item-delete");
+      deleteBtn.addEventListener("click", async () => {
+        if (confirm(`Delete "${file.key}"?`)) {
+          const success = await deleteFileFromR2(currentSiteId, file.key);
+          if (success) {
+            await refreshFileList();
+          } else {
+            alert("Failed to delete file.");
+          }
+        }
+      });
+
+      fileList.appendChild(fileItem);
+    }
+  } catch (error) {
+    console.error("Error loading files:", error);
+    fileList.innerHTML = '<p class="file-list-empty">Error loading files.</p>';
+  }
+}
+
+// Allowed file extensions for upload
+const ALLOWED_EXTENSIONS = [
+  // HTML
+  "html", "htm",
+  // CSS
+  "css",
+  // Data
+  "json", "md", "txt",
+  // Images
+  "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "avif",
+  // Fonts
+  "woff", "woff2", "ttf", "eot", "otf",
+  // Archives
+  "zip"
+];
+
+// Handle file upload from dropzone
+async function handleFileUpload(files) {
+  if (!files || files.length === 0) return;
+
+  const fileList = document.getElementById("fileList");
+
+  // Filter files by allowed extensions
+  const allowedFiles = [];
+  const rejectedFiles = [];
+
+  for (const file of files) {
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ALLOWED_EXTENSIONS.includes(ext)) {
+      allowedFiles.push(file);
+    } else {
+      rejectedFiles.push(file.name);
+    }
+  }
+
+  // Warn about rejected files
+  if (rejectedFiles.length > 0) {
+    alert(`The following files were not uploaded (unsupported file type):\n${rejectedFiles.join("\n")}\n\nAllowed types: HTML, CSS, JS, JSON, Markdown, images, fonts, and ZIP files.`);
+  }
+
+  if (allowedFiles.length === 0) return;
+
+  for (const file of allowedFiles) {
+    // Show upload progress
+    const uploadingItem = document.createElement("div");
+    uploadingItem.className = "file-item";
+    uploadingItem.innerHTML = `
+      <span class="file-item-icon">⏳</span>
+      <span class="file-item-name">Uploading ${file.name}...</span>
+    `;
+    fileList.insertBefore(uploadingItem, fileList.firstChild);
+
+    try {
+      // Upload to public/ folder
+      const filePath = `public/${file.name}`;
+      await uploadFileToR2(currentSiteId, filePath, file);
+      console.log("Uploaded:", filePath);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert(`Failed to upload ${file.name}`);
+    }
+  }
+
+  // Refresh file list after all uploads
+  await refreshFileList();
+}
+
 // Handle edit context from /edit route
 async function handleEditContext(username) {
   const editContext = window.PLURIBUS_EDIT_CONTEXT;
@@ -360,9 +549,9 @@ async function handleEditContext(username) {
     return;
   }
 
-  // Open the site in the editor
+  // Show mode selection instead of directly opening editor
   const pagePath = editContext.pagePath || "index";
-  await openSiteInEditor(site, pagePath);
+  showModeSelection(site, pagePath);
 }
 
 // Load sites for a specific user
@@ -1817,6 +2006,106 @@ document.addEventListener("DOMContentLoaded", function() {
         alert("Failed to delete account: " + error.message);
         confirmDeleteAccountButton.disabled = false;
         confirmDeleteAccountButton.textContent = "Delete My Account";
+      }
+    });
+  }
+
+  // ==================== Mode Selection and File Manager Event Handlers ====================
+
+  // Mode selection back button - return to sites list
+  const modeBackButton = document.getElementById("modeBackButton");
+  if (modeBackButton) {
+    modeBackButton.addEventListener("click", function() {
+      // Hide mode selection panel
+      document.getElementById("modeSelectionPanel").style.display = "none";
+      // Show sites list panel
+      document.getElementById("sites-list-panel").style.display = "block";
+      // Clear pending site
+      pendingSite = null;
+      pendingPagePath = "index";
+    });
+  }
+
+  // Mode editor button - open page editor
+  const modeEditorButton = document.getElementById("modeEditorButton");
+  if (modeEditorButton) {
+    modeEditorButton.addEventListener("click", async function() {
+      if (!pendingSite) return;
+      // Hide mode selection panel
+      document.getElementById("modeSelectionPanel").style.display = "none";
+      // Open the site in the editor
+      await openSiteInEditor(pendingSite, pendingPagePath);
+    });
+  }
+
+  // Mode files button - open file manager
+  const modeFilesButton = document.getElementById("modeFilesButton");
+  if (modeFilesButton) {
+    modeFilesButton.addEventListener("click", async function() {
+      if (!pendingSite) return;
+      await openFileManager(pendingSite);
+    });
+  }
+
+  // File manager back button - return to mode selection
+  const fileManagerBackButton = document.getElementById("fileManagerBackButton");
+  if (fileManagerBackButton) {
+    fileManagerBackButton.addEventListener("click", function() {
+      // Hide file manager
+      document.getElementById("fileManagerContainer").style.display = "none";
+      // Show mode selection panel
+      document.getElementById("modeSelectionPanel").style.display = "block";
+    });
+  }
+
+  // File dropzone - drag and drop handlers
+  const fileDropzone = document.getElementById("fileDropzone");
+  const fileInput = document.getElementById("fileInput");
+  const fileSelectButton = document.getElementById("fileSelectButton");
+
+  if (fileDropzone) {
+    // Prevent default drag behaviors
+    ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => {
+      fileDropzone.addEventListener(eventName, function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    });
+
+    // Highlight dropzone on drag over
+    ["dragenter", "dragover"].forEach(eventName => {
+      fileDropzone.addEventListener(eventName, function() {
+        fileDropzone.classList.add("dragover");
+      });
+    });
+
+    // Remove highlight on drag leave or drop
+    ["dragleave", "drop"].forEach(eventName => {
+      fileDropzone.addEventListener(eventName, function() {
+        fileDropzone.classList.remove("dragover");
+      });
+    });
+
+    // Handle dropped files
+    fileDropzone.addEventListener("drop", async function(e) {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        await handleFileUpload(files);
+      }
+    });
+  }
+
+  // File select button - trigger file input
+  if (fileSelectButton && fileInput) {
+    fileSelectButton.addEventListener("click", function() {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", async function() {
+      if (fileInput.files.length > 0) {
+        await handleFileUpload(fileInput.files);
+        // Clear input so the same file can be uploaded again
+        fileInput.value = "";
       }
     });
   }

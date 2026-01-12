@@ -65,6 +65,51 @@
           </div>
           <div id="sites-list"></div>
         </div>
+        <div id="modeSelectionPanel" style="display: none;">
+          <div id="modeSelectionHeader">
+            <button id="modeBackButton" class="btn btn-warning">Back</button>
+            <h2 id="modeSelectionSiteName" style="display: inline-block; margin-left: 15px;"></h2>
+          </div>
+          <div id="modeSelectionContent">
+            <p>Choose how you want to edit this site:</p>
+            <div id="modeSelectionButtons">
+              <button id="modeEditorButton" class="btn btn-primary mode-button">
+                <div class="mode-button-icon">&#9998;</div>
+                <div class="mode-button-title">Page Editor</div>
+                <div class="mode-button-desc">Create and edit pages using a visual markdown editor</div>
+              </button>
+              <button id="modeFilesButton" class="btn btn-default mode-button">
+                <div class="mode-button-icon">&#128193;</div>
+                <div class="mode-button-title">File Manager</div>
+                <div class="mode-button-desc">Upload and manage your own HTML, CSS, JS, and other files</div>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="fileManagerContainer" style="display: none;">
+          <div id="fileManagerTopbar">
+            <button id="fileManagerBackButton" class="btn btn-warning">Back</button>
+            <button id="fileManagerVisitSiteButton" class="btn btn-info">Visit Site</button>
+            <h3 id="fileManagerSiteName" style="display: inline-block; margin-left: 15px;"></h3>
+          </div>
+          <div id="fileManagerContent">
+            <div id="fileDropzone">
+              <div id="fileDropzoneContent">
+                <div class="dropzone-icon">&#128194;</div>
+                <p>Drag and drop files here to upload</p>
+                <p>or</p>
+                <button id="fileSelectButton" class="btn btn-primary">Select Files</button>
+                <input type="file" id="fileInput" multiple style="display: none;" accept=".html,.htm,.css,.json,.md,.txt,.png,.jpg,.jpeg,.gif,.webp,.svg,.ico,.avif,.woff,.woff2,.ttf,.eot,.otf,.zip">
+              </div>
+            </div>
+            <div id="fileListSection">
+              <h4>Files</h4>
+              <div id="fileList">
+                <p class="file-list-loading">Loading files...</p>
+              </div>
+            </div>
+          </div>
+        </div>
         <div id="editorContainer" style="display: none">
           <div id="editor-topbar" style="text-align: center; margin-bottom: 10px; margin-top: 10px;">
             <button id="backButton" class="btn btn-warning">Back</button>

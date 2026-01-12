@@ -151,21 +151,49 @@ export async function onRequestPost(context) {
   });
 }
 
-// GET /api/files - Get a file from R2
+// GET /api/files - Get a file from R2 or list all files for a site
 export async function onRequestGet(context) {
   const { request, env } = context;
 
   const url = new URL(request.url);
   const siteId = url.searchParams.get("siteId");
   const filePath = url.searchParams.get("filePath");
+  const listAll = url.searchParams.get("list") === "true";
 
-  if (!siteId || !filePath) {
-    return new Response("Missing required query params: siteId, filePath", { status: 400 });
+  if (!siteId) {
+    return new Response("Missing required query param: siteId", { status: 400 });
   }
 
   // Validate siteId format
   if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
+  }
+
+  // List all files for the site
+  if (listAll) {
+    try {
+      const prefix = `${siteId}/`;
+      const listed = await env.PLURIBUS_BUCKET.list({ prefix });
+
+      const files = listed.objects.map(obj => ({
+        key: obj.key.replace(prefix, ""),
+        size: obj.size,
+        uploaded: obj.uploaded,
+      }));
+
+      return new Response(JSON.stringify({ files }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("R2 list error:", error);
+      return new Response("Failed to list files", { status: 500 });
+    }
+  }
+
+  // Get a specific file
+  if (!filePath) {
+    return new Response("Missing required query param: filePath (or use list=true)", { status: 400 });
   }
 
   // Validate filePath (no path traversal)

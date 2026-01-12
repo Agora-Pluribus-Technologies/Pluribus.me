@@ -876,6 +876,199 @@ nav {
   font-weight: 500;
 }
 
+/* Mode Selection Panel */
+#modeSelectionPanel {
+  text-align: center;
+  min-width: 40%;
+  max-width: 80%;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+#modeSelectionHeader {
+  text-align: left;
+  margin-bottom: 30px;
+}
+
+#modeSelectionContent {
+  padding: 20px;
+}
+
+#modeSelectionContent p {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: 30px;
+}
+
+#modeSelectionButtons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.mode-button {
+  width: 250px;
+  height: auto;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.mode-button:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+.mode-button-icon {
+  font-size: 48px;
+}
+
+.mode-button-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.mode-button-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* File Manager */
+#fileManagerContainer {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+#fileManagerTopbar {
+  margin-bottom: 20px;
+}
+
+#fileManagerTopbar h3 {
+  margin: 0;
+  vertical-align: middle;
+}
+
+#fileManagerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+#fileDropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: var(--bg-secondary);
+}
+
+#fileDropzone:hover,
+#fileDropzone.dragover {
+  border-color: var(--link-color);
+  background-color: rgba(24, 144, 255, 0.1);
+}
+
+#fileDropzoneContent .dropzone-icon {
+  font-size: 64px;
+  margin-bottom: 10px;
+}
+
+#fileDropzoneContent p {
+  margin: 5px 0;
+  color: var(--text-secondary);
+}
+
+#fileListSection {
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+#fileListSection h4 {
+  margin: 0 0 15px 0;
+  color: var(--text-primary);
+}
+
+#fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.file-list-loading {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  border: 1px solid var(--border-light);
+  transition: background-color 0.2s ease;
+}
+
+.file-item:hover {
+  background-color: var(--bg-primary);
+}
+
+.file-item-icon {
+  font-size: 20px;
+  margin-right: 10px;
+  width: 24px;
+  text-align: center;
+}
+
+.file-item-name {
+  flex: 1;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.file-item-size {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-right: 15px;
+}
+
+.file-item-delete {
+  background: transparent;
+  border: none;
+  color: var(--error-color);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 5px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.file-item-delete:hover {
+  opacity: 1;
+}
+
+.file-list-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 30px;
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
 
   #userMenuContainer {
