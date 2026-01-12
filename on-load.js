@@ -378,6 +378,22 @@ function updateBreadcrumbs() {
   const breadcrumbs = document.getElementById("fileBreadcrumbs");
   breadcrumbs.innerHTML = "";
 
+  // Up button (go to parent directory)
+  const upBtn = document.createElement("button");
+  upBtn.className = "breadcrumb-up-btn";
+  upBtn.innerHTML = "&#8593; Up";
+  upBtn.title = "Go to parent folder";
+  if (currentFolderPath === "") {
+    upBtn.disabled = true;
+  } else {
+    upBtn.addEventListener("click", () => {
+      const parts = currentFolderPath.split("/");
+      parts.pop();
+      navigateToFolder(parts.join("/"));
+    });
+  }
+  breadcrumbs.appendChild(upBtn);
+
   // Root breadcrumb (public)
   const rootItem = document.createElement("span");
   rootItem.className = "breadcrumb-item breadcrumb-root" + (currentFolderPath === "" ? " active" : "");
@@ -400,7 +416,7 @@ function updateBreadcrumbs() {
       // Separator
       const separator = document.createElement("span");
       separator.className = "breadcrumb-separator";
-      separator.textContent = " / ";
+      separator.textContent = "›";
       breadcrumbs.appendChild(separator);
 
       // Folder breadcrumb
