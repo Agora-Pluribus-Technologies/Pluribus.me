@@ -152,7 +152,7 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Update Visit Site button URL
   const visitSiteButton = document.getElementById("visitSiteButton");
   if (visitSiteButton && currentSitePathFull) {
-    const pluribusSiteUrl = `/s/${currentSitePathFull}`;
+    const pluribusSiteUrl = `/s/${currentSitePathFull}/`;
     visitSiteButton.onclick = function () {
       window.open(pluribusSiteUrl, "_blank");
     };
