@@ -682,13 +682,23 @@ async function processDroppedItems(dataTransfer) {
   const allFiles = [];
 
   if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === "function") {
-    // Use webkitGetAsEntry for folder support
+    // Collect all entries first (must be done synchronously before dataTransfer is cleared)
+    const entries = [];
     for (let i = 0; i < items.length; i++) {
       const entry = items[i].webkitGetAsEntry();
       if (entry) {
-        const files = await getAllFilesFromEntry(entry);
-        allFiles.push(...files);
+        entries.push(entry);
       }
+    }
+
+    // Process all entries in parallel
+    const fileArrays = await Promise.all(
+      entries.map(entry => getAllFilesFromEntry(entry))
+    );
+
+    // Flatten results
+    for (const files of fileArrays) {
+      allFiles.push(...files);
     }
   } else {
     // Fallback: regular file list (no folder support)
