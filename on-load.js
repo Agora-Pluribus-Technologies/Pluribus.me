@@ -364,7 +364,7 @@ async function openFileManager(site) {
 
   // Update Visit Site button
   const visitSiteButton = document.getElementById("fileManagerVisitSiteButton");
-  const pluribusSiteUrl = `/s/${currentSitePathFull}`;
+  const pluribusSiteUrl = `/s/${currentSitePathFull}/`;
   visitSiteButton.onclick = function () {
     window.open(pluribusSiteUrl, "_blank");
   };
