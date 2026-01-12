@@ -695,6 +695,63 @@ async function initialCommit(siteId, siteSettings = {}) {
   return result;
 }
 
+// Combined initial commit with git history - single R2 call
+async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
+  const { siteName, repo, owner } = siteSettings;
+
+  const siteJson = {
+    siteName: siteName || repo || "Untitled Site",
+    repo: repo || siteId.split("/")[1] || "",
+    owner: owner || siteId.split("/")[0] || "",
+    createdAt: new Date().toISOString(),
+  };
+
+  // Initialize git repository and create initial commit
+  await gitInit(siteId);
+  await gitWriteFile(siteId, "public/pages.json", "[]");
+  await gitWriteFile(siteId, "public/images.json", "[]");
+  await gitCommit(siteId, "Initial commit");
+  console.log("Git repo initialized for site:", siteId);
+
+  // Serialize git history
+  const gitData = await serializeGitDirectory(siteId);
+  if (!gitData) {
+    console.error("Failed to serialize git directory");
+    return false;
+  }
+  const gitHistoryJson = JSON.stringify(gitData);
+
+  // Combine all files into a single batch
+  const files = [
+    {
+      filePath: "public/pages.json",
+      content: "[]",
+      contentType: "application/json",
+    },
+    {
+      filePath: "public/images.json",
+      content: "[]",
+      contentType: "application/json",
+    },
+    {
+      filePath: "public/site.json",
+      content: JSON.stringify(siteJson, null, 2),
+      contentType: "application/json",
+    },
+    {
+      filePath: ".git-history.json",
+      content: gitHistoryJson,
+      contentType: "application/json",
+    },
+  ];
+
+  const result = await saveFilesToR2(siteId, files);
+  if (result) {
+    console.log("Initial commit with git history completed successfully (single R2 call)");
+  }
+  return result;
+}
+
 async function getFileContent(siteId, filePath) {
   return await getFileFromR2(siteId, filePath);
 }

@@ -829,20 +829,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         console.log("Site config stored successfully");
 
-        // Create initial files in R2
-        await initialCommit(siteId, { siteName, repo, owner });
-        console.log("Initial commit completed for site:", siteId);
-
-        // Initialize git repository
-        await gitInit(siteId);
-        await gitWriteFile(siteId, "public/pages.json", "[]");
-        await gitWriteFile(siteId, "public/images.json", "[]");
-        await gitCommit(siteId, "Initial commit");
-        console.log("Git repo initialized for site:", siteId);
-
-        // Save git history to R2 for persistence
-        await saveGitHistoryToR2(siteId);
-        console.log("Git history saved to R2 for site:", siteId);
+        // Create initial files and git history in R2 (single API call)
+        await initialCommitWithGitHistory(siteId, { siteName, repo, owner });
 
         // Add new site to cache
         const newSite = {
