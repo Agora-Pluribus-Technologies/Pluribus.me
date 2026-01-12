@@ -13,6 +13,9 @@ let sharedSitesCache = [];
 // Global cache for images - Array of filenames
 let imageCache = [];
 
+// Global cache for documents (PDFs, DOCX) - Array of filenames
+let documentCache = [];
+
 // Helper functions for markdownCache
 function getCacheByFileName(fileName) {
   return markdownCache.find(item => item.fileName === fileName);
@@ -76,6 +79,24 @@ function removeImageFromCache(filename) {
 
 function isImageInCache(filename) {
   return imageCache.includes(filename);
+}
+
+// Helper functions for documentCache
+function addDocumentToCache(filename) {
+  if (!documentCache.includes(filename)) {
+    documentCache.push(filename);
+  }
+}
+
+function removeDocumentFromCache(filename) {
+  const index = documentCache.indexOf(filename);
+  if (index !== -1) {
+    documentCache.splice(index, 1);
+  }
+}
+
+function isDocumentInCache(filename) {
+  return documentCache.includes(filename);
 }
 
 // Interval for checking site availability
@@ -230,6 +251,22 @@ async function openSiteInEditor(site, initialPage = "index") {
     } catch (error) {
       console.error("Error loading images.json:", error);
       imageCache = [];
+    }
+
+    // Initialize documentCache from documents.json
+    try {
+      const documentsJsonContent = await getFileContent(currentSiteId, "public/documents.json");
+
+      if (documentsJsonContent) {
+        documentCache = JSON.parse(documentsJsonContent);
+        console.log("Loaded documentCache:", documentCache);
+      } else {
+        documentCache = [];
+        console.log("documents.json not found, initialized empty documentCache");
+      }
+    } catch (error) {
+      console.error("Error loading documents.json:", error);
+      documentCache = [];
     }
   }
 

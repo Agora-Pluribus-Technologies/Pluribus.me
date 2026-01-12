@@ -811,6 +811,9 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
     // Write images.json
     await gitWriteFile(siteId, "public/images.json", JSON.stringify(imageCache));
 
+    // Write documents.json
+    await gitWriteFile(siteId, "public/documents.json", JSON.stringify(documentCache));
+
     console.log("Cache synced to git");
     return true;
   } catch (error) {
@@ -869,6 +872,12 @@ async function loadR2ToGit(siteId) {
           await pfs.writeFile(`${dir}/public/images.json`, imagesJson, "utf8");
         }
 
+        // Load documents.json
+        const documentsJson = await getFileFromR2(siteId, "public/documents.json");
+        if (documentsJson) {
+          await pfs.writeFile(`${dir}/public/documents.json`, documentsJson, "utf8");
+        }
+
         console.log("Git history restored from R2 successfully");
         return true;
       }
@@ -901,6 +910,12 @@ async function loadR2ToGit(siteId) {
     const imagesJson = await getFileFromR2(siteId, "public/images.json");
     if (imagesJson) {
       await gitWriteFile(siteId, "public/images.json", imagesJson);
+    }
+
+    // Load documents.json from R2
+    const documentsJson = await getFileFromR2(siteId, "public/documents.json");
+    if (documentsJson) {
+      await gitWriteFile(siteId, "public/documents.json", documentsJson);
     }
 
     // Create initial commit if there are files

@@ -1,4 +1,46 @@
 let editor; // Global variable to store editor instance
+let savedCursorPosition = null; // Store cursor position before opening popups
+
+// Helper function to save cursor position
+function saveCursorPosition() {
+  if (editor) {
+    const selection = editor.getSelection();
+    // selection is [startPos, endPos] where each is [line, ch]
+    savedCursorPosition = selection;
+  }
+}
+
+// Helper function to insert content at saved cursor position
+function insertAtCursor(content) {
+  if (!editor) return;
+
+  const markdown = editor.getMarkdown();
+  const wrappedContent = `\n\n${content}\n\n`;
+
+  if (savedCursorPosition) {
+    // Get cursor offset in the markdown string
+    const lines = markdown.split('\n');
+    const [startPos] = savedCursorPosition;
+    const [line, ch] = startPos;
+
+    // Calculate character offset
+    let offset = 0;
+    for (let i = 0; i < line - 1 && i < lines.length; i++) {
+      offset += lines[i].length + 1; // +1 for newline
+    }
+    offset += ch;
+
+    // Insert at position
+    const before = markdown.substring(0, offset);
+    const after = markdown.substring(offset);
+    editor.setMarkdown(before + wrappedContent + after);
+  } else {
+    // Fallback: append to end
+    editor.setMarkdown(markdown.replace("<br>", "").trim() + wrappedContent);
+  }
+
+  savedCursorPosition = null;
+}
 
 // Helper function to convert image to AVIF and resize
 async function processImage(file) {
@@ -151,6 +193,7 @@ function createImageButton() {
   button.type = 'button';
 
   button.addEventListener('click', () => {
+    saveCursorPosition();
     showImageUploadPopup();
   });
 
@@ -165,6 +208,7 @@ function createHtmlEmbedButton() {
   button.type = 'button';
 
   button.addEventListener('click', () => {
+    saveCursorPosition();
     showHtmlEmbedPopup();
   });
 
@@ -192,10 +236,8 @@ function populateImageGallery(galleryElement) {
 
     // Click image to insert into editor
     img.addEventListener('click', () => {
-      let currentMarkdown = editor.getMarkdown();
       const imageMarkdown = `![${filename}](${imageUrl})`;
-
-      editor.setMarkdown(currentMarkdown.replace("<br>", "").trim() + "\n\n\n" + imageMarkdown);
+      insertAtCursor(imageMarkdown);
 
       // Close the popup
       const popup = document.querySelector('.image-upload-popup');
@@ -373,11 +415,10 @@ async function handleImageUpload(file, popup, progressContainer, imageGallery) {
     // Refresh the image gallery
     populateImageGallery(imageGallery);
 
-    // Insert image into editor (use setMarkdown to avoid escaping)
+    // Insert image into editor at cursor position
     const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
-    const currentMarkdown = editor.getMarkdown();
     const imageMarkdown = `![${filename}](${imageUrl})`;
-    editor.setMarkdown(currentMarkdown + '\n' + imageMarkdown);
+    insertAtCursor(imageMarkdown);
 
     // Close popup
     popup.remove();
@@ -520,12 +561,9 @@ function showHtmlEmbedPopup() {
       embedContent = htmlCode;
     }
 
-    // Insert into editor as code-block-enclosed embed
-    let currentMarkdown = editor.getMarkdown();
-    const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
+    // Insert into editor as code-block-enclosed embed at cursor position
     const htmlEmbed = `\`\`\`embed\n${embedContent}\n\`\`\``;
-
-    editor.setMarkdown(`${cleanMarkdown}\n\n\n${htmlEmbed}`);
+    insertAtCursor(htmlEmbed);
 
     // Close popup
     popup.remove();
@@ -544,17 +582,18 @@ function showHtmlEmbedPopup() {
   popup.setAttribute('tabindex', '-1');
   popup.focus();
 
-  // Prevent blur when clicking inside the popup (but not on buttons)
+  // Prevent blur when clicking inside the popup (but not on interactive elements)
   popup.addEventListener('mousedown', (e) => {
-    // Don't prevent default on buttons to allow clicks to work
-    if (e.target.tagName !== 'BUTTON') {
+    // Don't prevent default on interactive elements to allow them to work
+    const interactiveTags = ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'];
+    if (!interactiveTags.includes(e.target.tagName)) {
       e.preventDefault();
     }
   });
 
-  // Focus the textarea
+  // Focus the YouTube input (default selection)
   setTimeout(() => {
-    textarea.focus();
+    youtubeInput.focus();
   }, 100);
 }
 
@@ -568,6 +607,7 @@ function createPdfAttachButton() {
   button.style.fontSize = '16px';
 
   button.addEventListener('click', () => {
+    saveCursorPosition();
     showPdfUploadPopup();
   });
 
@@ -610,6 +650,12 @@ function showPdfUploadPopup() {
           </div>
           <p class="progress-text">Uploading document...</p>
         </div>
+        <div class="document-list-section">
+          <h4>Uploaded Documents</h4>
+          <div class="document-list" id="documentList">
+            <!-- Documents will be populated here -->
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -623,6 +669,10 @@ function showPdfUploadPopup() {
   const fileInput = popup.querySelector('#pdfFileInput');
   const closeButton = popup.querySelector('.pdf-upload-close');
   const progressContainer = popup.querySelector('.pdf-upload-progress');
+  const documentList = popup.querySelector('#documentList');
+
+  // Populate document list
+  populateDocumentList(documentList);
 
   // Close button handler
   closeButton.addEventListener('click', () => {
@@ -751,20 +801,101 @@ async function handlePdfUpload(file, popup, progressContainer) {
     // Hide progress
     progressContainer.style.display = 'none';
 
-    // Insert PDF attachment markdown into editor
-    const currentMarkdown = editor.getMarkdown();
-    const cleanMarkdown = currentMarkdown.replace("<br>", "").trim();
-    const pdfEmbed = `\`\`\`doc-attachment\n${filename}\n\`\`\``;
-
-    editor.setMarkdown(`${cleanMarkdown}\n\n\n${pdfEmbed}`);
+    // Insert document attachment markdown into editor at cursor position
+    const docEmbed = `\`\`\`doc-attachment\n${filename}\n\`\`\``;
+    insertAtCursor(docEmbed);
 
     // Close popup
     popup.remove();
 
-    console.log('PDF uploaded successfully:', filename);
+    // Add to document cache
+    addDocumentToCache(filename);
+
+    console.log('Document uploaded successfully:', filename);
   } catch (error) {
-    console.error('Error handling PDF upload:', error);
+    console.error('Error handling document upload:', error);
     progressContainer.style.display = 'none';
-    alert('Failed to upload PDF: ' + error.message);
+    alert('Failed to upload document: ' + error.message);
   }
+}
+
+// Populate document list
+function populateDocumentList(listElement) {
+  listElement.innerHTML = '';
+
+  if (documentCache.length === 0) {
+    listElement.innerHTML = '<div class="document-list-empty">No documents uploaded yet</div>';
+    return;
+  }
+
+  documentCache.forEach(filename => {
+    const docUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
+    const isDocx = filename.toLowerCase().endsWith('.docx');
+    const icon = isDocx ? '📝' : '📄';
+
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'document-list-item';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'document-icon';
+    iconSpan.textContent = icon;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'document-name';
+    nameSpan.textContent = filename;
+    nameSpan.title = filename;
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'document-actions';
+
+    // Insert button
+    const insertBtn = document.createElement('button');
+    insertBtn.className = 'document-insert-btn';
+    insertBtn.textContent = 'Insert';
+    insertBtn.title = 'Insert into editor';
+    insertBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const docEmbed = `\`\`\`doc-attachment\n${filename}\n\`\`\``;
+      insertAtCursor(docEmbed);
+
+      // Close the popup
+      const popup = document.querySelector('.pdf-upload-popup');
+      if (popup) popup.remove();
+    });
+
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'document-delete-btn';
+    deleteBtn.textContent = '×';
+    deleteBtn.title = 'Delete document';
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+
+      if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+        return;
+      }
+
+      try {
+        const success = await deleteFileFromR2(currentSiteId, `public/${filename}`);
+
+        if (success) {
+          removeDocumentFromCache(filename);
+          populateDocumentList(listElement);
+        } else {
+          throw new Error('Failed to delete document');
+        }
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        alert('Failed to delete document: ' + error.message);
+      }
+    });
+
+    actionsDiv.appendChild(insertBtn);
+    actionsDiv.appendChild(deleteBtn);
+
+    itemDiv.appendChild(iconSpan);
+    itemDiv.appendChild(nameSpan);
+    itemDiv.appendChild(actionsDiv);
+    listElement.appendChild(itemDiv);
+  });
 }

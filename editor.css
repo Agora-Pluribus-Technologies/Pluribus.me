@@ -860,18 +860,25 @@ nav {
 
 .pdf-upload-close {
   background: transparent;
-  border: none;
-  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #ff4444;
   font-size: 28px;
   cursor: pointer;
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
 .pdf-upload-close:hover {
-  color: #ff4444;
+  background-color: #ff4444;
+  border-color: #ff4444;
+  color: #fff;
 }
 
 .pdf-upload-dropzone {
@@ -891,6 +898,109 @@ nav {
 
 .pdf-upload-progress {
   text-align: center;
+}
+
+/* Document list section */
+.document-list-section {
+  margin-top: 20px;
+}
+
+.document-list-section h4 {
+  margin: 0 0 10px 0;
+  color: #fff;
+  font-size: 16px;
+}
+
+.document-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #0a0a0a;
+  border-radius: 8px;
+  border: 1px solid #333;
+  padding: 8px;
+}
+
+.document-list-empty {
+  color: #888;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+.document-list-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  background-color: #1e1e1e;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  transition: background-color 0.2s ease;
+}
+
+.document-list-item:last-child {
+  margin-bottom: 0;
+}
+
+.document-list-item:hover {
+  background-color: #2a2a2a;
+}
+
+.document-icon {
+  font-size: 18px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.document-name {
+  flex: 1;
+  color: #fff;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.document-insert-btn {
+  background-color: #1890ff;
+  border: none;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s ease;
+}
+
+.document-insert-btn:hover {
+  background-color: #40a9ff;
+}
+
+.document-delete-btn {
+  background-color: transparent;
+  border: 1px solid #ff4444;
+  color: #ff4444;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.document-delete-btn:hover {
+  background-color: #ff4444;
+  color: #fff;
 }
 
 /* Theme toggle button */
