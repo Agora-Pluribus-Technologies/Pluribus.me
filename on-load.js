@@ -321,6 +321,9 @@ async function openSiteInEditor(site, initialPage = "index") {
 let pendingSite = null;
 let pendingPagePath = "index";
 
+// Current folder path for file manager (relative to public/)
+let currentFolderPath = "";
+
 // Show mode selection panel
 function showModeSelection(site, pagePath = "index") {
   pendingSite = site;
@@ -345,6 +348,7 @@ async function openFileManager(site) {
 
   currentSiteId = site.siteId;
   currentSitePathFull = site.siteId;
+  currentFolderPath = ""; // Reset to root folder
 
   // Hide mode selection panel
   const modeSelectionPanel = document.getElementById("modeSelectionPanel");
@@ -369,37 +373,181 @@ async function openFileManager(site) {
   await refreshFileList();
 }
 
+// Update breadcrumbs display
+function updateBreadcrumbs() {
+  const breadcrumbs = document.getElementById("fileBreadcrumbs");
+  breadcrumbs.innerHTML = "";
+
+  // Root breadcrumb (public)
+  const rootItem = document.createElement("span");
+  rootItem.className = "breadcrumb-item breadcrumb-root" + (currentFolderPath === "" ? " active" : "");
+  rootItem.textContent = "public";
+  rootItem.dataset.path = "";
+  if (currentFolderPath !== "") {
+    rootItem.addEventListener("click", () => navigateToFolder(""));
+  }
+  breadcrumbs.appendChild(rootItem);
+
+  // Add folder path parts
+  if (currentFolderPath) {
+    const parts = currentFolderPath.split("/");
+    let accumulatedPath = "";
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      accumulatedPath += (accumulatedPath ? "/" : "") + part;
+
+      // Separator
+      const separator = document.createElement("span");
+      separator.className = "breadcrumb-separator";
+      separator.textContent = " / ";
+      breadcrumbs.appendChild(separator);
+
+      // Folder breadcrumb
+      const folderItem = document.createElement("span");
+      const isLast = i === parts.length - 1;
+      folderItem.className = "breadcrumb-item" + (isLast ? " active" : "");
+      folderItem.textContent = part;
+      folderItem.dataset.path = accumulatedPath;
+      if (!isLast) {
+        const pathToNavigate = accumulatedPath;
+        folderItem.addEventListener("click", () => navigateToFolder(pathToNavigate));
+      }
+      breadcrumbs.appendChild(folderItem);
+    }
+  }
+}
+
+// Navigate to a folder
+async function navigateToFolder(folderPath) {
+  currentFolderPath = folderPath;
+  updateBreadcrumbs();
+  await refreshFileList();
+}
+
+// Download a file
+async function downloadFile(filePath) {
+  try {
+    const response = await fetch(`/api/files?siteId=${encodeURIComponent(currentSiteId)}&filePath=${encodeURIComponent(filePath)}`);
+    if (!response.ok) {
+      throw new Error("Failed to download file");
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filePath.split("/").pop();
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  } catch (error) {
+    console.error("Download error:", error);
+    alert("Failed to download file.");
+  }
+}
+
 // Refresh file list in file manager
 async function refreshFileList() {
   const fileList = document.getElementById("fileList");
   fileList.innerHTML = '<p class="file-list-loading">Loading files...</p>';
 
-  try {
-    const files = await listSiteFiles(currentSiteId);
+  updateBreadcrumbs();
 
-    if (files.length === 0) {
-      fileList.innerHTML = '<p class="file-list-empty">No files uploaded yet. Drag and drop files above to get started.</p>';
-      return;
+  try {
+    const allFiles = await listSiteFiles(currentSiteId);
+
+    // Filter files: only show items in current folder (files in public/ folder)
+    // Files from API have keys relative to siteId, so they start with "public/"
+    const currentPrefix = currentFolderPath ? `public/${currentFolderPath}/` : "public/";
+
+    // Get items in current folder (files and immediate subfolders)
+    const folders = new Set();
+    const filesInFolder = [];
+
+    for (const file of allFiles) {
+      // Skip files not in public folder
+      if (!file.key.startsWith("public/")) continue;
+
+      // Get path relative to public/
+      const relativePath = file.key.substring(7); // Remove "public/"
+
+      // Check if file is in current folder or a subfolder
+      if (currentFolderPath === "") {
+        // At root (public/)
+        if (relativePath.includes("/")) {
+          // It's in a subfolder - extract first folder name
+          const folderName = relativePath.split("/")[0];
+          folders.add(folderName);
+        } else {
+          // It's a file directly in public/
+          filesInFolder.push({ ...file, displayName: relativePath });
+        }
+      } else {
+        // In a subfolder
+        if (relativePath.startsWith(currentFolderPath + "/")) {
+          const remainingPath = relativePath.substring(currentFolderPath.length + 1);
+          if (remainingPath.includes("/")) {
+            // It's in a deeper subfolder
+            const folderName = remainingPath.split("/")[0];
+            folders.add(folderName);
+          } else {
+            // It's a file in current folder
+            filesInFolder.push({ ...file, displayName: remainingPath });
+          }
+        }
+      }
     }
 
     fileList.innerHTML = "";
 
-    // Sort files by name
-    files.sort((a, b) => a.key.localeCompare(b.key));
+    // Check if empty
+    if (folders.size === 0 && filesInFolder.length === 0) {
+      fileList.innerHTML = '<p class="file-list-empty">No files in this folder. Drag and drop files to upload.</p>';
+      return;
+    }
 
-    for (const file of files) {
+    // Sort and display folders first
+    const sortedFolders = Array.from(folders).sort();
+    for (const folderName of sortedFolders) {
+      const folderItem = document.createElement("div");
+      folderItem.className = "file-item folder-item";
+
+      folderItem.innerHTML = `
+        <span class="file-item-icon">📁</span>
+        <span class="file-item-name">${folderName}</span>
+        <span class="file-item-size"></span>
+        <div class="file-item-actions"></div>
+      `;
+
+      // Click to navigate into folder
+      folderItem.addEventListener("click", () => {
+        const newPath = currentFolderPath ? `${currentFolderPath}/${folderName}` : folderName;
+        navigateToFolder(newPath);
+      });
+
+      fileList.appendChild(folderItem);
+    }
+
+    // Sort files by name
+    filesInFolder.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    for (const file of filesInFolder) {
       const fileItem = document.createElement("div");
       fileItem.className = "file-item";
 
       // File icon based on extension
-      const ext = file.key.split(".").pop().toLowerCase();
+      const ext = file.displayName.split(".").pop().toLowerCase();
       let icon = "📄";
-      if (["png", "jpg", "jpeg", "gif", "webp", "svg", "ico"].includes(ext)) icon = "🖼️";
+      if (["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "avif"].includes(ext)) icon = "🖼️";
       else if (["html", "htm"].includes(ext)) icon = "🌐";
       else if (["css"].includes(ext)) icon = "🎨";
       else if (["js"].includes(ext)) icon = "⚡";
       else if (["json"].includes(ext)) icon = "📋";
       else if (["md"].includes(ext)) icon = "📝";
+      else if (["woff", "woff2", "ttf", "eot", "otf"].includes(ext)) icon = "🔤";
+      else if (["zip"].includes(ext)) icon = "📦";
 
       // Format file size
       let sizeStr = "";
@@ -413,15 +561,26 @@ async function refreshFileList() {
 
       fileItem.innerHTML = `
         <span class="file-item-icon">${icon}</span>
-        <span class="file-item-name">${file.key}</span>
+        <span class="file-item-name">${file.displayName}</span>
         <span class="file-item-size">${sizeStr}</span>
-        <button class="file-item-delete" title="Delete file">×</button>
+        <div class="file-item-actions">
+          <button class="file-item-download" title="Download file">⬇</button>
+          <button class="file-item-delete" title="Delete file">×</button>
+        </div>
       `;
+
+      // Download button handler
+      const downloadBtn = fileItem.querySelector(".file-item-download");
+      downloadBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        downloadFile(file.key);
+      });
 
       // Delete button handler
       const deleteBtn = fileItem.querySelector(".file-item-delete");
-      deleteBtn.addEventListener("click", async () => {
-        if (confirm(`Delete "${file.key}"?`)) {
+      deleteBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete "${file.displayName}"?`)) {
           const success = await deleteFileFromR2(currentSiteId, file.key);
           if (success) {
             await refreshFileList();
@@ -492,8 +651,9 @@ async function handleFileUpload(files) {
     fileList.insertBefore(uploadingItem, fileList.firstChild);
 
     try {
-      // Upload to public/ folder
-      const filePath = `public/${file.name}`;
+      // Upload to current folder within public/
+      const folderPrefix = currentFolderPath ? `public/${currentFolderPath}` : "public";
+      const filePath = `${folderPrefix}/${file.name}`;
       await uploadFileToR2(currentSiteId, filePath, file);
       console.log("Uploaded:", filePath);
     } catch (error) {
@@ -2046,15 +2206,15 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 
-  // File dropzone - drag and drop handlers
-  const fileDropzone = document.getElementById("fileDropzone");
+  // File dropzone - drag and drop handlers (using fileListSection as dropzone)
+  const fileListSection = document.getElementById("fileListSection");
   const fileInput = document.getElementById("fileInput");
   const fileSelectButton = document.getElementById("fileSelectButton");
 
-  if (fileDropzone) {
+  if (fileListSection) {
     // Prevent default drag behaviors
     ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => {
-      fileDropzone.addEventListener(eventName, function(e) {
+      fileListSection.addEventListener(eventName, function(e) {
         e.preventDefault();
         e.stopPropagation();
       });
@@ -2062,20 +2222,20 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Highlight dropzone on drag over
     ["dragenter", "dragover"].forEach(eventName => {
-      fileDropzone.addEventListener(eventName, function() {
-        fileDropzone.classList.add("dragover");
+      fileListSection.addEventListener(eventName, function() {
+        fileListSection.classList.add("dragover");
       });
     });
 
     // Remove highlight on drag leave or drop
     ["dragleave", "drop"].forEach(eventName => {
-      fileDropzone.addEventListener(eventName, function() {
-        fileDropzone.classList.remove("dragover");
+      fileListSection.addEventListener(eventName, function() {
+        fileListSection.classList.remove("dragover");
       });
     });
 
     // Handle dropped files
-    fileDropzone.addEventListener("drop", async function(e) {
+    fileListSection.addEventListener("drop", async function(e) {
       const files = e.dataTransfer.files;
       if (files.length > 0) {
         await handleFileUpload(files);
