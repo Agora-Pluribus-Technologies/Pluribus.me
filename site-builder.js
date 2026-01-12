@@ -1,12 +1,62 @@
 let editor; // Global variable to store editor instance
-let savedCursorPosition = null; // Store cursor position before opening popups
+let savedMarkdownBeforeCursor = null;
+let savedMarkdownAfterCursor = null;
 
-// Helper function to save cursor position
+// Helper function to save cursor position by storing markdown split at cursor
 function saveCursorPosition() {
-  if (editor) {
+  if (!editor) return;
+
+  try {
+    // Get current markdown
+    const markdown = editor.getMarkdown();
+
+    // Get selection - ToastUI returns [start, end] where each is [line, ch]
     const selection = editor.getSelection();
-    // selection is [startPos, endPos] where each is [line, ch]
-    savedCursorPosition = selection;
+
+    if (selection && Array.isArray(selection) && selection.length >= 1) {
+      const startPos = selection[0];
+      let line, ch;
+
+      // Handle both array format [line, ch] and object format {line, ch}
+      if (Array.isArray(startPos)) {
+        [line, ch] = startPos;
+      } else if (startPos && typeof startPos === 'object') {
+        line = startPos.line || startPos.row || 0;
+        ch = startPos.ch || startPos.column || 0;
+      } else {
+        // Fallback - append to end
+        savedMarkdownBeforeCursor = markdown.replace("<br>", "").trim();
+        savedMarkdownAfterCursor = "";
+        return;
+      }
+
+      // Calculate character offset in markdown string
+      const lines = markdown.split('\n');
+      let offset = 0;
+
+      // Line numbers are 1-based in ToastUI
+      const targetLine = Math.max(0, line - 1);
+      for (let i = 0; i < targetLine && i < lines.length; i++) {
+        offset += lines[i].length + 1; // +1 for newline
+      }
+      offset += Math.min(ch, lines[targetLine]?.length || 0);
+
+      // Clamp offset to valid range
+      offset = Math.max(0, Math.min(offset, markdown.length));
+
+      savedMarkdownBeforeCursor = markdown.substring(0, offset);
+      savedMarkdownAfterCursor = markdown.substring(offset);
+    } else {
+      // No valid selection, append to end
+      savedMarkdownBeforeCursor = markdown.replace("<br>", "").trim();
+      savedMarkdownAfterCursor = "";
+    }
+  } catch (error) {
+    console.error("Error saving cursor position:", error);
+    // Fallback - append to end
+    const markdown = editor.getMarkdown();
+    savedMarkdownBeforeCursor = markdown.replace("<br>", "").trim();
+    savedMarkdownAfterCursor = "";
   }
 }
 
@@ -14,32 +64,19 @@ function saveCursorPosition() {
 function insertAtCursor(content) {
   if (!editor) return;
 
-  const markdown = editor.getMarkdown();
   const wrappedContent = `\n\n${content}\n\n`;
 
-  if (savedCursorPosition) {
-    // Get cursor offset in the markdown string
-    const lines = markdown.split('\n');
-    const [startPos] = savedCursorPosition;
-    const [line, ch] = startPos;
-
-    // Calculate character offset
-    let offset = 0;
-    for (let i = 0; i < line - 1 && i < lines.length; i++) {
-      offset += lines[i].length + 1; // +1 for newline
-    }
-    offset += ch;
-
-    // Insert at position
-    const before = markdown.substring(0, offset);
-    const after = markdown.substring(offset);
-    editor.setMarkdown(before + wrappedContent + after);
+  if (savedMarkdownBeforeCursor !== null) {
+    editor.setMarkdown(savedMarkdownBeforeCursor + wrappedContent + savedMarkdownAfterCursor);
   } else {
     // Fallback: append to end
-    editor.setMarkdown(markdown.replace("<br>", "").trim() + wrappedContent);
+    const markdown = editor.getMarkdown().replace("<br>", "").trim();
+    editor.setMarkdown(markdown + wrappedContent);
   }
 
-  savedCursorPosition = null;
+  // Reset saved positions
+  savedMarkdownBeforeCursor = null;
+  savedMarkdownAfterCursor = null;
 }
 
 // Helper function to convert image to AVIF and resize
