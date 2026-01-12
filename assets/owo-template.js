@@ -99,20 +99,22 @@ function decodeEmbeds() {
       }
     }
 
-    // Handle PDF attachments
+    // Handle PDF/DOCX attachments
     if (pdfAttachment) {
       const filename = pdfAttachment;
-      const pdfUrl = `${origin}${basePath}/${filename}`;
+      const fileUrl = `${origin}${basePath}/${filename}`;
+      const isDocx = filename.toLowerCase().endsWith('.docx');
+      const icon = isDocx ? '📝' : '📄';
 
       const downloadContainer = document.createElement("div");
       downloadContainer.classList.add("pdf-download-container");
 
       const downloadButton = document.createElement("a");
-      downloadButton.href = pdfUrl;
+      downloadButton.href = fileUrl;
       downloadButton.classList.add("pdf-download-button");
       downloadButton.setAttribute("download", filename);
       downloadButton.setAttribute("target", "_blank");
-      downloadButton.innerHTML = `<span class="pdf-icon">📄</span> Download ${escapeHtmlForHistory(filename)}`;
+      downloadButton.innerHTML = `<span class="pdf-icon">${icon}</span> Download ${escapeHtml(filename)}`;
 
       downloadContainer.appendChild(downloadButton);
       pre.replaceWith(downloadContainer);
@@ -435,10 +437,10 @@ async function showHistoryModal(origin, basePath) {
           html += `<span class="history-sha">${commit.shortSha}</span>`;
           html += `<span class="history-date">${commit.date}</span>`;
           html += `</div>`;
-          html += `<div class="history-message">${escapeHtmlForHistory(
+          html += `<div class="history-message">${escapeHtml(
             commit.message
           )}</div>`;
-          html += `<div class="history-author">by ${escapeHtmlForHistory(
+          html += `<div class="history-author">by ${escapeHtml(
             commit.author
           )}</div>`;
 
@@ -450,7 +452,7 @@ async function showHistoryModal(origin, basePath) {
               const statusIcon = change.status === "added" ? "+" : change.status === "deleted" ? "−" : "~";
               html += `<div class="history-change-item ${statusClass}">`;
               html += `<span class="change-icon">${statusIcon}</span>`;
-              html += `<span class="change-file">${escapeHtmlForHistory(change.file)}</span>`;
+              html += `<span class="change-file">${escapeHtml(change.file)}</span>`;
               html += `</div>`;
 
               // Show line-level diffs if available
@@ -461,7 +463,7 @@ async function showHistoryModal(origin, basePath) {
                   const linePrefix = line.type === "add" ? "+" : "-";
                   html += `<div class="diff-line ${lineClass}">`;
                   html += `<span class="diff-prefix">${linePrefix}</span>`;
-                  html += `<span class="diff-content">${escapeHtmlForHistory(line.content)}</span>`;
+                  html += `<span class="diff-content">${escapeHtml(line.content)}</span>`;
                   html += `</div>`;
                 }
                 if (change.truncated) {
@@ -492,7 +494,7 @@ function closeHistoryModal() {
   overlay.style.display = "none";
 }
 
-function escapeHtmlForHistory(text) {
+function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;

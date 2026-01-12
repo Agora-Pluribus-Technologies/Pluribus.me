@@ -563,7 +563,8 @@ function createPdfAttachButton() {
   const button = document.createElement('button');
   button.classList.add('toastui-editor-toolbar-icons');
   button.type = 'button';
-  button.innerHTML = '📎';
+  button.innerHTML = '📄';
+  button.style.backgroundImage = 'none';
   button.style.fontSize = '16px';
 
   button.addEventListener('click', () => {
@@ -573,7 +574,7 @@ function createPdfAttachButton() {
   return button;
 }
 
-// Show PDF upload popup
+// Show PDF/DOCX upload popup
 function showPdfUploadPopup() {
   // Remove existing popup if any
   const existingPopup = document.querySelector('.pdf-upload-popup');
@@ -592,14 +593,14 @@ function showPdfUploadPopup() {
     <div class="toastui-editor-popup-body">
       <div class="pdf-upload-container">
         <div class="pdf-upload-header">
-          <h3>Attach PDF</h3>
+          <h3>Attach Document</h3>
           <button class="pdf-upload-close">×</button>
         </div>
         <div class="pdf-upload-dropzone" id="pdfDropzone">
-          <input type="file" id="pdfFileInput" accept="application/pdf" style="display: none;" />
+          <input type="file" id="pdfFileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;" />
           <div class="dropzone-content">
             <p class="dropzone-icon">📄</p>
-            <p>Click to select a PDF or drag and drop here</p>
+            <p>Click to select a PDF or DOCX file, or drag and drop here</p>
             <p style="font-size: 12px; color: #888;">Max file size: 10 MB</p>
           </div>
         </div>
@@ -607,7 +608,7 @@ function showPdfUploadPopup() {
           <div class="progress-bar">
             <div class="progress-fill"></div>
           </div>
-          <p class="progress-text">Uploading PDF...</p>
+          <p class="progress-text">Uploading document...</p>
         </div>
       </div>
     </div>
@@ -682,15 +683,23 @@ function showPdfUploadPopup() {
     dropzone.style.backgroundColor = 'transparent';
 
     const file = e.dataTransfer.files[0];
-    if (file && file.type === 'application/pdf') {
+    const validTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    const validExtensions = ['.pdf', '.docx'];
+    const hasValidType = validTypes.includes(file.type);
+    const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+
+    if (file && (hasValidType || hasValidExtension)) {
       await handlePdfUpload(file, popup, progressContainer);
     } else {
-      alert('Please drop a PDF file');
+      alert('Please drop a PDF or DOCX file');
     }
   });
 }
 
-// Handle PDF upload
+// Handle PDF/DOCX upload
 async function handlePdfUpload(file, popup, progressContainer) {
   // Check file size (10 MB max)
   const maxSize = 10 * 1024 * 1024;
@@ -703,14 +712,20 @@ async function handlePdfUpload(file, popup, progressContainer) {
     // Show progress
     progressContainer.style.display = 'block';
 
-    // Sanitize filename
-    let originalName = file.name.replace(/\.pdf$/i, '');
+    // Determine file extension
+    const originalExtension = file.name.toLowerCase().endsWith('.docx') ? '.docx' : '.pdf';
+    const contentType = originalExtension === '.docx'
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : 'application/pdf';
+
+    // Sanitize filename (remove extension first, then add it back)
+    let originalName = file.name.replace(/\.(pdf|docx)$/i, '');
     const sanitizedName = originalName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .replace(/-+/g, '-');
-    const filename = `${sanitizedName}.pdf`;
+    const filename = `${sanitizedName}${originalExtension}`;
 
     // Read file as base64
     const base64Content = await new Promise((resolve, reject) => {
@@ -726,7 +741,7 @@ async function handlePdfUpload(file, popup, progressContainer) {
     // Upload to R2 storage
     const success = await saveFileToR2(currentSiteId, `public/${filename}`, base64Content, {
       encoding: 'base64',
-      contentType: 'application/pdf'
+      contentType: contentType
     });
 
     if (!success) {
