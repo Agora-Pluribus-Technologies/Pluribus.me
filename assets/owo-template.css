@@ -1,0 +1,330 @@
+/* Theme CSS Variables */
+:root {
+    --bg-primary: #181818;
+    --bg-secondary: #303030;
+    --bg-tertiary: #252525;
+    --text-primary: #fff;
+    --text-secondary: #ccc;
+    --text-muted: #888;
+    --border-color: #404040;
+    --accent-color: gold;
+    --accent-hover: #ffe780;
+}
+
+/* Light mode overrides */
+body.light-mode {
+    --bg-primary: #e0e0e0;
+    --bg-secondary: #f5f5f5;
+    --bg-tertiary: #ffffff;
+    --text-primary: #1a1a1a;
+    --text-secondary: #444;
+    --text-muted: #666;
+    --border-color: #ccc;
+    --accent-color: #b8860b;
+    --accent-hover: #996515;
+}
+
+body {
+    background-color: var(--bg-primary);
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.6;
+    font-family: Arial, Helvetica, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+nav {
+    background-color: var(--bg-secondary);
+    padding: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    transition: background-color 0.3s ease;
+}
+
+.menu-link {
+    display: inline-block;
+    color: var(--text-primary);
+    text-decoration: none;
+    padding: 15px 20px;
+    font-size: 20pt;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.menu-link:hover {
+    background-color: var(--border-color);
+}
+
+.menu-link:active {
+    background-color: var(--accent-color);
+    text-decoration: none;
+}
+
+.h-entry {
+    margin-left: 10%;
+    margin-right: 10%;
+    margin-bottom: 20px;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    border-color: var(--border-color);
+    border-style: solid;
+    border-width: 1px;
+    padding: 20px;
+    transition: background-color 0.3s ease;
+}
+
+.h-entry h1 {
+    text-align: center;
+    font-size: 24pt;
+}
+
+.h-entry h2 {
+    text-align: center;
+    font-size: 20pt;
+}
+
+.h-entry h3,
+.h-entry h4,
+.h-entry h5,
+.h-entry h6 {
+    text-align: center;
+    font-size: 18pt;
+}
+
+.h-entry p {
+    font-size: 16pt;
+}
+
+.h-entry .p-author,
+.h-entry .dt-published,
+.h-entry .dt-updated {
+    display: block;
+    text-align: center;
+    font-size: 14pt;
+}
+
+.embed-container {
+    text-align: center;
+}
+
+img {
+    max-width: 100%;
+}
+
+table {
+    width: auto;
+    border-collapse: collapse;
+    margin: 16px auto;
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: background-color 0.3s ease;
+}
+
+th,
+td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+th {
+    background-color: var(--bg-secondary);
+    font-weight: bold;
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+tr:hover {
+    background-color: var(--border-color);
+}
+
+/* Floating footer */
+.pluribus-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--bg-secondary);
+    padding: 8px 20px;
+    text-align: center;
+    font-size: 14pt;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.pluribus-footer a {
+    color: var(--accent-color);
+}
+
+.pluribus-footer a:hover {
+    color: var(--accent-hover);
+}
+
+.history-link {
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.history-link:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+}
+
+/* Theme toggle in footer */
+.theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.theme-toggle:hover {
+    background-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* History modal */
+.history-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.history-modal {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.history-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+.history-modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.history-close {
+    background: transparent;
+    border: none;
+    color: #ff4444;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.history-item {
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 0;
+}
+
+.history-item:last-child {
+    border-bottom: none;
+}
+
+.history-sha {
+    color: var(--accent-color);
+    font-family: monospace;
+}
+
+.history-date {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.history-message {
+    margin-top: 5px;
+}
+
+.history-author {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 5px;
+}
+
+/* Add padding to body to account for fixed footer */
+body {
+    padding-bottom: 50px;
+}
+
+@media (max-width: 768px) {
+    .menu-link {
+        font-size: 14pt;
+    }
+
+    .h-entry h1 {
+        font-size: 16pt;
+    }
+
+    .h-entry h2 {
+        font-size: 14pt;
+    }
+
+    .h-entry h3,
+    .h-entry h4,
+    .h-entry h5,
+    .h-entry h6 {
+        font-size: 12pt;
+    }
+
+    .h-entry p {
+        font-size: 10pt;
+    }
+
+    .h-entry .p-author,
+    .h-entry .dt-published,
+    .h-entry .dt-updated {
+        font-size: 8pt;
+    }
+
+    .pluribus-footer {
+        font-size: 8pt;
+    }
+}
