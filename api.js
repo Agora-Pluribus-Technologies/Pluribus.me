@@ -807,16 +807,25 @@ async function getPublicFiles(siteId) {
 async function generateHistoryJson(siteId) {
   try {
     const commits = await gitLog(siteId, 50);
-    return commits.map(commit => {
+    const historyItems = [];
+
+    for (const commit of commits) {
       const date = new Date(commit.commit.author.timestamp * 1000);
       const dateStr = date.toLocaleDateString() + " " + date.toLocaleTimeString();
-      return {
+
+      // Get detailed changes with line-level diffs for this commit
+      const detailedChanges = await getDetailedCommitChanges(siteId, commit.oid);
+
+      historyItems.push({
         shortSha: commit.oid.substring(0, 7),
         date: dateStr,
         message: commit.commit.message.split('\n')[0],
-        author: commit.commit.author.name
-      };
-    });
+        author: commit.commit.author.name,
+        changes: detailedChanges
+      });
+    }
+
+    return historyItems;
   } catch (error) {
     console.error("Error generating history JSON:", error);
     return [];

@@ -563,6 +563,123 @@ function generateSimpleDiff(oldContent, newContent) {
   return diff;
 }
 
+// Get file content at a specific commit
+async function getFileContentAtCommit(siteId, commitOid, filepath) {
+  const dir = getRepoDir(siteId);
+
+  try {
+    const { blob } = await git.readBlob({
+      fs,
+      dir,
+      oid: commitOid,
+      filepath,
+    });
+    return new TextDecoder().decode(blob);
+  } catch (error) {
+    // File doesn't exist at this commit
+    return null;
+  }
+}
+
+// Generate diff between two commits for a specific file using LCS algorithm
+function generateLCSDiff(oldContent, newContent) {
+  if (oldContent === null) oldContent = "";
+  if (newContent === null) newContent = "";
+
+  const oldLines = oldContent.split("\n");
+  const newLines = newContent.split("\n");
+
+  // LCS-based diff algorithm
+  const m = oldLines.length;
+  const n = newLines.length;
+
+  // Build LCS table
+  const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  // Backtrack to find diff
+  const diff = [];
+  let i = m, j = n;
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      // Line unchanged - don't include in diff
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      // Line added
+      diff.unshift({ type: "add", content: newLines[j - 1] });
+      j--;
+    } else if (i > 0) {
+      // Line deleted
+      diff.unshift({ type: "del", content: oldLines[i - 1] });
+      i--;
+    }
+  }
+
+  return diff;
+}
+
+// Get detailed changes for a commit including line-level diffs
+async function getDetailedCommitChanges(siteId, commitOid) {
+  const dir = getRepoDir(siteId);
+
+  try {
+    // Get the commit
+    const commitObj = await git.readCommit({ fs, dir, oid: commitOid });
+    const commit = commitObj.commit;
+
+    // Get parent commit oid (if any)
+    const parentOid = commit.parent.length > 0 ? commit.parent[0] : null;
+
+    // Get basic changes first
+    const changes = await getCommitChanges(siteId, commitOid);
+
+    // Filter to only public/ files and add diffs
+    const detailedChanges = [];
+
+    for (const change of changes) {
+      if (!change.filepath.startsWith("public/")) continue;
+
+      // Get file content at both commits
+      const newContent = change.newOid
+        ? await getFileContentAtCommit(siteId, commitOid, change.filepath)
+        : null;
+      const oldContent = parentOid && change.oldOid
+        ? await getFileContentAtCommit(siteId, parentOid, change.filepath)
+        : null;
+
+      // Generate diff
+      const diff = generateLCSDiff(oldContent, newContent);
+
+      // Limit diff size to avoid huge payloads
+      const limitedDiff = diff.slice(0, 50);
+      const truncated = diff.length > 50;
+
+      detailedChanges.push({
+        file: change.filepath.replace("public/", ""),
+        status: change.status,
+        diff: limitedDiff,
+        truncated: truncated
+      });
+    }
+
+    return detailedChanges;
+  } catch (error) {
+    console.error("Error getting detailed commit changes:", error);
+    return [];
+  }
+}
+
 // Format changes for display in the commit modal
 async function formatChangesForDisplay(siteId) {
   const changes = await gitStatus(siteId);

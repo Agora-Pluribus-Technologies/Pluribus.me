@@ -289,6 +289,106 @@ tr:hover {
     margin-top: 5px;
 }
 
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-changes {
+    margin-top: 8px;
+    padding: 8px;
+    background-color: var(--bg-primary);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.history-change-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.change-icon {
+    width: 16px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.change-file {
+    word-break: break-all;
+}
+
+.change-added .change-icon {
+    color: #4caf50;
+}
+
+.change-modified .change-icon {
+    color: #ff9800;
+}
+
+.change-deleted .change-icon {
+    color: #f44336;
+}
+
+.change-added .change-file {
+    color: #4caf50;
+}
+
+.change-modified .change-file {
+    color: var(--text-primary);
+}
+
+.change-deleted .change-file {
+    color: #f44336;
+    text-decoration: line-through;
+}
+
+/* Line-level diff styles */
+.history-diff {
+    margin-top: 4px;
+    margin-left: 24px;
+    padding: 4px;
+    background-color: var(--bg-secondary);
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.diff-line {
+    display: flex;
+    white-space: pre;
+    line-height: 1.4;
+}
+
+.diff-prefix {
+    width: 16px;
+    flex-shrink: 0;
+    user-select: none;
+    font-weight: bold;
+}
+
+.diff-content {
+    flex: 1;
+}
+
+.diff-add {
+    background-color: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+.diff-del {
+    background-color: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+}
+
+.diff-truncated {
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 4px;
+}
+
 /* Add padding to body to account for fixed footer */
 body {
     padding-bottom: 50px;

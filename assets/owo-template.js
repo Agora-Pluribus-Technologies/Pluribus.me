@@ -405,7 +405,7 @@ async function showHistoryModal(origin, basePath) {
         let html = "";
         for (const commit of history) {
           html += `<div class="history-item">`;
-          html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
+          html += `<div class="history-item-header">`;
           html += `<span class="history-sha">${commit.shortSha}</span>`;
           html += `<span class="history-date">${commit.date}</span>`;
           html += `</div>`;
@@ -415,6 +415,38 @@ async function showHistoryModal(origin, basePath) {
           html += `<div class="history-author">by ${escapeHtmlForHistory(
             commit.author
           )}</div>`;
+
+          // Show file changes if available
+          if (commit.changes && commit.changes.length > 0) {
+            html += `<div class="history-changes">`;
+            for (const change of commit.changes) {
+              const statusClass = `change-${change.status}`;
+              const statusIcon = change.status === "added" ? "+" : change.status === "deleted" ? "−" : "~";
+              html += `<div class="history-change-item ${statusClass}">`;
+              html += `<span class="change-icon">${statusIcon}</span>`;
+              html += `<span class="change-file">${escapeHtmlForHistory(change.file)}</span>`;
+              html += `</div>`;
+
+              // Show line-level diffs if available
+              if (change.diff && change.diff.length > 0) {
+                html += `<div class="history-diff">`;
+                for (const line of change.diff) {
+                  const lineClass = line.type === "add" ? "diff-add" : "diff-del";
+                  const linePrefix = line.type === "add" ? "+" : "-";
+                  html += `<div class="diff-line ${lineClass}">`;
+                  html += `<span class="diff-prefix">${linePrefix}</span>`;
+                  html += `<span class="diff-content">${escapeHtmlForHistory(line.content)}</span>`;
+                  html += `</div>`;
+                }
+                if (change.truncated) {
+                  html += `<div class="diff-truncated">... more lines not shown</div>`;
+                }
+                html += `</div>`;
+              }
+            }
+            html += `</div>`;
+          }
+
           html += `</div>`;
         }
         content.innerHTML = html;
