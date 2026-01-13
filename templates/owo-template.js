@@ -182,7 +182,7 @@ function decodeEmbeds(origin, basePath) {
       if (iframe) {
         const w = iframe.width || 560;
         const h = iframe.height || 315;
-        iframe.style.maxWidth = "100%";
+        iframe.style.maxWidth = "90%";
         iframe.style.aspectRatio = `${w / h}`;
       }
 
