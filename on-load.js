@@ -207,7 +207,6 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Show editor panel
   const editorContainer = document.getElementById("editorContainer");
   editorContainer.style.display = "flex";
-  editorContainer.style.height = "100%";
 
   // Fetch site tree from R2
   const markdownFiles = await getPublicFiles(currentSiteId);
