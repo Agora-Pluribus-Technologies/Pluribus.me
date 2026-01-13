@@ -1570,7 +1570,10 @@ async function populateMenubar(siteId) {
       fileItem.appendChild(buttonContainer);
     }
 
-    fileText.addEventListener("click", async function () {
+    fileItem.addEventListener("click", async function (e) {
+      // Don't trigger if clicking on buttons (rename/delete)
+      if (e.target.tagName === "BUTTON") return;
+
       console.log(`Loading file: ${cacheItem.fileName}`);
 
       // Remove active class from all items
