@@ -313,7 +313,6 @@ nav {
 #editorContainer {
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 #editor {
