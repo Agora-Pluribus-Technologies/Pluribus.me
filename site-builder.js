@@ -443,6 +443,19 @@ function showAddBlockMenu(wrapper, afterIndex) {
 
   wrapper.appendChild(menu);
 
+  // Check if menu would go below the viewport/footer and flip it above if needed
+  requestAnimationFrame(() => {
+    const menuRect = menu.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const footer = document.getElementById('footer');
+    const footerTop = footer ? footer.getBoundingClientRect().top : viewportHeight;
+
+    // If menu bottom extends past footer or viewport, position above
+    if (menuRect.bottom > Math.min(footerTop, viewportHeight)) {
+      menu.classList.add('menu-above');
+    }
+  });
+
   // Close menu when clicking outside
   const closeMenu = (e) => {
     if (!menu.contains(e.target)) {

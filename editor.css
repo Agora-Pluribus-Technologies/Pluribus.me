@@ -1595,6 +1595,11 @@ nav {
   min-width: 180px;
 }
 
+.add-block-menu.menu-above {
+  top: auto;
+  bottom: 100%;
+}
+
 .add-block-menu-item {
   display: flex;
   align-items: center;
