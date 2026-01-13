@@ -537,11 +537,13 @@ function updateThemeIcon(isLight) {
 }
 
 function showThemePreview() {
+  const button = document.getElementById("themeToggle");
   const icon = document.getElementById("themeIcon");
   if (icon) {
     const isCurrentlyLight = document.body.classList.contains("light-mode");
     // Show the opposite mode (what it will switch to)
     icon.textContent = isCurrentlyLight ? "🌙" : "☀️";
+    button.style.backgroundColor = isCurrentlyLight ? "#303030" : "#e0e0e0";
   }
 }
 

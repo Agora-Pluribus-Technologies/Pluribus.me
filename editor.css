@@ -1071,10 +1071,6 @@ nav {
   gap: 6px;
 }
 
-.theme-toggle:hover {
-  background-color: var(--bg-secondary);
-}
-
 .theme-toggle-icon {
   font-size: 14px;
 }
