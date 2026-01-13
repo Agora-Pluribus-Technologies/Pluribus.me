@@ -1701,7 +1701,8 @@ nav {
 
 .panel-edit-modal-body #panelEditor {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
+  max-width: 100%;
 }
 
 .panel-edit-modal-footer {
