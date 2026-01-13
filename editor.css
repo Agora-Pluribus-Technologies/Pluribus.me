@@ -337,7 +337,7 @@ nav {
   border-top: 1px solid var(--border-light);
   border-bottom: 1px solid var(--border-light);
   padding: 5px 10px;
-  margin-top: 120px;
+  /* margin-top is set dynamically by JavaScript based on editor-topbar position */
   overflow-x: auto;
   flex-shrink: 0;
   gap: 5px;

@@ -392,7 +392,23 @@ async function loadSitesForUser(username) {
   populateSitesList(sitesCache, sharedSitesCache);
 }
 
+// Position pageMenubar below editor-topbar
+function positionPageMenubar() {
+  const editorTopbar = document.getElementById("editor-topbar");
+  const pageMenubar = document.getElementById("pageMenubar");
+  if (editorTopbar && pageMenubar) {
+    const topbarRect = editorTopbar.getBoundingClientRect();
+    pageMenubar.style.marginTop = topbarRect.bottom + "px";
+  }
+}
+
+// Call on load and resize
+window.addEventListener("resize", positionPageMenubar);
+
 document.addEventListener("DOMContentLoaded", async function () {
+  // Position menubar after DOM is ready
+  positionPageMenubar();
+
   // Check for edit context - either from injected script or from sessionStorage
   if (window.PLURIBUS_EDIT_CONTEXT) {
     // Save to sessionStorage so it persists through OAuth redirect
