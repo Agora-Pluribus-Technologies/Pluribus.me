@@ -741,11 +741,21 @@ document.addEventListener("DOMContentLoaded", async function () {
   document
     .getElementById("confirmCommitButton")
     .addEventListener("click", async function () {
-      const commitMessage = document.getElementById("commitMessage").value.trim();
+      let commitMessage = document.getElementById("commitMessage").value.trim();
 
+      // Generate default commit message if blank
       if (!commitMessage) {
-        alert("Please enter a description for what you changed.");
-        return;
+        const changes = await gitStatus(currentSiteId);
+        const mdChanges = changes.filter(c => c.filepath.endsWith(".md"));
+        if (mdChanges.length > 0) {
+          const fileNames = mdChanges.map(c => {
+            const name = c.filepath.replace("public/", "").replace(".md", "");
+            return name === "index" ? "Home" : name;
+          });
+          commitMessage = `Modified ${fileNames.join(", ")}`;
+        } else {
+          commitMessage = "Site update";
+        }
       }
 
       const confirmButton = document.getElementById("confirmCommitButton");
