@@ -397,8 +397,8 @@ function positionSitesListPanel() {
   const sitesListPanel = document.getElementById("sites-list-panel");
   const userMenuButton = document.getElementById("userMenuButton");
   if (sitesListPanel && userMenuButton) {
-    const topbarRect = sitesListPanel.getBoundingClientRect();
-    userMenuButton.style.marginTop = topbarRect.bottom + "px";
+    const topbarRect = userMenuButton.getBoundingClientRect();
+    sitesListPanel.style.marginTop = topbarRect.bottom + "px";
   }
 }
 
