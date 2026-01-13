@@ -238,7 +238,7 @@ tr:hover {
 
 .theme-toggle:hover {
     background-color: var(--bg-primary-alt);
-    color: var(--text-primary);
+    color: var(--text-primary-alt);
 }
 
 /* History modal */

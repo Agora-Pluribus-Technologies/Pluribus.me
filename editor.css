@@ -1117,7 +1117,7 @@ nav {
 
 .theme-toggle:hover {
     background-color: var(--bg-primary-alt);
-    color: var(--text-primary);
+    color: var(--text-primary-alt);
 }
 
 .theme-toggle-icon {
