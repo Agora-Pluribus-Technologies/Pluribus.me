@@ -37,7 +37,6 @@ body.light-mode {
 
 html,
 body {
-  height: 100%;
   margin: 0;
   padding: 0;
 }
@@ -288,12 +287,10 @@ nav {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: auto;
 }
 
 #editor {
   flex: 1;
-  overflow: auto;
 }
 
 #pageMenubar {
@@ -1699,7 +1696,6 @@ nav {
 
 .panel-edit-modal-body #panelEditor {
   flex: 1;
-  overflow: auto;
 }
 
 .panel-edit-modal-footer {
