@@ -549,6 +549,9 @@ function showThemePreview() {
 
 function hideThemePreview() {
   const isCurrentlyLight = document.body.classList.contains("light-mode");
+  let button = document.getElementById("themeToggle");
+  button.classList.remove("theme-toggle");
+  button.classList.add("theme-toggle");
   updateThemeIcon(isCurrentlyLight);
 }
 
