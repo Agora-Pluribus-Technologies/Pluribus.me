@@ -603,7 +603,7 @@ function showHtmlEmbedPopup() {
     }
 
     // Insert into editor as code-block-enclosed embed at cursor position
-    const htmlEmbed = `\`\`\`embed\n${embedContent}\n\`\`\``;
+    const htmlEmbed = `\n\n\`\`\`embed\n${embedContent}\n\`\`\`\n\n`;
     insertAtCursor(htmlEmbed);
 
     // Close popup
@@ -843,7 +843,7 @@ async function handlePdfUpload(file, popup, progressContainer) {
     progressContainer.style.display = 'none';
 
     // Insert document attachment markdown into editor at cursor position
-    const docEmbed = `\`\`\`doc-attachment\n${filename}\n\`\`\``;
+    const docEmbed = `\n\n\`\`\`doc-attachment\n${filename}\n\`\`\`\n\n`;
     insertAtCursor(docEmbed);
 
     // Close popup
@@ -896,7 +896,7 @@ function populateDocumentList(listElement) {
     insertBtn.title = 'Insert into editor';
     insertBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const docEmbed = `\`\`\`doc-attachment\n${filename}\n\`\`\``;
+      const docEmbed = `\n\n\`\`\`doc-attachment\n${filename}\n\`\`\`\n\n`;
       insertAtCursor(docEmbed);
 
       // Close the popup
