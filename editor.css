@@ -1058,7 +1058,7 @@ nav {
 
 /* Theme toggle button */
 .theme-toggle {
-  background: transparent;
+  background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 4px 6px;
@@ -1069,6 +1069,11 @@ nav {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.theme-toggle:hover {
+    background-color: var(--bg-primary-alt);
+    color: var(--text-primary);
 }
 
 .theme-toggle-icon {

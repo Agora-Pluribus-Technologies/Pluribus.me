@@ -543,7 +543,6 @@ function showThemePreview() {
     const isCurrentlyLight = document.body.classList.contains("light-mode");
     // Show the opposite mode (what it will switch to)
     icon.textContent = isCurrentlyLight ? "🌙" : "☀️";
-    button.style.backgroundColor = isCurrentlyLight ? "#303030" : "#e0e0e0";
   }
 }
 

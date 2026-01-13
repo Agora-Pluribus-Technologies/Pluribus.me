@@ -383,11 +383,9 @@
       const isCurrentlyLight = document.body.classList.contains('light-mode');
       // Show the opposite mode (what it will switch to)
       if (isCurrentlyLight) {
-        button.style.backgroundColor = '#303030';
         icon.textContent = '🌙';
         text.textContent = 'Dark';
       } else {
-        button.style.backgroundColor = '#e0e0e0';
         icon.textContent = '☀️';
         text.textContent = 'Light';
       }
