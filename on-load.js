@@ -414,6 +414,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null && getOauthTokenGoogle() === null) {
     console.log("Access tokens missing or expired");
+    document.body.style.height = "100%";
     displayLoginButtons();
   } else {
     console.log("Access token present and valid");
@@ -422,9 +423,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     const providerInfo = await getCurrentProviderInfo();
     if (!providerInfo || !providerInfo.provider || !providerInfo.providerId) {
       console.error("Could not get provider info");
+      document.body.style.height = "100%";
       displayLoginButtons();
       return;
     }
+
+    document.body.style.height = "auto";
 
     console.log("Provider info:", providerInfo);
 
