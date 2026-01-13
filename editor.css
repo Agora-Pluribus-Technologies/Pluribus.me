@@ -1553,6 +1553,11 @@ nav {
 }
 
 /* Add Block Button */
+.add-block-wrapper {
+  position: relative;
+  width: 100%;
+}
+
 .add-block-btn {
   display: flex;
   align-items: center;
@@ -1578,6 +1583,9 @@ nav {
 /* Add Block Menu */
 .add-block-menu {
   position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1000;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
