@@ -352,10 +352,6 @@ nav {
   overflow-x: auto;
 }
 
-#last-updated-time-label {
-  display: inline-block;
-}
-
 .menubar-item {
   display: inline-flex;
   align-items: center;
@@ -2221,7 +2217,7 @@ nav {
 
   #main {
     margin: 0;
-    padding-top: 120px;
+    /* padding-top handled by pageMenubar margin-top set via JavaScript */
   }
 
   #userMenuContainer {
