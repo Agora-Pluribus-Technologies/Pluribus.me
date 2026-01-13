@@ -1,62 +1,89 @@
 let editor; // Global variable to store editor instance
-let savedMarkdownBeforeCursor = null;
-let savedMarkdownAfterCursor = null;
+let savedMarkdownBeforeSelection = null;
+let savedMarkdownAfterSelection = null;
 
-// Helper function to save cursor position by storing markdown split at cursor
+// Helper function to save cursor position by storing markdown split at selection
 function saveCursorPosition() {
   if (!editor) return;
 
   try {
-    // Get current markdown
     const markdown = editor.getMarkdown();
 
-    // Get selection - ToastUI returns [start, end] where each is [line, ch]
+    // Get the selected text (empty string if no selection, just cursor)
+    const selectedText = editor.getSelectedText ? editor.getSelectedText() : '';
+
+    // Get selection range from editor
     const selection = editor.getSelection();
+    console.log("Selection object:", JSON.stringify(selection));
 
-    if (selection && Array.isArray(selection) && selection.length >= 1) {
-      const startPos = selection[0];
-      let line, ch;
+    // Parse selection to get start and end offsets
+    let startOffset = markdown.length; // Default to end
+    let endOffset = markdown.length;
 
-      // Handle both array format [line, ch] and object format {line, ch}
-      if (Array.isArray(startPos)) {
-        [line, ch] = startPos;
-      } else if (startPos && typeof startPos === 'object') {
-        line = startPos.line || startPos.row || 0;
-        ch = startPos.ch || startPos.column || 0;
-      } else {
-        // Fallback - append to end
-        savedMarkdownBeforeCursor = markdown.replace("<br>", "").trim();
-        savedMarkdownAfterCursor = "";
-        return;
+    if (selection) {
+      // ToastUI Editor selection format: [[startLine, startCh], [endLine, endCh]]
+      // Lines are 1-based, characters are 0-based
+      let startLine, startCh, endLine, endCh;
+
+      if (Array.isArray(selection)) {
+        if (Array.isArray(selection[0])) {
+          // Format: [[line, ch], [line, ch]]
+          [startLine, startCh] = selection[0];
+          [endLine, endCh] = selection[1] || selection[0];
+        } else if (typeof selection[0] === 'number') {
+          // Format: [startOffset, endOffset] - direct character offsets
+          startOffset = selection[0];
+          endOffset = selection[1] || selection[0];
+        }
+      } else if (typeof selection === 'object') {
+        // Format: {start: {line, ch}, end: {line, ch}} or similar
+        if (selection.start) {
+          startLine = selection.start.line || selection.start.row;
+          startCh = selection.start.ch || selection.start.column || 0;
+        }
+        if (selection.end) {
+          endLine = selection.end.line || selection.end.row;
+          endCh = selection.end.ch || selection.end.column || 0;
+        }
       }
 
-      // Calculate character offset in markdown string
-      const lines = markdown.split('\n');
-      let offset = 0;
+      // Convert line/ch to character offset if we have line numbers
+      if (startLine !== undefined) {
+        const lines = markdown.split('\n');
 
-      // Line numbers are 1-based in ToastUI
-      const targetLine = Math.max(0, line - 1);
-      for (let i = 0; i < targetLine && i < lines.length; i++) {
-        offset += lines[i].length + 1; // +1 for newline
+        // Calculate start offset (lines are 1-based)
+        startOffset = 0;
+        for (let i = 0; i < startLine - 1 && i < lines.length; i++) {
+          startOffset += lines[i].length + 1;
+        }
+        startOffset += startCh || 0;
+
+        // Calculate end offset
+        endOffset = 0;
+        for (let i = 0; i < (endLine || startLine) - 1 && i < lines.length; i++) {
+          endOffset += lines[i].length + 1;
+        }
+        endOffset += endCh || startCh || 0;
       }
-      offset += Math.min(ch, lines[targetLine]?.length || 0);
-
-      // Clamp offset to valid range
-      offset = Math.max(0, Math.min(offset, markdown.length));
-
-      savedMarkdownBeforeCursor = markdown.substring(0, offset);
-      savedMarkdownAfterCursor = markdown.substring(offset);
-    } else {
-      // No valid selection, append to end
-      savedMarkdownBeforeCursor = markdown.replace("<br>", "").trim();
-      savedMarkdownAfterCursor = "";
     }
+
+    // Clamp offsets to valid range
+    startOffset = Math.max(0, Math.min(startOffset, markdown.length));
+    endOffset = Math.max(startOffset, Math.min(endOffset, markdown.length));
+
+    // Store the markdown before and after the selection
+    savedMarkdownBeforeSelection = markdown.substring(0, startOffset);
+    savedMarkdownAfterSelection = markdown.substring(endOffset);
+
+    console.log("Saved before:", savedMarkdownBeforeSelection.length, "chars");
+    console.log("Saved after:", savedMarkdownAfterSelection.length, "chars");
+
   } catch (error) {
     console.error("Error saving cursor position:", error);
     // Fallback - append to end
     const markdown = editor.getMarkdown();
-    savedMarkdownBeforeCursor = markdown.replace("<br>", "").trim();
-    savedMarkdownAfterCursor = "";
+    savedMarkdownBeforeSelection = markdown.replace("<br>", "").trim();
+    savedMarkdownAfterSelection = "";
   }
 }
 
@@ -66,8 +93,9 @@ function insertAtCursor(content) {
 
   const wrappedContent = `\n\n${content}\n\n`;
 
-  if (savedMarkdownBeforeCursor !== null) {
-    editor.setMarkdown(savedMarkdownBeforeCursor + wrappedContent + savedMarkdownAfterCursor);
+  if (savedMarkdownBeforeSelection !== null) {
+    const newMarkdown = savedMarkdownBeforeSelection + wrappedContent + savedMarkdownAfterSelection;
+    editor.setMarkdown(newMarkdown);
   } else {
     // Fallback: append to end
     const markdown = editor.getMarkdown().replace("<br>", "").trim();
@@ -75,8 +103,8 @@ function insertAtCursor(content) {
   }
 
   // Reset saved positions
-  savedMarkdownBeforeCursor = null;
-  savedMarkdownAfterCursor = null;
+  savedMarkdownBeforeSelection = null;
+  savedMarkdownAfterSelection = null;
 }
 
 // Helper function to convert image to AVIF and resize
