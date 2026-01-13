@@ -744,7 +744,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const commitMessage = document.getElementById("commitMessage").value.trim();
 
       if (!commitMessage) {
-        alert("Please enter a commit message.");
+        alert("Please enter a description for what you changed.");
         return;
       }
 

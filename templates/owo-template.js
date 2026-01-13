@@ -397,6 +397,8 @@ function createFooter(origin, basePath, showHistory) {
   themeToggle.id = "themeToggle";
   themeToggle.innerHTML = '<span id="themeIcon">🌙</span>';
   themeToggle.addEventListener("click", toggleTheme);
+  themeToggle.addEventListener("mouseenter", showThemePreview);
+  themeToggle.addEventListener("mouseleave", hideThemePreview);
   footer.appendChild(themeToggle);
 
   document.body.appendChild(footer);
@@ -532,6 +534,20 @@ function updateThemeIcon(isLight) {
   if (icon) {
     icon.textContent = isLight ? "☀️" : "🌙";
   }
+}
+
+function showThemePreview() {
+  const icon = document.getElementById("themeIcon");
+  if (icon) {
+    const isCurrentlyLight = document.body.classList.contains("light-mode");
+    // Show the opposite mode (what it will switch to)
+    icon.textContent = isCurrentlyLight ? "🌙" : "☀️";
+  }
+}
+
+function hideThemePreview() {
+  const isCurrentlyLight = document.body.classList.contains("light-mode");
+  updateThemeIcon(isCurrentlyLight);
 }
 
 // Initialize theme on page load

@@ -129,7 +129,7 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="commitMessage">Commit Message</label>
+            <label for="commitMessage">What did you change?</label>
             <input type="text" class="form-control" id="commitMessage" placeholder="Describe your changes..." required>
           </div>
           <div class="form-group">
@@ -351,6 +351,11 @@
         document.body.classList.add('light-mode');
         updateThemeButton(true);
       }
+
+      // Add hover handlers to show preview of other mode
+      const themeBtn = document.getElementById('themeToggle');
+      themeBtn.addEventListener('mouseenter', showThemePreview);
+      themeBtn.addEventListener('mouseleave', hideThemePreview);
     }
 
     function toggleTheme() {
@@ -369,6 +374,25 @@
         icon.textContent = '🌙';
         text.textContent = 'Dark';
       }
+    }
+
+    function showThemePreview() {
+      const icon = document.getElementById('themeIcon');
+      const text = document.getElementById('themeText');
+      const isCurrentlyLight = document.body.classList.contains('light-mode');
+      // Show the opposite mode (what it will switch to)
+      if (isCurrentlyLight) {
+        icon.textContent = '🌙';
+        text.textContent = 'Dark';
+      } else {
+        icon.textContent = '☀️';
+        text.textContent = 'Light';
+      }
+    }
+
+    function hideThemePreview() {
+      const isCurrentlyLight = document.body.classList.contains('light-mode');
+      updateThemeButton(isCurrentlyLight);
     }
 
     // Initialize theme on page load
