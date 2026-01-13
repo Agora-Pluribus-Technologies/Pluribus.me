@@ -291,7 +291,7 @@ nav {
 
 #editor {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
 }
 
 #pageMenubar {
