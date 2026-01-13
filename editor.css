@@ -1578,10 +1578,7 @@ nav {
 
 /* Add Block Menu */
 .add-block-menu {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   z-index: 10001;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -1589,12 +1586,9 @@ nav {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   padding: 8px 0;
   min-width: 180px;
+  margin: 0 auto;
 }
 
-.add-block-menu.menu-above {
-  top: auto;
-  bottom: 100%;
-}
 
 .add-block-menu-item {
   display: flex;
