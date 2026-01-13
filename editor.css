@@ -2230,9 +2230,7 @@ nav {
     left: 0;
     right: 0;
     text-align: right;
-    padding: 10px 20px;
     background-color: var(--bg-tertiary);
-    border-bottom: 1px solid var(--border-light);
     z-index: 10002;
   }
 
