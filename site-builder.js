@@ -425,7 +425,7 @@ function showAddBlockMenu(wrapper, afterIndex) {
 
   const options = [
     { type: 'panel', icon: '&#x1F4DD;', label: 'Text Panel' },
-    { type: 'image', icon: '&#x1F5BC;', label: 'Image' },
+    { type: 'image', icon: '🖼️', label: 'Image' },
     { type: 'embed', icon: '&#x1F3AC;', label: 'Embed' },
     { type: 'document', icon: '&#x1F4C4;', label: 'Document' }
   ];
