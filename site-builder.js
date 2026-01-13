@@ -1,89 +1,17 @@
-let editor; // Global variable to store editor instance
-let savedCursorOffset = null;
+// Block-based editor state
+let currentBlocks = [];
+let blockIdCounter = 0;
+let pendingBlockCallback = null;
 
-// Helper function to save cursor position
-function saveCursorPosition() {
-  if (!editor) return;
-
-  try {
-    // Clean the markdown first (remove <br> tags)
-    let markdown = editor.getMarkdown().replace(/<br\s*\/?>/gi, '');
-
-    // Get selection range from editor
-    const selection = editor.getSelection();
-    console.log("Selection object:", JSON.stringify(selection));
-
-    // Parse selection to get start offset
-    let startOffset = markdown.length; // Default to end
-
-    if (selection) {
-      let startLine, startCh;
-
-      if (Array.isArray(selection)) {
-        if (Array.isArray(selection[0])) {
-          // Format: [[line, ch], [line, ch]]
-          [startLine, startCh] = selection[0];
-        } else if (typeof selection[0] === 'number') {
-          // Format: [startOffset, endOffset] - direct character offsets
-          startOffset = selection[0];
-          startLine = undefined; // Skip line calculation
-        }
-      } else if (typeof selection === 'object') {
-        // Format: {start: {line, ch}, end: {line, ch}} or similar
-        if (selection.start) {
-          startLine = selection.start.line || selection.start.row;
-          startCh = selection.start.ch || selection.start.column || 0;
-        }
-      }
-
-      // Convert line/ch to character offset if we have line numbers
-      if (startLine !== undefined) {
-        const lines = markdown.split('\n');
-
-        // Calculate start offset (lines are 1-based)
-        startOffset = 0;
-        for (let i = 0; i < startLine - 1 && i < lines.length; i++) {
-          startOffset += lines[i].length + 1;
-        }
-        startOffset += startCh || 0;
-      }
-    }
-
-    // Clamp offset to valid range
-    savedCursorOffset = Math.max(0, Math.min(startOffset, markdown.length));
-
-    console.log("Saved cursor offset:", savedCursorOffset, "of", markdown.length);
-
-  } catch (error) {
-    console.error("Error saving cursor position:", error);
-    savedCursorOffset = null; // Will fallback to append at end
-  }
+// Generate unique block ID
+function generateBlockId() {
+  return `block-${Date.now()}-${blockIdCounter++}`;
 }
 
-// Helper function to insert content at saved cursor position
-function insertAtCursor(content) {
-  if (!editor) return;
+// ============================================
+// Image Processing Functions (kept from original)
+// ============================================
 
-  // Clean the markdown (remove <br> tags)
-  let markdown = editor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
-
-  const wrappedContent = `\n\n${content}\n\n`;
-
-  if (savedCursorOffset !== null && savedCursorOffset <= markdown.length) {
-    // Insert at saved position
-    const before = markdown.substring(0, savedCursorOffset);
-    const after = markdown.substring(savedCursorOffset);
-    editor.setMarkdown(before + wrappedContent + after);
-  } else {
-    // Fallback: append to end
-    editor.setMarkdown(markdown + wrappedContent);
-  }
-
-  // Reset saved position
-  savedCursorOffset = null;
-}
-
-// Helper function to convert image to AVIF and resize
 async function processImage(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -94,7 +22,6 @@ async function processImage(file) {
     };
 
     img.onload = async () => {
-      // Calculate new dimensions (max 1080px)
       let width = img.width;
       let height = img.height;
       const maxSize = 1080;
@@ -109,14 +36,12 @@ async function processImage(file) {
         }
       }
 
-      // Create canvas and draw resized image
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Convert to AVIF using canvas.toBlob
       canvas.toBlob(
         (blob) => {
           if (blob) {
@@ -126,28 +51,20 @@ async function processImage(file) {
           }
         },
         'image/avif',
-        0.85 // Quality
+        0.85
       );
     };
 
-    img.onerror = () => {
-      reject(new Error('Failed to load image'));
-    };
-
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
-    };
-
+    img.onerror = () => reject(new Error('Failed to load image'));
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
 }
 
-// Helper function to convert Blob to base64
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      // Remove the data URL prefix to get just the base64 string
       const base64 = reader.result.split(',')[1];
       resolve(base64);
     };
@@ -156,32 +73,24 @@ function blobToBase64(blob) {
   });
 }
 
-// Function to process and upload image to R2 storage
 async function processAndUploadImage(file) {
   try {
-    // Process image (convert to AVIF and resize)
     const processedBlob = await processImage(file);
-
-    // Generate filename (sanitize to lowercase letters and dashes, then change extension to .avif)
     let originalName = file.name.replace(/\.[^/.]+$/, '');
     if (originalName === "image") {
       originalName = `uploaded-image-${Date.now()}`;
     }
     const sanitizedName = originalName
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric chars with dashes
-      .replace(/^-+|-+$/g, '')       // Remove leading/trailing dashes
-      .replace(/-+/g, '-');           // Replace multiple dashes with single dash
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
     const filename = `${sanitizedName}.avif`;
 
-    // Convert to base64
     const base64Content = await blobToBase64(processedBlob);
-
-    // Upload to R2 storage
     const success = await uploadImage(currentSiteId, filename, base64Content);
 
     if (success) {
-      // Add to imageCache
       addImageToCache(filename);
       console.log('Image uploaded successfully:', filename);
       return filename;
@@ -194,71 +103,633 @@ async function processAndUploadImage(file) {
   }
 }
 
-function loadToastEditor() {
-  editor = new toastui.Editor({
-    el: document.querySelector("#editor"),
-    initialEditType: "wysiwyg",
-    previewStyle: "vertical",
-    theme: "dark",
+// ============================================
+// Markdown <-> Blocks Conversion
+// ============================================
+
+function parseMarkdownToBlocks(markdown) {
+  if (!markdown || !markdown.trim()) {
+    return [];
+  }
+
+  // Clean up <br> tags
+  markdown = markdown.replace(/<br\s*\/?>/gi, '');
+
+  // Split by horizontal rules
+  const sections = markdown.split(/\n---\n|\n---$|^---\n/);
+  const blocks = [];
+
+  for (const section of sections) {
+    const trimmed = section.trim();
+    if (!trimmed) continue;
+
+    // Check for embed block
+    const embedMatch = trimmed.match(/^```embed\n([\s\S]*?)\n```$/);
+    if (embedMatch) {
+      blocks.push({
+        id: generateBlockId(),
+        type: 'embed',
+        content: embedMatch[1].trim()
+      });
+      continue;
+    }
+
+    // Check for document attachment block
+    const docMatch = trimmed.match(/^```doc-attachment\n([\s\S]*?)\n```$/);
+    if (docMatch) {
+      blocks.push({
+        id: generateBlockId(),
+        type: 'document',
+        content: docMatch[1].trim()
+      });
+      continue;
+    }
+
+    // Check for standalone image
+    const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imageMatch) {
+      blocks.push({
+        id: generateBlockId(),
+        type: 'image',
+        content: trimmed
+      });
+      continue;
+    }
+
+    // Default: panel block
+    blocks.push({
+      id: generateBlockId(),
+      type: 'panel',
+      content: trimmed
+    });
+  }
+
+  return blocks;
+}
+
+function blocksToMarkdown(blocks) {
+  const parts = [];
+
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'embed':
+        parts.push(`\`\`\`embed\n${block.content}\n\`\`\``);
+        break;
+      case 'document':
+        parts.push(`\`\`\`doc-attachment\n${block.content}\n\`\`\``);
+        break;
+      case 'image':
+      case 'panel':
+      default:
+        parts.push(block.content);
+        break;
+    }
+  }
+
+  return parts.join('\n\n---\n\n');
+}
+
+// ============================================
+// Block Editor Initialization
+// ============================================
+
+function initBlockEditor() {
+  const editorContainer = document.getElementById('editor');
+  if (!editorContainer) {
+    console.error('Editor container not found');
+    return;
+  }
+
+  editorContainer.innerHTML = '';
+  editorContainer.className = 'block-editor';
+
+  renderAllBlocks();
+}
+
+function loadBlocksFromCache() {
+  const cacheItem = getCacheByFileName(currentSitePath);
+  if (cacheItem && cacheItem.content) {
+    currentBlocks = parseMarkdownToBlocks(cacheItem.content);
+  } else {
+    currentBlocks = [];
+  }
+}
+
+// Load page content into block editor (called from on-load.js)
+function loadPageIntoBlockEditor(content) {
+  currentBlocks = parseMarkdownToBlocks(content);
+  renderAllBlocks();
+}
+
+function saveBlocksToCache() {
+  const markdown = blocksToMarkdown(currentBlocks);
+  const cacheItem = getCacheByFileName(currentSitePath);
+  if (cacheItem) {
+    cacheItem.content = markdown;
+    cacheItem.modifiedAt = new Date().toISOString();
+    modified = true;
+    updateDeployButtonState();
+  }
+}
+
+// ============================================
+// Block Rendering
+// ============================================
+
+function renderAllBlocks() {
+  const container = document.getElementById('editor');
+  container.innerHTML = '';
+
+  // Add initial plus button
+  container.appendChild(createAddBlockButton(-1));
+
+  // Render each block with plus button after
+  currentBlocks.forEach((block, index) => {
+    container.appendChild(renderBlock(block, index));
+    container.appendChild(createAddBlockButton(index));
+  });
+}
+
+function renderBlock(block, index) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'block-item';
+  wrapper.dataset.index = index;
+  wrapper.dataset.id = block.id;
+  wrapper.draggable = true;
+
+  // Drag handle and controls
+  const controls = document.createElement('div');
+  controls.className = 'block-controls';
+
+  const controlsLeft = document.createElement('div');
+  controlsLeft.className = 'block-controls-left';
+
+  const dragHandle = document.createElement('span');
+  dragHandle.className = 'block-drag-handle';
+  dragHandle.innerHTML = '&#x2630;';
+  dragHandle.title = 'Drag to reorder';
+
+  const typeLabel = document.createElement('span');
+  typeLabel.className = 'block-type-label';
+  typeLabel.textContent = block.type.charAt(0).toUpperCase() + block.type.slice(1);
+
+  controlsLeft.appendChild(dragHandle);
+  controlsLeft.appendChild(typeLabel);
+
+  const controlsRight = document.createElement('div');
+  controlsRight.className = 'block-controls-right';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'block-edit-btn';
+  editBtn.textContent = 'Edit';
+  editBtn.addEventListener('click', () => editBlock(index));
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'block-delete-btn';
+  deleteBtn.innerHTML = '&times;';
+  deleteBtn.title = 'Delete block';
+  deleteBtn.addEventListener('click', () => deleteBlock(index));
+
+  controlsRight.appendChild(editBtn);
+  controlsRight.appendChild(deleteBtn);
+
+  controls.appendChild(controlsLeft);
+  controls.appendChild(controlsRight);
+
+  // Preview content
+  const preview = document.createElement('div');
+  preview.className = 'block-preview';
+  preview.innerHTML = renderBlockPreview(block);
+
+  wrapper.appendChild(controls);
+  wrapper.appendChild(preview);
+
+  // Drag and drop events
+  wrapper.addEventListener('dragstart', handleDragStart);
+  wrapper.addEventListener('dragend', handleDragEnd);
+  wrapper.addEventListener('dragover', handleDragOver);
+  wrapper.addEventListener('drop', handleDrop);
+
+  return wrapper;
+}
+
+function renderBlockPreview(block) {
+  switch (block.type) {
+    case 'panel':
+      return renderPanelPreview(block.content);
+    case 'image':
+      return renderImagePreview(block.content);
+    case 'embed':
+      return renderEmbedPreview(block.content);
+    case 'document':
+      return renderDocumentPreview(block.content);
+    default:
+      return `<div class="h-entry"><p>${escapeHtml(block.content)}</p></div>`;
+  }
+}
+
+function renderPanelPreview(markdown) {
+  const parsed = marked.parse(markdown);
+  const sanitized = DOMPurify.sanitize(parsed);
+  return `<article class="h-entry"><div class="e-content">${sanitized}</div></article>`;
+}
+
+function renderImagePreview(content) {
+  // Extract image URL from markdown
+  const match = content.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+  if (match) {
+    const alt = match[1];
+    const url = match[2];
+    return `<div class="embed-container"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" style="max-width:100%;"></div>`;
+  }
+  return '<div class="embed-container"><p>Invalid image</p></div>';
+}
+
+function renderEmbedPreview(content) {
+  // YouTube
+  if (content.includes('youtube.com') || content.includes('youtu.be')) {
+    const videoId = extractYouTubeVideoId(content);
+    if (videoId) {
+      return `<div class="embed-container"><iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allowfullscreen style="max-width:100%;"></iframe></div>`;
+    }
+  }
+
+  // SoundCloud
+  if (content.includes('soundcloud.com')) {
+    const encodedUrl = encodeURIComponent(content);
+    return `<div class="embed-container"><iframe width="100%" height="166" scrolling="no" frameborder="no" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false"></iframe></div>`;
+  }
+
+  // Raw HTML embed
+  const sanitized = DOMPurify.sanitize(content, {
+    ADD_TAGS: ['iframe'],
+    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'src', 'width', 'height']
+  });
+  return `<div class="embed-container">${sanitized}</div>`;
+}
+
+function renderDocumentPreview(filename) {
+  const isDocx = filename.toLowerCase().endsWith('.docx');
+  const icon = isDocx ? '&#x1F4DD;' : '&#x1F4C4;';
+  const url = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
+  return `<div class="pdf-download-container"><a href="${escapeHtml(url)}" class="pdf-download-button" target="_blank" download="${escapeHtml(filename)}"><span class="pdf-icon">${icon}</span> Download ${escapeHtml(filename)}</a></div>`;
+}
+
+function extractYouTubeVideoId(url) {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?.*&v=)([^&\n?#]+)/,
+    /^([a-zA-Z0-9_-]{11})$/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ============================================
+// Add Block Button and Menu
+// ============================================
+
+function createAddBlockButton(afterIndex) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'add-block-wrapper';
+  wrapper.dataset.afterIndex = afterIndex;
+
+  const btn = document.createElement('button');
+  btn.className = 'add-block-btn';
+  btn.innerHTML = '+';
+  btn.title = 'Add block';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showAddBlockMenu(wrapper, afterIndex);
+  });
+
+  wrapper.appendChild(btn);
+  return wrapper;
+}
+
+function showAddBlockMenu(wrapper, afterIndex) {
+  // Remove any existing menu
+  const existingMenu = document.querySelector('.add-block-menu');
+  if (existingMenu) existingMenu.remove();
+
+  const menu = document.createElement('div');
+  menu.className = 'add-block-menu';
+
+  const options = [
+    { type: 'panel', icon: '&#x1F4DD;', label: 'Text Panel' },
+    { type: 'image', icon: '&#x1F5BC;', label: 'Image' },
+    { type: 'embed', icon: '&#x1F3AC;', label: 'Embed' },
+    { type: 'document', icon: '&#x1F4C4;', label: 'Document' }
+  ];
+
+  options.forEach(opt => {
+    const item = document.createElement('button');
+    item.className = 'add-block-menu-item';
+    item.innerHTML = `<span class="menu-icon">${opt.icon}</span> ${opt.label}`;
+    item.addEventListener('click', () => {
+      menu.remove();
+      addBlock(opt.type, afterIndex);
+    });
+    menu.appendChild(item);
+  });
+
+  wrapper.appendChild(menu);
+
+  // Close menu when clicking outside
+  const closeMenu = (e) => {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeMenu), 0);
+}
+
+// ============================================
+// Block CRUD Operations
+// ============================================
+
+function addBlock(type, afterIndex) {
+  const newBlock = {
+    id: generateBlockId(),
+    type: type,
+    content: ''
+  };
+
+  // Insert at correct position
+  const insertIndex = afterIndex + 1;
+  currentBlocks.splice(insertIndex, 0, newBlock);
+
+  // Save and re-render
+  saveBlocksToCache();
+  renderAllBlocks();
+
+  // Open editor for the new block
+  editBlock(insertIndex);
+}
+
+function editBlock(index) {
+  const block = currentBlocks[index];
+  if (!block) return;
+
+  switch (block.type) {
+    case 'panel':
+      showPanelEditModal(block, (newContent) => {
+        block.content = newContent;
+        saveBlocksToCache();
+        renderAllBlocks();
+      });
+      break;
+    case 'image':
+      showImageUploadPopup((filename) => {
+        const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
+        block.content = `![${filename}](${imageUrl})`;
+        saveBlocksToCache();
+        renderAllBlocks();
+      });
+      break;
+    case 'embed':
+      showEmbedPopup(block.content, (newContent) => {
+        block.content = newContent;
+        saveBlocksToCache();
+        renderAllBlocks();
+      });
+      break;
+    case 'document':
+      showDocumentUploadPopup((filename) => {
+        block.content = filename;
+        saveBlocksToCache();
+        renderAllBlocks();
+      });
+      break;
+  }
+}
+
+function deleteBlock(index) {
+  if (!confirm('Are you sure you want to delete this block?')) return;
+
+  currentBlocks.splice(index, 1);
+  saveBlocksToCache();
+  renderAllBlocks();
+}
+
+// ============================================
+// Drag and Drop
+// ============================================
+
+let draggedIndex = null;
+
+function handleDragStart(e) {
+  draggedIndex = parseInt(e.currentTarget.dataset.index);
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.block-item').forEach(el => {
+    el.classList.remove('drag-over');
+  });
+  draggedIndex = null;
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const target = e.currentTarget;
+  if (target.classList.contains('block-item')) {
+    target.classList.add('drag-over');
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  target.classList.remove('drag-over');
+
+  const targetIndex = parseInt(target.dataset.index);
+  if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+  // Reorder blocks
+  const [movedBlock] = currentBlocks.splice(draggedIndex, 1);
+  currentBlocks.splice(targetIndex, 0, movedBlock);
+
+  saveBlocksToCache();
+  renderAllBlocks();
+}
+
+// ============================================
+// Panel Edit Modal
+// ============================================
+
+let panelEditor = null;
+
+function showPanelEditModal(block, callback) {
+  // Remove existing modal
+  const existingModal = document.querySelector('.panel-edit-modal-overlay');
+  if (existingModal) existingModal.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'panel-edit-modal-overlay';
+
+  const modal = document.createElement('div');
+  modal.className = 'panel-edit-modal';
+
+  modal.innerHTML = `
+    <div class="panel-edit-header">
+      <h3>Edit Panel</h3>
+      <button class="panel-edit-close">&times;</button>
+    </div>
+    <div class="panel-edit-body">
+      <div id="panelEditor"></div>
+    </div>
+    <div class="panel-edit-footer">
+      <button class="panel-edit-cancel">Cancel</button>
+      <button class="panel-edit-confirm">Confirm</button>
+    </div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Initialize ToastUI editor
+  panelEditor = new toastui.Editor({
+    el: document.querySelector('#panelEditor'),
+    initialEditType: 'wysiwyg',
+    previewStyle: 'vertical',
+    theme: 'dark',
+    height: '400px',
+    initialValue: block.content,
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['hr', 'quote'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
-      ['table', 'link'],
-      [
-        {
-          el: createImageButton(),
-          tooltip: 'Insert image',
-          name: 'customImage'
-        },
-        {
-          el: createHtmlEmbedButton(),
-          tooltip: 'Insert embed (YouTube, SoundCloud, or HTML)',
-          name: 'customHtmlEmbed'
-        },
-        {
-          el: createPdfAttachButton(),
-          tooltip: 'Attach Document (PDF or DOCX)',
-          name: 'customPdfAttach'
-        }
-      ]
+      ['table', 'link']
     ]
   });
-}
 
-// Create custom image toolbar button
-function createImageButton() {
-  const button = document.createElement('button');
-  button.classList.add('toastui-editor-toolbar-icons');
-  button.classList.add('image');
-  button.type = 'button';
-
-  button.addEventListener('click', () => {
-    saveCursorPosition();
-    showImageUploadPopup();
+  // Event handlers
+  modal.querySelector('.panel-edit-close').addEventListener('click', () => {
+    overlay.remove();
+    panelEditor = null;
   });
 
-  return button;
-}
-
-// Create custom HTML embed toolbar button
-function createHtmlEmbedButton() {
-  const button = document.createElement('button');
-  button.classList.add('toastui-editor-toolbar-icons');
-  button.classList.add('code');
-  button.type = 'button';
-
-  button.addEventListener('click', () => {
-    saveCursorPosition();
-    showHtmlEmbedPopup();
+  modal.querySelector('.panel-edit-cancel').addEventListener('click', () => {
+    overlay.remove();
+    panelEditor = null;
   });
 
-  return button;
+  modal.querySelector('.panel-edit-confirm').addEventListener('click', () => {
+    const newContent = panelEditor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
+    overlay.remove();
+    panelEditor = null;
+    if (callback) callback(newContent);
+  });
+
+  // Close on overlay click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+      panelEditor = null;
+    }
+  });
 }
 
-// Populate image gallery
-function populateImageGallery(galleryElement) {
+// ============================================
+// Image Upload Popup (for blocks)
+// ============================================
+
+function showImageUploadPopup(callback) {
+  pendingBlockCallback = callback;
+
+  const existingPopup = document.querySelector('.image-upload-popup');
+  if (existingPopup) existingPopup.remove();
+
+  const popup = document.createElement('div');
+  popup.className = 'block-popup image-upload-popup';
+
+  popup.innerHTML = `
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3>Upload Image</h3>
+        <button class="popup-close">&times;</button>
+      </div>
+      <div class="image-upload-dropzone" id="imageDropzone">
+        <input type="file" id="imageFileInput" accept="image/*" style="display: none;" />
+        <div class="dropzone-content">
+          <p class="dropzone-icon">&#x1F4C1;</p>
+          <p>Click to select an image or drag and drop here</p>
+        </div>
+      </div>
+      <div class="image-upload-progress" style="display: none;">
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <p class="progress-text">Processing and uploading...</p>
+      </div>
+      <div class="image-gallery-section">
+        <h4>Image Gallery</h4>
+        <div class="image-gallery" id="imageGallery"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  const dropzone = popup.querySelector('#imageDropzone');
+  const fileInput = popup.querySelector('#imageFileInput');
+  const closeButton = popup.querySelector('.popup-close');
+  const progressContainer = popup.querySelector('.image-upload-progress');
+  const imageGallery = popup.querySelector('#imageGallery');
+
+  populateImageGalleryForBlock(imageGallery, popup);
+
+  closeButton.addEventListener('click', () => {
+    popup.remove();
+    pendingBlockCallback = null;
+  });
+
+  dropzone.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) await handleImageUploadForBlock(file, popup, progressContainer, imageGallery);
+  });
+
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+  });
+
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+  });
+
+  dropzone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      await handleImageUploadForBlock(file, popup, progressContainer, imageGallery);
+    } else {
+      alert('Please drop an image file');
+    }
+  });
+}
+
+function populateImageGalleryForBlock(galleryElement, popup) {
   galleryElement.innerHTML = '';
+
+  if (imageCache.length === 0) {
+    galleryElement.innerHTML = '<p class="gallery-empty">No images uploaded yet</p>';
+    return;
+  }
 
   imageCache.forEach(filename => {
     const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
@@ -270,41 +741,26 @@ function populateImageGallery(galleryElement) {
     img.src = imageUrl;
     img.alt = filename;
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'image-delete-btn';
-    deleteBtn.innerHTML = '×';
-    deleteBtn.title = 'Delete image';
-
-    // Click image to insert into editor
     img.addEventListener('click', () => {
-      const imageMarkdown = `![${filename}](${imageUrl})`;
-      insertAtCursor(imageMarkdown);
-
-      // Close the popup
-      const popup = document.querySelector('.image-upload-popup');
-      if (popup) popup.remove();
+      popup.remove();
+      if (pendingBlockCallback) {
+        pendingBlockCallback(filename);
+        pendingBlockCallback = null;
+      }
     });
 
-    // Delete button handler
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'image-delete-btn';
+    deleteBtn.innerHTML = '&times;';
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-
-      if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
-        return;
-      }
-
+      if (!confirm(`Delete "${filename}"?`)) return;
       try {
-        const success = await deleteImage(currentSiteId, filename);
-
-        if (success) {
-          removeImageFromCache(filename);
-          populateImageGallery(galleryElement);
-        } else {
-          throw new Error('Failed to delete image from repository');
-        }
+        await deleteImage(currentSiteId, filename);
+        removeImageFromCache(filename);
+        populateImageGalleryForBlock(galleryElement, popup);
       } catch (error) {
-        console.error('Error deleting image:', error);
-        alert('Failed to delete image: ' + error.message);
+        alert('Failed to delete image');
       }
     });
 
@@ -314,485 +770,245 @@ function populateImageGallery(galleryElement) {
   });
 }
 
-// Show image upload popup
-function showImageUploadPopup() {
-  // Remove existing popup if any
-  const existingPopup = document.querySelector('.image-upload-popup');
-  if (existingPopup) {
-    existingPopup.remove();
-  }
-
-  // Create popup container
-  const popup = document.createElement('div');
-  popup.className = 'toastui-editor-popup image-upload-popup';
-  popup.style.display = 'block';
-  popup.style.zIndex = '10000';
-
-  // Create popup content
-  popup.innerHTML = `
-    <div class="toastui-editor-popup-body">
-      <div class="image-upload-container">
-        <div class="image-upload-header">
-          <h3>Upload Image</h3>
-          <button class="image-upload-close">×</button>
-        </div>
-        <div class="image-upload-dropzone" id="imageDropzone">
-          <input type="file" id="imageFileInput" accept="image/*" style="display: none;" />
-          <div class="dropzone-content">
-            <p class="dropzone-icon">📁</p>
-            <p>Click to select an image or drag and drop here</p>
-          </div>
-        </div>
-        <div class="image-upload-progress" style="display: none;">
-          <div class="progress-bar">
-            <div class="progress-fill"></div>
-          </div>
-          <p class="progress-text">Processing and uploading...</p>
-        </div>
-        <div class="image-gallery-section">
-          <h4>Image Gallery</h4>
-          <div class="image-gallery" id="imageGallery">
-            <!-- Images will be populated here -->
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Append to editor container
-  const toolbarContainer = document.getElementsByClassName("toastui-editor-toolbar")[0];
-  toolbarContainer.appendChild(popup);
-
-  // Get elements
-  const dropzone = popup.querySelector('#imageDropzone');
-  const fileInput = popup.querySelector('#imageFileInput');
-  const closeButton = popup.querySelector('.image-upload-close');
-  const progressContainer = popup.querySelector('.image-upload-progress');
-  const imageGallery = popup.querySelector('#imageGallery');
-
-  // Populate image gallery
-  populateImageGallery(imageGallery);
-
-  // Close button handler
-  closeButton.addEventListener('click', () => {
-    popup.remove();
-  });
-
-  // Blur event handler to hide popup when clicking outside
-  popup.addEventListener('blur', (e) => {
-    // Don't hide if the blur is caused by clicking within the popup
-    setTimeout(() => {
-      if (!popup.contains(document.activeElement)) {
-        popup.style.display = 'none';
-      }
-    }, 0);
-  }, true);
-
-  // Make popup focusable and focus it
-  popup.setAttribute('tabindex', '-1');
-  popup.focus();
-
-  // Prevent blur when clicking inside the popup
-  popup.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-  });
-
-  // Click to select file
-  dropzone.addEventListener('click', (e) => {
-    e.stopPropagation();
-    fileInput.click();
-  });
-
-  // File input change handler
-  fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      await handleImageUpload(file, popup, progressContainer, imageGallery);
-    }
-  });
-
-  // Drag and drop handlers
-  dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropzone.style.borderColor = '#1890ff';
-    dropzone.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
-  });
-
-  dropzone.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropzone.style.borderColor = '#555';
-    dropzone.style.backgroundColor = 'transparent';
-  });
-
-  dropzone.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropzone.style.borderColor = '#555';
-    dropzone.style.backgroundColor = 'transparent';
-
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      await handleImageUpload(file, popup, progressContainer, imageGallery);
-    } else {
-      alert('Please drop an image file');
-    }
-  });
-}
-
-// Handle image upload
-async function handleImageUpload(file, popup, progressContainer, imageGallery) {
+async function handleImageUploadForBlock(file, popup, progressContainer, imageGallery) {
   try {
-    // Show progress
     progressContainer.style.display = 'block';
-
-    // Process and upload image
     const filename = await processAndUploadImage(file);
-
-    // Hide progress
     progressContainer.style.display = 'none';
-
-    // Refresh the image gallery
-    populateImageGallery(imageGallery);
-
-    // Insert image into editor at cursor position
-    const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
-    const imageMarkdown = `![${filename}](${imageUrl})`;
-    insertAtCursor(imageMarkdown);
-
-    // Close popup
+    populateImageGalleryForBlock(imageGallery, popup);
     popup.remove();
+    if (pendingBlockCallback) {
+      pendingBlockCallback(filename);
+      pendingBlockCallback = null;
+    }
   } catch (error) {
-    console.error('Error handling image upload:', error);
     progressContainer.style.display = 'none';
     alert('Failed to upload image: ' + error.message);
   }
 }
 
-// Show HTML embed popup
-function showHtmlEmbedPopup() {
-  // Remove existing popup if any
-  const existingPopup = document.querySelector('.html-embed-popup');
-  if (existingPopup) {
-    existingPopup.remove();
-  }
+// ============================================
+// Embed Popup (for blocks)
+// ============================================
 
-  // Create popup container
+function showEmbedPopup(currentContent, callback) {
+  const existingPopup = document.querySelector('.embed-popup');
+  if (existingPopup) existingPopup.remove();
+
   const popup = document.createElement('div');
-  popup.className = 'toastui-editor-popup html-embed-popup';
-  popup.style.display = 'block';
-  popup.style.zIndex = '10000';
+  popup.className = 'block-popup embed-popup';
 
-  // Create popup content
   popup.innerHTML = `
-    <div class="toastui-editor-popup-body">
-      <div class="html-embed-container">
-        <div class="html-embed-header">
-          <h3>Insert Embed</h3>
-          <button class="html-embed-close">×</button>
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3>Insert Embed</h3>
+        <button class="popup-close">&times;</button>
+      </div>
+      <div class="embed-form">
+        <div class="embed-type-selector">
+          <label><input type="radio" name="embedType" value="youtube" checked> YouTube</label>
+          <label><input type="radio" name="embedType" value="soundcloud"> SoundCloud</label>
+          <label><input type="radio" name="embedType" value="html"> HTML</label>
         </div>
-        <div class="html-embed-form">
-          <div class="embed-type-selector" style="margin-bottom: 12px;">
-            <label style="display: inline; margin-right: 15px; cursor: pointer;">
-              <input type="radio" name="embedType" value="youtube" checked style="margin-right: 5px;">
-              YouTube
-            </label>
-            <label style="display: inline; margin-right: 15px; cursor: pointer;">
-              <input type="radio" name="embedType" value="soundcloud" style="margin-right: 5px;">
-              SoundCloud
-            </label>
-            <label style="display: inline; cursor: pointer;">
-              <input type="radio" name="embedType" value="html" style="margin-right: 5px;">
-              HTML
-            </label>
-          </div>
-          <div id="youtubeEmbedSection">
-            <label for="youtubeUrlInput">Paste YouTube video URL:</label>
-            <input type="text" id="youtubeUrlInput" placeholder="https://youtu.be/..." style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 4px; background: #2d2d2d; color: #fff;">
-          </div>
-          <div id="soundcloudEmbedSection" style="display: none;">
-            <label for="soundcloudUrlInput">Paste SoundCloud URL:</label>
-            <input type="text" id="soundcloudUrlInput" placeholder="https://soundcloud.com/artist/track" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 4px; background: #2d2d2d; color: #fff;">
-          </div>
-          <div id="htmlEmbedSection" style="display: none;">
-            <label for="htmlEmbedTextarea">Paste your HTML code:</label>
-            <textarea id="htmlEmbedTextarea" rows="3" placeholder="<iframe src=&quot;...&quot;></iframe>"></textarea>
-          </div>
-          <div class="html-embed-buttons">
-            <button class="html-embed-insert-btn toastui-editor-ok-button">Insert</button>
-            <button class="html-embed-cancel-btn toastui-editor-close-button">Cancel</button>
-          </div>
+        <div id="youtubeEmbedSection">
+          <label>YouTube URL:</label>
+          <input type="text" id="youtubeUrlInput" placeholder="https://youtu.be/...">
+        </div>
+        <div id="soundcloudEmbedSection" style="display:none;">
+          <label>SoundCloud URL:</label>
+          <input type="text" id="soundcloudUrlInput" placeholder="https://soundcloud.com/...">
+        </div>
+        <div id="htmlEmbedSection" style="display:none;">
+          <label>HTML Code:</label>
+          <textarea id="htmlEmbedTextarea" rows="4" placeholder="<iframe ...></iframe>"></textarea>
+        </div>
+        <div class="popup-buttons">
+          <button class="popup-cancel">Cancel</button>
+          <button class="popup-confirm">Confirm</button>
         </div>
       </div>
     </div>
   `;
 
-  // Append to editor container
-  const toolbarContainer = document.getElementsByClassName("toastui-editor-toolbar")[0];
-  toolbarContainer.appendChild(popup);
+  document.body.appendChild(popup);
 
-  // Get elements
-  const textarea = popup.querySelector('#htmlEmbedTextarea');
   const youtubeInput = popup.querySelector('#youtubeUrlInput');
   const soundcloudInput = popup.querySelector('#soundcloudUrlInput');
+  const htmlTextarea = popup.querySelector('#htmlEmbedTextarea');
   const youtubeSection = popup.querySelector('#youtubeEmbedSection');
   const soundcloudSection = popup.querySelector('#soundcloudEmbedSection');
   const htmlSection = popup.querySelector('#htmlEmbedSection');
-  const embedTypeRadios = popup.querySelectorAll('input[name="embedType"]');
-  const closeButton = popup.querySelector('.html-embed-close');
-  const insertButton = popup.querySelector('.html-embed-insert-btn');
-  const cancelButton = popup.querySelector('.html-embed-cancel-btn');
 
-  // Handle embed type radio change
-  embedTypeRadios.forEach(radio => {
+  // Pre-fill if editing
+  if (currentContent) {
+    if (currentContent.includes('youtube') || currentContent.includes('youtu.be')) {
+      youtubeInput.value = currentContent;
+    } else if (currentContent.includes('soundcloud')) {
+      soundcloudInput.value = currentContent;
+      popup.querySelector('input[value="soundcloud"]').checked = true;
+      youtubeSection.style.display = 'none';
+      soundcloudSection.style.display = 'block';
+    } else {
+      htmlTextarea.value = currentContent;
+      popup.querySelector('input[value="html"]').checked = true;
+      youtubeSection.style.display = 'none';
+      htmlSection.style.display = 'block';
+    }
+  }
+
+  // Type switching
+  popup.querySelectorAll('input[name="embedType"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
       youtubeSection.style.display = 'none';
       soundcloudSection.style.display = 'none';
       htmlSection.style.display = 'none';
-
-      if (e.target.value === 'youtube') {
-        youtubeSection.style.display = 'block';
-        youtubeInput.focus();
-      } else if (e.target.value === 'soundcloud') {
-        soundcloudSection.style.display = 'block';
-        soundcloudInput.focus();
-      } else {
-        htmlSection.style.display = 'block';
-        textarea.focus();
-      }
+      if (e.target.value === 'youtube') youtubeSection.style.display = 'block';
+      else if (e.target.value === 'soundcloud') soundcloudSection.style.display = 'block';
+      else htmlSection.style.display = 'block';
     });
   });
 
-  // Close button handler
-  closeButton.addEventListener('click', () => {
-    popup.remove();
-  });
+  popup.querySelector('.popup-close').addEventListener('click', () => popup.remove());
+  popup.querySelector('.popup-cancel').addEventListener('click', () => popup.remove());
 
-  // Cancel button handler
-  cancelButton.addEventListener('click', () => {
-    popup.remove();
-  });
+  popup.querySelector('.popup-confirm').addEventListener('click', () => {
+    const type = popup.querySelector('input[name="embedType"]:checked').value;
+    let content = '';
+    if (type === 'youtube') content = youtubeInput.value.trim();
+    else if (type === 'soundcloud') content = soundcloudInput.value.trim();
+    else content = htmlTextarea.value.trim();
 
-  // Insert button handler
-  insertButton.addEventListener('click', () => {
-    const selectedType = popup.querySelector('input[name="embedType"]:checked').value;
-    let embedContent;
-
-    if (selectedType === 'youtube') {
-      const youtubeUrl = youtubeInput.value.trim();
-      if (!youtubeUrl) {
-        alert('Please enter a YouTube URL');
-        return;
-      }
-      embedContent = youtubeUrl;
-    } else if (selectedType === 'soundcloud') {
-      const soundcloudUrl = soundcloudInput.value.trim();
-      if (!soundcloudUrl) {
-        alert('Please enter a SoundCloud URL');
-        return;
-      }
-      embedContent = soundcloudUrl;
-    } else {
-      const htmlCode = textarea.value.trim();
-      if (!htmlCode) {
-        alert('Please enter HTML code');
-        return;
-      }
-      embedContent = htmlCode;
+    if (!content) {
+      alert('Please enter content');
+      return;
     }
 
-    // Insert into editor as code-block-enclosed embed at cursor position
-    const htmlEmbed = `\n\n\`\`\`embed\n${embedContent}\n\`\`\`\n\n`;
-    insertAtCursor(htmlEmbed);
-
-    // Close popup
     popup.remove();
+    if (callback) callback(content);
   });
-
-  // Blur event handler to hide popup when clicking outside
-  popup.addEventListener('blur', (e) => {
-    setTimeout(() => {
-      if (!popup.contains(document.activeElement)) {
-        popup.style.display = 'none';
-      }
-    }, 0);
-  }, true);
-
-  // Make popup focusable and focus it
-  popup.setAttribute('tabindex', '-1');
-  popup.focus();
-
-  // Prevent blur when clicking inside the popup (but not on interactive elements)
-  popup.addEventListener('mousedown', (e) => {
-    // Don't prevent default on interactive elements to allow them to work
-    const interactiveTags = ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'];
-    if (!interactiveTags.includes(e.target.tagName)) {
-      e.preventDefault();
-    }
-  });
-
-  // Focus the YouTube input (default selection)
-  setTimeout(() => {
-    youtubeInput.focus();
-  }, 100);
 }
 
-// Create custom PDF attach toolbar button
-function createPdfAttachButton() {
-  const button = document.createElement('button');
-  button.classList.add('toastui-editor-toolbar-icons');
-  button.type = 'button';
-  button.innerHTML = '📄';
-  button.style.backgroundImage = 'none';
-  button.style.fontSize = '16px';
+// ============================================
+// Document Upload Popup (for blocks)
+// ============================================
 
-  button.addEventListener('click', () => {
-    saveCursorPosition();
-    showPdfUploadPopup();
-  });
+function showDocumentUploadPopup(callback) {
+  pendingBlockCallback = callback;
 
-  return button;
-}
+  const existingPopup = document.querySelector('.document-upload-popup');
+  if (existingPopup) existingPopup.remove();
 
-// Show PDF/DOCX upload popup
-function showPdfUploadPopup() {
-  // Remove existing popup if any
-  const existingPopup = document.querySelector('.pdf-upload-popup');
-  if (existingPopup) {
-    existingPopup.remove();
-  }
-
-  // Create popup container
   const popup = document.createElement('div');
-  popup.className = 'toastui-editor-popup pdf-upload-popup';
-  popup.style.display = 'block';
-  popup.style.zIndex = '10000';
+  popup.className = 'block-popup document-upload-popup';
 
-  // Create popup content
   popup.innerHTML = `
-    <div class="toastui-editor-popup-body">
-      <div class="pdf-upload-container">
-        <div class="pdf-upload-header">
-          <h3>Attach Document</h3>
-          <button class="pdf-upload-close">×</button>
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3>Upload Document</h3>
+        <button class="popup-close">&times;</button>
+      </div>
+      <div class="document-upload-dropzone" id="docDropzone">
+        <input type="file" id="docFileInput" accept=".pdf,.docx" style="display: none;" />
+        <div class="dropzone-content">
+          <p class="dropzone-icon">&#x1F4C4;</p>
+          <p>Click to select a PDF or DOCX file</p>
+          <p style="font-size: 12px; color: #888;">Max file size: 10 MB</p>
         </div>
-        <div class="pdf-upload-dropzone" id="pdfDropzone">
-          <input type="file" id="pdfFileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;" />
-          <div class="dropzone-content">
-            <p class="dropzone-icon">📄</p>
-            <p>Click to select a PDF or DOCX file, or drag and drop here</p>
-            <p style="font-size: 12px; color: #888;">Max file size: 10 MB</p>
-          </div>
-        </div>
-        <div class="pdf-upload-progress" style="display: none;">
-          <div class="progress-bar">
-            <div class="progress-fill"></div>
-          </div>
-          <p class="progress-text">Uploading document...</p>
-        </div>
-        <div class="document-list-section">
-          <h4>Uploaded Documents</h4>
-          <div class="document-list" id="documentList">
-            <!-- Documents will be populated here -->
-          </div>
-        </div>
+      </div>
+      <div class="document-upload-progress" style="display: none;">
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <p class="progress-text">Uploading...</p>
+      </div>
+      <div class="document-list-section">
+        <h4>Uploaded Documents</h4>
+        <div class="document-list" id="documentList"></div>
       </div>
     </div>
   `;
 
-  // Append to editor container
-  const toolbarContainer = document.getElementsByClassName("toastui-editor-toolbar")[0];
-  toolbarContainer.appendChild(popup);
+  document.body.appendChild(popup);
 
-  // Get elements
-  const dropzone = popup.querySelector('#pdfDropzone');
-  const fileInput = popup.querySelector('#pdfFileInput');
-  const closeButton = popup.querySelector('.pdf-upload-close');
-  const progressContainer = popup.querySelector('.pdf-upload-progress');
+  const dropzone = popup.querySelector('#docDropzone');
+  const fileInput = popup.querySelector('#docFileInput');
+  const closeButton = popup.querySelector('.popup-close');
+  const progressContainer = popup.querySelector('.document-upload-progress');
   const documentList = popup.querySelector('#documentList');
 
-  // Populate document list
-  populateDocumentList(documentList);
+  populateDocumentListForBlock(documentList, popup);
 
-  // Close button handler
   closeButton.addEventListener('click', () => {
     popup.remove();
+    pendingBlockCallback = null;
   });
 
-  // Blur event handler to hide popup when clicking outside
-  popup.addEventListener('blur', (e) => {
-    setTimeout(() => {
-      if (!popup.contains(document.activeElement)) {
-        popup.style.display = 'none';
-      }
-    }, 0);
-  }, true);
+  dropzone.addEventListener('click', () => fileInput.click());
 
-  // Make popup focusable and focus it
-  popup.setAttribute('tabindex', '-1');
-  popup.focus();
-
-  // Prevent blur when clicking inside the popup
-  popup.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-  });
-
-  // Click to select file
-  dropzone.addEventListener('click', (e) => {
-    e.stopPropagation();
-    fileInput.click();
-  });
-
-  // File input change handler
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      await handlePdfUpload(file, popup, progressContainer);
-    }
+    if (file) await handleDocumentUploadForBlock(file, popup, progressContainer, documentList);
   });
 
-  // Drag and drop handlers
   dropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    dropzone.style.borderColor = '#1890ff';
-    dropzone.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
+    dropzone.classList.add('dragover');
   });
 
-  dropzone.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropzone.style.borderColor = '#555';
-    dropzone.style.backgroundColor = 'transparent';
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
   });
 
   dropzone.addEventListener('drop', async (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    dropzone.style.borderColor = '#555';
-    dropzone.style.backgroundColor = 'transparent';
-
+    dropzone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    const validTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ];
-    const validExtensions = ['.pdf', '.docx'];
-    const hasValidType = validTypes.includes(file.type);
-    const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
-
-    if (file && (hasValidType || hasValidExtension)) {
-      await handlePdfUpload(file, popup, progressContainer);
-    } else {
-      alert('Please drop a PDF or DOCX file');
+    if (file) {
+      await handleDocumentUploadForBlock(file, popup, progressContainer, documentList);
     }
   });
 }
 
-// Handle PDF/DOCX upload
-async function handlePdfUpload(file, popup, progressContainer) {
-  // Check file size (10 MB max)
+function populateDocumentListForBlock(listElement, popup) {
+  listElement.innerHTML = '';
+
+  if (documentCache.length === 0) {
+    listElement.innerHTML = '<p class="list-empty">No documents uploaded yet</p>';
+    return;
+  }
+
+  documentCache.forEach(filename => {
+    const isDocx = filename.toLowerCase().endsWith('.docx');
+    const icon = isDocx ? '&#x1F4DD;' : '&#x1F4C4;';
+
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'document-list-item';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'document-icon';
+    iconSpan.innerHTML = icon;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'document-name';
+    nameSpan.textContent = filename;
+
+    const selectBtn = document.createElement('button');
+    selectBtn.className = 'document-select-btn';
+    selectBtn.textContent = 'Select';
+    selectBtn.addEventListener('click', () => {
+      popup.remove();
+      if (pendingBlockCallback) {
+        pendingBlockCallback(filename);
+        pendingBlockCallback = null;
+      }
+    });
+
+    itemDiv.appendChild(iconSpan);
+    itemDiv.appendChild(nameSpan);
+    itemDiv.appendChild(selectBtn);
+    listElement.appendChild(itemDiv);
+  });
+}
+
+async function handleDocumentUploadForBlock(file, popup, progressContainer, documentList) {
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
     alert('File is too large. Maximum size is 10 MB.');
@@ -800,16 +1016,13 @@ async function handlePdfUpload(file, popup, progressContainer) {
   }
 
   try {
-    // Show progress
     progressContainer.style.display = 'block';
 
-    // Determine file extension
     const originalExtension = file.name.toLowerCase().endsWith('.docx') ? '.docx' : '.pdf';
     const contentType = originalExtension === '.docx'
       ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       : 'application/pdf';
 
-    // Sanitize filename (remove extension first, then add it back)
     let originalName = file.name.replace(/\.(pdf|docx)$/i, '');
     const sanitizedName = originalName
       .toLowerCase()
@@ -818,125 +1031,31 @@ async function handlePdfUpload(file, popup, progressContainer) {
       .replace(/-+/g, '-');
     const filename = `${sanitizedName}${originalExtension}`;
 
-    // Read file as base64
     const base64Content = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64 = e.target.result.split(',')[1];
-        resolve(base64);
-      };
+      reader.onload = (e) => resolve(e.target.result.split(',')[1]);
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
 
-    // Upload to R2 storage
     const success = await saveFileToR2(currentSiteId, `public/${filename}`, base64Content, {
       encoding: 'base64',
       contentType: contentType
     });
 
-    if (!success) {
-      throw new Error('Failed to upload PDF');
-    }
+    if (!success) throw new Error('Upload failed');
 
-    // Hide progress
-    progressContainer.style.display = 'none';
-
-    // Insert document attachment markdown into editor at cursor position
-    const docEmbed = `\n\n\`\`\`doc-attachment\n${filename}\n\`\`\`\n\n`;
-    insertAtCursor(docEmbed);
-
-    // Close popup
-    popup.remove();
-
-    // Add to document cache
     addDocumentToCache(filename);
-
-    console.log('Document uploaded successfully:', filename);
-  } catch (error) {
-    console.error('Error handling document upload:', error);
     progressContainer.style.display = 'none';
-    alert('Failed to upload document: ' + error.message);
+    populateDocumentListForBlock(documentList, popup);
+
+    popup.remove();
+    if (pendingBlockCallback) {
+      pendingBlockCallback(filename);
+      pendingBlockCallback = null;
+    }
+  } catch (error) {
+    progressContainer.style.display = 'none';
+    alert('Failed to upload: ' + error.message);
   }
-}
-
-// Populate document list
-function populateDocumentList(listElement) {
-  listElement.innerHTML = '';
-
-  if (documentCache.length === 0) {
-    listElement.innerHTML = '<div class="document-list-empty">No documents uploaded yet</div>';
-    return;
-  }
-
-  documentCache.forEach(filename => {
-    const docUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
-    const isDocx = filename.toLowerCase().endsWith('.docx');
-    const icon = isDocx ? '📝' : '📄';
-
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'document-list-item';
-
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'document-icon';
-    iconSpan.textContent = icon;
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'document-name';
-    nameSpan.textContent = filename;
-    nameSpan.title = filename;
-
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'document-actions';
-
-    // Insert button
-    const insertBtn = document.createElement('button');
-    insertBtn.className = 'document-insert-btn';
-    insertBtn.textContent = 'Insert';
-    insertBtn.title = 'Insert into editor';
-    insertBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const docEmbed = `\n\n\`\`\`doc-attachment\n${filename}\n\`\`\`\n\n`;
-      insertAtCursor(docEmbed);
-
-      // Close the popup
-      const popup = document.querySelector('.pdf-upload-popup');
-      if (popup) popup.remove();
-    });
-
-    // Delete button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'document-delete-btn';
-    deleteBtn.textContent = '×';
-    deleteBtn.title = 'Delete document';
-    deleteBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-
-      if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
-        return;
-      }
-
-      try {
-        const success = await deleteFileFromR2(currentSiteId, `public/${filename}`);
-
-        if (success) {
-          removeDocumentFromCache(filename);
-          populateDocumentList(listElement);
-        } else {
-          throw new Error('Failed to delete document');
-        }
-      } catch (error) {
-        console.error('Error deleting document:', error);
-        alert('Failed to delete document: ' + error.message);
-      }
-    });
-
-    actionsDiv.appendChild(insertBtn);
-    actionsDiv.appendChild(deleteBtn);
-
-    itemDiv.appendChild(iconSpan);
-    itemDiv.appendChild(nameSpan);
-    itemDiv.appendChild(actionsDiv);
-    listElement.appendChild(itemDiv);
-  });
 }

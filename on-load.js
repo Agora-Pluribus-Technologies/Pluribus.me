@@ -276,8 +276,8 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Populate menubar from cache
   await populateMenubar(site.siteId);
 
-  // Load the editor
-  loadToastEditor();
+  // Load the block editor
+  initBlockEditor();
 
   // Find and click the appropriate page tab
   setTimeout(() => {
@@ -300,22 +300,6 @@ async function openSiteInEditor(site, initialPage = "index") {
           text.click();
           pageFound = true;
 
-          // Set up editor change listener to update cache
-          editor.off("change");
-          editor.on("change", function () {
-            if (currentSitePath) {
-              const cacheItem = getCacheByFileName(currentSitePath);
-              if (cacheItem) {
-                let currentMarkdown = editor.getMarkdown();
-                cacheItem.content = currentMarkdown;
-                cacheItem.modifiedAt = new Date().toISOString();
-                console.log(`Cached content for ${currentSitePath}`);
-                modified = true;
-                updateDeployButtonState();
-              }
-            }
-          });
-
           // Ensure modified flag is false on initial load
           modified = false;
           break;
@@ -330,22 +314,6 @@ async function openSiteInEditor(site, initialPage = "index") {
         const text = item.querySelector("span");
         if (text && text.textContent === "Home") {
           text.click();
-
-          editor.off("change");
-          editor.on("change", function () {
-            if (currentSitePath) {
-              const cacheItem = getCacheByFileName(currentSitePath);
-              if (cacheItem) {
-                let currentMarkdown = editor.getMarkdown();
-                cacheItem.content = currentMarkdown;
-                cacheItem.modifiedAt = new Date().toISOString();
-                console.log(`Cached content for ${currentSitePath}`);
-                modified = true;
-                updateDeployButtonState();
-              }
-            }
-          });
-
           modified = false;
           break;
         }
@@ -1224,7 +1192,7 @@ async function triggerCreateNewSite(displayName) {
     // Open the new page in the editor
     currentSitePath = fileName;
     const cacheItem = getCacheByFileName(fileName);
-    editor.setMarkdown(cacheItem.content);
+    loadPageIntoBlockEditor(cacheItem.content);
   }
 }
 
@@ -1521,7 +1489,7 @@ async function populateMenubar(siteId) {
             if (currentSitePath === oldFilePath) {
               currentSitePath = newFilePath;
               const updatedItem = getCacheByFileName(newFilePath);
-              editor.setMarkdown(updatedItem.content);
+              loadPageIntoBlockEditor(updatedItem.content);
             }
 
             // Mark as modified
@@ -1576,7 +1544,7 @@ async function populateMenubar(siteId) {
 
           // Clear editor if the deleted file was open
           if (currentSitePath === cacheItem.fileName) {
-            editor.setMarkdown("");
+            loadPageIntoBlockEditor("");
             currentSitePath = null;
           }
 
@@ -1621,8 +1589,8 @@ async function populateMenubar(siteId) {
       // Update current file path
       currentSitePath = cacheItem.fileName;
 
-      // Set editor content
-      editor.setMarkdown(fileContent);
+      // Load content into block editor
+      loadPageIntoBlockEditor(fileContent);
     });
     menubarContent.appendChild(fileItem);
   }
