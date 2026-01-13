@@ -392,6 +392,16 @@ async function loadSitesForUser(username) {
   populateSitesList(sitesCache, sharedSitesCache);
 }
 
+// Position sites-list-panel below userMenuButton
+function positionSitesListPanel() {
+  const sitesListPanel = document.getElementById("sites-list-panel");
+  const userMenuButton = document.getElementById("userMenuButton");
+  if (sitesListPanel && userMenuButton) {
+    const topbarRect = sitesListPanel.getBoundingClientRect();
+    userMenuButton.style.marginTop = topbarRect.bottom + "px";
+  }
+}
+
 // Position pageMenubar below editor-topbar
 function positionPageMenubar() {
   const editorTopbar = document.getElementById("editor-topbar");
@@ -1413,6 +1423,8 @@ function populateSitesList(ownedSites, sharedSites = []) {
       sitesList.appendChild(createSiteItem(site, false));
     }
   }
+
+  positionSitesListPanel();
 }
 
 async function populateMenubar(siteId) {
