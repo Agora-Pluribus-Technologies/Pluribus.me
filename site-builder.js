@@ -661,8 +661,11 @@ function showPanelEditModal(block, callback) {
 // Image Upload Popup (for blocks)
 // ============================================
 
+let selectedImageFilename = null;
+
 function showImageUploadPopup(callback, currentCaption = '') {
   pendingBlockCallback = callback;
+  selectedImageFilename = null;
 
   const existingPopup = document.querySelector('.image-upload-popup');
   if (existingPopup) existingPopup.remove();
@@ -673,14 +676,14 @@ function showImageUploadPopup(callback, currentCaption = '') {
   popup.innerHTML = `
     <div class="popup-content">
       <div class="popup-header">
-        <h3>Upload Image</h3>
+        <h3>Select Image</h3>
         <button class="popup-close">&times;</button>
       </div>
       <div class="image-upload-dropzone" id="imageDropzone">
         <input type="file" id="imageFileInput" accept="image/*" style="display: none;" />
         <div class="dropzone-content">
           <p class="dropzone-icon">&#x1F4C1;</p>
-          <p>Click to select an image or drag and drop here</p>
+          <p>Click to upload a new image or drag and drop here</p>
         </div>
       </div>
       <div class="image-upload-progress" style="display: none;">
@@ -695,6 +698,10 @@ function showImageUploadPopup(callback, currentCaption = '') {
         <h4>Image Gallery</h4>
         <div class="image-gallery" id="imageGallery"></div>
       </div>
+      <div class="popup-buttons">
+        <button class="popup-cancel">Cancel</button>
+        <button class="popup-confirm" disabled>Confirm</button>
+      </div>
     </div>
   `;
 
@@ -706,22 +713,41 @@ function showImageUploadPopup(callback, currentCaption = '') {
   const progressContainer = popup.querySelector('.image-upload-progress');
   const imageGallery = popup.querySelector('#imageGallery');
   const captionInput = popup.querySelector('#imageCaptionInput');
+  const confirmBtn = popup.querySelector('.popup-confirm');
+  const cancelBtn = popup.querySelector('.popup-cancel');
 
   // Set current caption if editing
   captionInput.value = currentCaption;
 
-  populateImageGalleryForBlock(imageGallery, popup, captionInput);
+  populateImageGalleryForBlock(imageGallery, popup, captionInput, confirmBtn);
 
   closeButton.addEventListener('click', () => {
     popup.remove();
     pendingBlockCallback = null;
+    selectedImageFilename = null;
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    popup.remove();
+    pendingBlockCallback = null;
+    selectedImageFilename = null;
+  });
+
+  confirmBtn.addEventListener('click', () => {
+    if (selectedImageFilename && pendingBlockCallback) {
+      const caption = captionInput.value.trim();
+      popup.remove();
+      pendingBlockCallback({ filename: selectedImageFilename, caption });
+      pendingBlockCallback = null;
+      selectedImageFilename = null;
+    }
   });
 
   dropzone.addEventListener('click', () => fileInput.click());
 
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
-    if (file) await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput);
+    if (file) await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput, confirmBtn);
   });
 
   dropzone.addEventListener('dragover', (e) => {
@@ -738,14 +764,14 @@ function showImageUploadPopup(callback, currentCaption = '') {
     dropzone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
-      await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput);
+      await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput, confirmBtn);
     } else {
       alert('Please drop an image file');
     }
   });
 }
 
-function populateImageGalleryForBlock(galleryElement, popup, captionInput) {
+function populateImageGalleryForBlock(galleryElement, popup, captionInput, confirmBtn) {
   galleryElement.innerHTML = '';
 
   if (imageCache.length === 0) {
@@ -758,17 +784,28 @@ function populateImageGalleryForBlock(galleryElement, popup, captionInput) {
 
     const itemDiv = document.createElement('div');
     itemDiv.className = 'image-gallery-item';
+    itemDiv.dataset.filename = filename;
+
+    // Check if this image is currently selected
+    if (selectedImageFilename === filename) {
+      itemDiv.classList.add('selected');
+    }
 
     const img = document.createElement('img');
     img.src = imageUrl;
     img.alt = filename;
 
-    img.addEventListener('click', () => {
-      const caption = captionInput ? captionInput.value.trim() : '';
-      popup.remove();
-      if (pendingBlockCallback) {
-        pendingBlockCallback({ filename, caption });
-        pendingBlockCallback = null;
+    itemDiv.addEventListener('click', () => {
+      // Deselect all items
+      galleryElement.querySelectorAll('.image-gallery-item').forEach(item => {
+        item.classList.remove('selected');
+      });
+      // Select this item
+      itemDiv.classList.add('selected');
+      selectedImageFilename = filename;
+      // Enable confirm button
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
       }
     });
 
@@ -781,7 +818,12 @@ function populateImageGalleryForBlock(galleryElement, popup, captionInput) {
       try {
         await deleteImage(currentSiteId, filename);
         removeImageFromCache(filename);
-        populateImageGalleryForBlock(galleryElement, popup, captionInput);
+        // Clear selection if deleted image was selected
+        if (selectedImageFilename === filename) {
+          selectedImageFilename = null;
+          if (confirmBtn) confirmBtn.disabled = true;
+        }
+        populateImageGalleryForBlock(galleryElement, popup, captionInput, confirmBtn);
       } catch (error) {
         alert('Failed to delete image');
       }
@@ -793,18 +835,15 @@ function populateImageGalleryForBlock(galleryElement, popup, captionInput) {
   });
 }
 
-async function handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput) {
+async function handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput, confirmBtn) {
   try {
     progressContainer.style.display = 'block';
     const filename = await processAndUploadImage(file);
     progressContainer.style.display = 'none';
-    populateImageGalleryForBlock(imageGallery, popup, captionInput);
-    const caption = captionInput ? captionInput.value.trim() : '';
-    popup.remove();
-    if (pendingBlockCallback) {
-      pendingBlockCallback({ filename, caption });
-      pendingBlockCallback = null;
-    }
+    // Auto-select the newly uploaded image
+    selectedImageFilename = filename;
+    if (confirmBtn) confirmBtn.disabled = false;
+    populateImageGalleryForBlock(imageGallery, popup, captionInput, confirmBtn);
   } catch (error) {
     progressContainer.style.display = 'none';
     alert('Failed to upload image: ' + error.message);
