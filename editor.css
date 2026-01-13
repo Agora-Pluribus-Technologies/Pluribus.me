@@ -16,6 +16,20 @@
   --success-color: #4CAF50;
   --error-color: #f44336;
   --warning-color: #ff9800;
+  
+  --bg-primary-alt: #f5f5f5;
+  --bg-secondary-alt: #e0e0e0;
+  --bg-tertiary-alt: #ffffff;
+  --bg-input-alt: #ffffff;
+  --text-primary-alt: #1a1a1a;
+  --text-secondary-alt: #444;
+  --text-muted-alt: #666;
+  --border-color-alt: #ccc;
+  --border-light-alt: #ddd;
+  --accent-color-alt: #b8860b;
+  --accent-hover-alt: #996515;
+  --link-color-alt: #0066cc;
+  --link-hover-alt: #004499;
 }
 
 /* Light mode overrides */
@@ -33,6 +47,23 @@ body.light-mode {
   --accent-hover: #996515;
   --link-color: #0066cc;
   --link-hover: #004499;
+
+  --bg-primary-alt: #181818;
+  --bg-secondary-alt: #303030;
+  --bg-tertiary-alt: #0a0a0a;
+  --bg-input-alt: #1e1e1e;
+  --text-primary-alt: #fff;
+  --text-secondary-alt: #ccc;
+  --text-muted-alt: #888;
+  --border-color-alt: #555;
+  --border-light-alt: #333;
+  --accent-color-alt: gold;
+  --accent-hover-alt: #ffe780;
+  --link-color-alt: #1890ff;
+  --link-hover-alt: #68c0ff;
+  --success-color-alt: #4CAF50;
+  --error-color-alt: #f44336;
+  --warning-color-alt: #ff9800;
 }
 
 html,
