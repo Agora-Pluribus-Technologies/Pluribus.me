@@ -325,7 +325,7 @@ nav {
   z-index: 10000;
   display: block;
   text-align: center;
-  background-color: black;
+  background-color: var(--bg-tertiary);
   width: 100%;
   padding: 10px 0 20px 0;
 }
