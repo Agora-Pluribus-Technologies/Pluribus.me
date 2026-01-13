@@ -117,7 +117,7 @@ function decodeEmbeds(origin, basePath) {
       downloadButton.innerHTML = `<span class="pdf-icon">${icon}</span> Download ${escapeHtml(filename)}`;
 
       downloadContainer.appendChild(downloadButton);
-      pre.replaceWith(downloadContainer);
+      pre.parentElement.parentElement.replaceWith(downloadContainer);
       continue;
     }
 
@@ -174,7 +174,7 @@ function decodeEmbeds(origin, basePath) {
         iframe.style.aspectRatio = `${w / h}`;
       }
 
-      pre.replaceWith(newDiv);
+      pre.parentElement.parentElement.replaceWith(newDiv);
     }
   }
 }
