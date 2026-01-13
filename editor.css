@@ -636,6 +636,41 @@ nav {
   }
 }
 
+.image-caption-section {
+  margin-top: 15px;
+}
+
+.image-caption-section label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.image-caption-section input {
+  width: 100%;
+  padding: 10px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.image-caption-section input:focus {
+  outline: none;
+  border-color: var(--link-color);
+}
+
+.image-caption {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
+}
+
 .image-gallery-section {
   margin-top: 20px;
 }

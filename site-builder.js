@@ -335,12 +335,19 @@ function renderPanelPreview(markdown) {
 }
 
 function renderImagePreview(content) {
-  // Extract image URL from markdown
-  const match = content.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+  // Extract image URL and optional caption from markdown
+  // Format: ![alt](url) or ![alt](url "caption")
+  const match = content.match(/!\[([^\]]*)\]\(([^\s"]+)(?:\s+"([^"]*)")?\)/);
   if (match) {
     const alt = match[1];
     const url = match[2];
-    return `<div class="embed-container"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" style="max-width:100%;"></div>`;
+    const caption = match[3] || '';
+    let html = `<div class="embed-container"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" style="max-width:100%;">`;
+    if (caption) {
+      html += `<p class="image-caption">${escapeHtml(caption)}</p>`;
+    }
+    html += '</div>';
+    return html;
   }
   return '<div class="embed-container"><p>Invalid image</p></div>';
 }
@@ -489,12 +496,19 @@ function editBlock(index) {
       });
       break;
     case 'image':
-      showImageUploadPopup((filename) => {
+      // Parse current caption from existing content
+      const captionMatch = block.content.match(/!\[[^\]]*\]\([^)]+\s+"([^"]+)"\)/);
+      const currentCaption = captionMatch ? captionMatch[1] : '';
+      showImageUploadPopup(({ filename, caption }) => {
         const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
-        block.content = `![${filename}](${imageUrl})`;
+        if (caption) {
+          block.content = `![${filename}](${imageUrl} "${caption}")`;
+        } else {
+          block.content = `![${filename}](${imageUrl})`;
+        }
         saveBlocksToCache();
         renderAllBlocks();
-      });
+      }, currentCaption);
       break;
     case 'embed':
       showEmbedPopup(block.content, (newContent) => {
@@ -647,7 +661,7 @@ function showPanelEditModal(block, callback) {
 // Image Upload Popup (for blocks)
 // ============================================
 
-function showImageUploadPopup(callback) {
+function showImageUploadPopup(callback, currentCaption = '') {
   pendingBlockCallback = callback;
 
   const existingPopup = document.querySelector('.image-upload-popup');
@@ -673,6 +687,10 @@ function showImageUploadPopup(callback) {
         <div class="progress-bar"><div class="progress-fill"></div></div>
         <p class="progress-text">Processing and uploading...</p>
       </div>
+      <div class="image-caption-section">
+        <label for="imageCaptionInput">Caption (optional):</label>
+        <input type="text" id="imageCaptionInput" placeholder="Enter a caption for the image...">
+      </div>
       <div class="image-gallery-section">
         <h4>Image Gallery</h4>
         <div class="image-gallery" id="imageGallery"></div>
@@ -687,8 +705,12 @@ function showImageUploadPopup(callback) {
   const closeButton = popup.querySelector('.popup-close');
   const progressContainer = popup.querySelector('.image-upload-progress');
   const imageGallery = popup.querySelector('#imageGallery');
+  const captionInput = popup.querySelector('#imageCaptionInput');
 
-  populateImageGalleryForBlock(imageGallery, popup);
+  // Set current caption if editing
+  captionInput.value = currentCaption;
+
+  populateImageGalleryForBlock(imageGallery, popup, captionInput);
 
   closeButton.addEventListener('click', () => {
     popup.remove();
@@ -699,7 +721,7 @@ function showImageUploadPopup(callback) {
 
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
-    if (file) await handleImageUploadForBlock(file, popup, progressContainer, imageGallery);
+    if (file) await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput);
   });
 
   dropzone.addEventListener('dragover', (e) => {
@@ -716,14 +738,14 @@ function showImageUploadPopup(callback) {
     dropzone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
-      await handleImageUploadForBlock(file, popup, progressContainer, imageGallery);
+      await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput);
     } else {
       alert('Please drop an image file');
     }
   });
 }
 
-function populateImageGalleryForBlock(galleryElement, popup) {
+function populateImageGalleryForBlock(galleryElement, popup, captionInput) {
   galleryElement.innerHTML = '';
 
   if (imageCache.length === 0) {
@@ -742,9 +764,10 @@ function populateImageGalleryForBlock(galleryElement, popup) {
     img.alt = filename;
 
     img.addEventListener('click', () => {
+      const caption = captionInput ? captionInput.value.trim() : '';
       popup.remove();
       if (pendingBlockCallback) {
-        pendingBlockCallback(filename);
+        pendingBlockCallback({ filename, caption });
         pendingBlockCallback = null;
       }
     });
@@ -758,7 +781,7 @@ function populateImageGalleryForBlock(galleryElement, popup) {
       try {
         await deleteImage(currentSiteId, filename);
         removeImageFromCache(filename);
-        populateImageGalleryForBlock(galleryElement, popup);
+        populateImageGalleryForBlock(galleryElement, popup, captionInput);
       } catch (error) {
         alert('Failed to delete image');
       }
@@ -770,15 +793,16 @@ function populateImageGalleryForBlock(galleryElement, popup) {
   });
 }
 
-async function handleImageUploadForBlock(file, popup, progressContainer, imageGallery) {
+async function handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput) {
   try {
     progressContainer.style.display = 'block';
     const filename = await processAndUploadImage(file);
     progressContainer.style.display = 'none';
-    populateImageGalleryForBlock(imageGallery, popup);
+    populateImageGalleryForBlock(imageGallery, popup, captionInput);
+    const caption = captionInput ? captionInput.value.trim() : '';
     popup.remove();
     if (pendingBlockCallback) {
-      pendingBlockCallback(filename);
+      pendingBlockCallback({ filename, caption });
       pendingBlockCallback = null;
     }
   } catch (error) {

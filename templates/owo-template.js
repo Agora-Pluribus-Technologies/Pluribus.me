@@ -33,6 +33,18 @@ function centerImages() {
       p.children[0].nodeName.toLowerCase() == "img"
     ) {
       p.style.textAlign = "center";
+
+      // Check if image has a title attribute (used as caption)
+      const img = p.children[0];
+      const caption = img.getAttribute("title");
+      if (caption) {
+        // Create caption element
+        const captionEl = document.createElement("p");
+        captionEl.className = "image-caption";
+        captionEl.textContent = caption;
+        // Insert caption after the paragraph containing the image
+        p.parentNode.insertBefore(captionEl, p.nextSibling);
+      }
     }
   }
 }

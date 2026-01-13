@@ -125,6 +125,15 @@ img {
     max-width: 100%;
 }
 
+.image-caption {
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-top: 8px;
+    margin-bottom: 16px;
+}
+
 table {
     width: auto;
     border-collapse: collapse;
