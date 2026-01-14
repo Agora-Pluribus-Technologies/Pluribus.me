@@ -51,7 +51,7 @@ async function processImage(file) {
           }
         },
         'image/avif',
-        0.85
+        0 // Quality
       );
     };
 
