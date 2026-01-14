@@ -232,7 +232,7 @@ nav {
 }
 
 .commit-modal {
-  z-index: 10002;
+  z-index: 10003;
 }
 
 .modal-content {
@@ -1130,7 +1130,7 @@ nav {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.8);
-  z-index: 10003;
+  z-index: 10005;
   display: flex;
   align-items: center;
   justify-content: center;
