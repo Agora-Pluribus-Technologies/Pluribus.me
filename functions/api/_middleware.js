@@ -24,15 +24,6 @@ export async function onRequest(context) {
 
   const method = request.method.toUpperCase();
 
-  // For GET requests, add caching headers
-  if (method === "GET") {
-    const response = await next();
-    // Clone the response to add headers
-    const newResponse = new Response(response.body, response);
-    newResponse.headers.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60"); // 5 minutes
-    return newResponse;
-  }
-
   // Only validate Turnstile for PUT, POST, DELETE requests
   if (method !== "PUT" && method !== "POST" && method !== "DELETE") {
     return next();
