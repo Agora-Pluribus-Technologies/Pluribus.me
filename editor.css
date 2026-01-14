@@ -231,7 +231,7 @@ nav {
   background-color: var(--border-color);
 }
 
-.commit-modal {
+#commitModal {
   z-index: 10003;
 }
 
