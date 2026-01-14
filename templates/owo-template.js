@@ -34,6 +34,7 @@ function decodeImages() {
     ) {
       p.style.textAlign = "center";
       p.parentElement.parentElement.classList.remove("h-entry");
+      p.parentElement.parentElement.classList.add("image-container");
       p.parentElement.classList.remove("e-content");
 
       // Check if image has a title attribute (used as caption)

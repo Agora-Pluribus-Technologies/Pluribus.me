@@ -94,6 +94,13 @@ nav {
     text-decoration: none;
 }
 
+.image-container {
+    margin-left: 10%;
+    margin-right: 10%;
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
 .h-entry {
     margin-left: 10%;
     margin-right: 10%;
