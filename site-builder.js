@@ -33,10 +33,10 @@ async function processImage(file) {
       if (totalPixels > maxPixels) {
         const scaleFactor = Math.sqrt(maxPixels / totalPixels);
         width = Math.floor(width * scaleFactor);
-        width = Math.min(width, maxWidth);
         height = Math.floor(height * scaleFactor);
-        height = Math.min(height, maxHeight);
       }
+      width = Math.min(width, maxWidth);
+      height = Math.min(height, maxHeight);
 
       const canvas = document.createElement('canvas');
       canvas.width = width;
