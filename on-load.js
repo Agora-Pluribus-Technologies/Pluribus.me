@@ -787,7 +787,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const confirmButton = document.getElementById("confirmCommitButton");
       const originalText = confirmButton.textContent;
       confirmButton.disabled = true;
-      confirmButton.textContent = "Deploying...";
+      confirmButton.textContent = "Publishing...";
 
       // Close modal and show deploy overlay
       $("#commitModal").modal("hide");
@@ -1261,7 +1261,7 @@ function showAlertBar(message, isSuccess) {
   }, 3000);
 }
 
-function showDeployOverlay(message = "Deploying site...") {
+function showDeployOverlay(message = "Publishing site...") {
   const overlay = document.getElementById("deployOverlay");
   const messageEl = overlay.querySelector(".deploy-message");
   if (messageEl) {
