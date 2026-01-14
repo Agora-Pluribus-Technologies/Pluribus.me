@@ -23,24 +23,18 @@ async function processImage(file) {
 
     img.onload = async () => {
 
-      // Downsize if larger than 1 megapixel or exceeds max dimensions
+      // Downsize if exceeds max dimensions
       let width = img.width;
       let height = img.height;
-      const maxPixels = 1000000; // 1 million pixels
-      const totalPixels = width * height;
-      const maxWidth = 1536; // 1920 * 0.8
-      const maxHeight = 864; // 1080 * 0.8
-      if (totalPixels > maxPixels) {
-        const scaleFactor = Math.sqrt(maxPixels / totalPixels);
-        width = Math.floor(width * scaleFactor);
-        height = Math.floor(height * scaleFactor);
-      }
+      const maxWidth = 1080; // 1920 / 1.777...
+      const maxHeight = 607; // 1080 / 1.777...
+      
       if (width > maxWidth || height > maxHeight) {
         const widthRatio = maxWidth / width;
         const heightRatio = maxHeight / height;
-        const scaleFactor2 = Math.min(widthRatio, heightRatio);
-        width = Math.floor(width * scaleFactor2);
-        height = Math.floor(height * scaleFactor2);
+        const scaleFactor = Math.min(widthRatio, heightRatio);
+        width = Math.floor(width * scaleFactor);
+        height = Math.floor(height * scaleFactor);
       }
 
       const canvas = document.createElement('canvas');
