@@ -22,18 +22,20 @@ async function processImage(file) {
     };
 
     img.onload = async () => {
+
+      // Downsize if larger than 1 megapixel or exceeds max dimensions
       let width = img.width;
       let height = img.height;
-      const maxSize = 1080;
-
-      if (width > maxSize || height > maxSize) {
-        if (width > height) {
-          height = (height / width) * maxSize;
-          width = maxSize;
-        } else {
-          width = (width / height) * maxSize;
-          height = maxSize;
-        }
+      const maxPixels = 1000000; // 1 million pixels
+      const totalPixels = width * height;
+      const maxWidth = 1536; // 1920 * 0.8
+      const maxHeight = 864; // 1080 * 0.8
+      if (totalPixels > maxPixels) {
+        const scaleFactor = Math.sqrt(maxPixels / totalPixels);
+        width = Math.floor(width * scaleFactor);
+        width = Math.min(width, maxWidth);
+        height = Math.floor(height * scaleFactor);
+        height = Math.min(height, maxHeight);
       }
 
       const canvas = document.createElement('canvas');
@@ -51,7 +53,7 @@ async function processImage(file) {
           }
         },
         'image/avif',
-        0 // Quality
+        0 // minimum quality
       );
     };
 
