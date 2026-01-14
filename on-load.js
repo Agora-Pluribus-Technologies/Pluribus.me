@@ -791,7 +791,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Close modal and show deploy overlay
       $("#commitModal").modal("hide");
-      showDeployOverlay("Deploying site...");
+      showDeployOverlay("Publishing site...");
 
       try {
         // Create git commit
