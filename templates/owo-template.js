@@ -20,11 +20,11 @@ document.addEventListener("DOMContentLoaded", async function () {
   await createMenubar(origin, basePath, pagesJson);
   await fetchPageContent(origin, basePath, siteName, pagesJson);
   decodeEmbeds(origin, basePath);
-  centerImages();
+  decodeImages();
   createFooter(origin, basePath, showHistory);
 });
 
-function centerImages() {
+function decodeImages() {
   const pList = document.getElementsByTagName("p");
   for (let i = 0; i < pList.length; i++) {
     let p = pList[i];
@@ -33,6 +33,8 @@ function centerImages() {
       p.children[0].nodeName.toLowerCase() == "img"
     ) {
       p.style.textAlign = "center";
+      p.parentElement.parentElement.classList.remove("h-entry");
+      p.parentElement.classList.remove("e-content");
 
       // Check if image has a title attribute (used as caption)
       const img = p.children[0];
