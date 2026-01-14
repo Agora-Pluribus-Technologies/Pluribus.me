@@ -35,8 +35,13 @@ async function processImage(file) {
         width = Math.floor(width * scaleFactor);
         height = Math.floor(height * scaleFactor);
       }
-      width = Math.min(width, maxWidth);
-      height = Math.min(height, maxHeight);
+      if (width > maxWidth || height > maxHeight) {
+        const widthRatio = maxWidth / width;
+        const heightRatio = maxHeight / height;
+        const scaleFactor2 = Math.min(widthRatio, heightRatio);
+        width = Math.floor(width * scaleFactor2);
+        height = Math.floor(height * scaleFactor2);
+      }
 
       const canvas = document.createElement('canvas');
       canvas.width = width;
