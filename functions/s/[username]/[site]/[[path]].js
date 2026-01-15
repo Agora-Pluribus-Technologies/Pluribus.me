@@ -73,8 +73,7 @@ export async function onRequestGet(context) {
     // Build response headers
     const headers = new Headers();
     headers.set("Content-Type", object.httpMetadata?.contentType || guessContentType(filePath));
-    // Cache control - allow some caching but not too aggressive
-    headers.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
+    headers.set("Cache-Control", "no-cache, must-revalidate");
 
     return new Response(object.body, {
       status: 200,
