@@ -625,7 +625,6 @@ function showPanelEditModal(block, callback) {
     initialValue: block.content,
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
-      ['hr', 'quote'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
       ['table', 'link']
     ]
