@@ -281,6 +281,8 @@ async function openSiteInEditor(site, initialPage = "index") {
 
   // Find and click the appropriate page tab
   setTimeout(() => {
+    // Position menubar after DOM is ready
+    positionPageMenubar();
     const menubarItems = document.querySelectorAll(".menubar-item");
     const fileName = `public/${initialPage}.md`;
     let pageFound = false;
@@ -416,8 +418,6 @@ function positionPageMenubar() {
 window.addEventListener("resize", positionPageMenubar);
 
 document.addEventListener("DOMContentLoaded", async function () {
-  // Position menubar after DOM is ready
-  positionPageMenubar();
 
   // Check for edit context - either from injected script or from sessionStorage
   if (window.PLURIBUS_EDIT_CONTEXT) {
