@@ -621,7 +621,7 @@ function showPanelEditModal(block, callback) {
     initialEditType: 'wysiwyg',
     previewStyle: 'vertical',
     theme: 'dark',
-    height: '400px',
+    height: '300px',
     initialValue: block.content,
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
