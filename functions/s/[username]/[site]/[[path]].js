@@ -7,6 +7,18 @@ export async function onRequestGet(context) {
   const { request, env, params } = context;
   const url = new URL(request.url);
 
+  for (const k of url.searchParams.keys()) {
+    url.searchParams.delete(k);
+  }
+
+  // Check cache first
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), request);
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const username = params && params.username ? String(params.username) : null;
   const site = params && params.site ? String(params.site) : null;
   const siteId = username && site ? `${username}/${site}` : null;
@@ -66,19 +78,31 @@ export async function onRequestGet(context) {
   try {
     const object = await env.PLURIBUS_BUCKET.get(r2Key);
 
-    if (!object) {
-      return new Response("File not found", { status: 404 });
-    }
-
     // Build response headers
     const headers = new Headers();
-    headers.set("Content-Type", object.httpMetadata?.contentType || guessContentType(filePath));
-    headers.set("Cache-Control", "no-cache, must-revalidate");
+    headers.set("Cache-Control", "public, max-age=0, s-maxage=30"); // Cache for 30 seconds at CDN
 
-    return new Response(object.body, {
-      status: 200,
-      headers,
-    });
+    let response;
+
+    if (!object) {
+      response = new Response("File not found", {
+        status: 404,
+        headers,
+      });
+    }
+    else {
+      headers.set("Content-Type", object.httpMetadata?.contentType || guessContentType(filePath));
+  
+      response = new Response(object.body, {
+        status: 200,
+        headers,
+      });
+    }
+
+    // Store in cache (must clone since body can only be read once)
+    context.waitUntil(cache.put(cacheKey, response.clone()));
+
+    return response;
   } catch (error) {
     console.error("R2 get error:", error);
     return new Response("Failed to retrieve file", { status: 500 });
