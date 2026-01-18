@@ -146,6 +146,17 @@ function parseMarkdownToBlocks(markdown) {
       continue;
     }
 
+    // Check for link-button block
+    const linkButtonMatch = trimmed.match(/^```link-button\n([\s\S]*?)\n```$/);
+    if (linkButtonMatch) {
+      blocks.push({
+        id: generateBlockId(),
+        type: 'link-button',
+        content: linkButtonMatch[1].trim()
+      });
+      continue;
+    }
+
     // Check for standalone image
     const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imageMatch) {
@@ -178,6 +189,9 @@ function blocksToMarkdown(blocks) {
         break;
       case 'document':
         parts.push(`\`\`\`doc-attachment\n${block.content}\n\`\`\``);
+        break;
+      case 'link-button':
+        parts.push(`\`\`\`link-button\n${block.content}\n\`\`\``);
         break;
       case 'image':
       case 'panel':
@@ -324,6 +338,8 @@ function renderBlockPreview(block) {
       return renderEmbedPreview(block.content);
     case 'document':
       return renderDocumentPreview(block.content);
+    case 'link-button':
+      return renderLinkButtonPreview(block.content);
     default:
       return `<div class="h-entry"><p>${escapeHtml(block.content)}</p></div>`;
   }
@@ -383,6 +399,17 @@ function renderDocumentPreview(filename) {
   return `<div class="pdf-download-container"><a href="${escapeHtml(url)}" class="pdf-download-button" target="_blank" download="${escapeHtml(filename)}"><span class="pdf-icon">${icon}</span> Download ${escapeHtml(filename)}</a></div>`;
 }
 
+function renderLinkButtonPreview(content) {
+  // Content format: url|label
+  const parts = content.split('|');
+  const url = parts[0] || '';
+  const label = parts[1] || 'Link';
+  const isExternal = url.startsWith('https://');
+  const icon = isExternal ? '&#x1F310;' : '&#x1F517;'; // Globe for external, link for local
+  const target = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+  return `<div class="link-button-container"><a href="${escapeHtml(url)}" class="link-button"${target}><span class="link-icon">${icon}</span> ${escapeHtml(label)}</a></div>`;
+}
+
 function extractYouTubeVideoId(url) {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?.*&v=)([^&\n?#]+)/,
@@ -433,6 +460,7 @@ function showAddBlockMenu(wrapper, afterIndex) {
 
   const options = [
     { type: 'panel', icon: '&#x1F4DD;', label: 'Text Panel' },
+    { type: 'link-button', icon: '&#x1F517;', label: 'Link Button' },
     { type: 'image', icon: '🖼️', label: 'Image' },
     { type: 'embed', icon: '&#x1F3AC;', label: 'Embed' },
     { type: 'document', icon: '&#x1F4C4;', label: 'Document' }
@@ -521,6 +549,17 @@ function editBlock(index) {
     case 'document':
       showDocumentUploadPopup((filename) => {
         block.content = filename;
+        saveBlocksToCache();
+        renderAllBlocks();
+      });
+      break;
+    case 'link-button':
+      // Parse current URL and label from content (format: url|label)
+      const linkParts = block.content.split('|');
+      const currentUrl = linkParts[0] || '';
+      const currentLabel = linkParts[1] || '';
+      showLinkButtonPopup(currentUrl, currentLabel, (url, label) => {
+        block.content = `${url}|${label}`;
         saveBlocksToCache();
         renderAllBlocks();
       });
@@ -948,6 +987,77 @@ function showEmbedPopup(currentContent, callback) {
 
     popup.remove();
     if (callback) callback(content);
+  });
+}
+
+// ============================================
+// Link Button Popup
+// ============================================
+
+function showLinkButtonPopup(currentUrl, currentLabel, callback) {
+  const existingPopup = document.querySelector('.link-button-popup');
+  if (existingPopup) existingPopup.remove();
+
+  const popup = document.createElement('div');
+  popup.className = 'block-popup link-button-popup';
+
+  popup.innerHTML = `
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3>Insert Link Button</h3>
+        <button class="popup-close">&times;</button>
+      </div>
+      <div class="link-button-form">
+        <div class="form-group">
+          <label for="linkButtonUrl">URL:</label>
+          <input type="text" id="linkButtonUrl" placeholder="/s/username/site/page or https://example.com" value="${escapeHtml(currentUrl)}">
+          <p class="form-hint">Local links start with /s/ • External links start with https://</p>
+        </div>
+        <div class="form-group">
+          <label for="linkButtonLabel">Button Label:</label>
+          <input type="text" id="linkButtonLabel" placeholder="Click here" value="${escapeHtml(currentLabel)}">
+        </div>
+        <div class="popup-buttons">
+          <button class="popup-cancel">Cancel</button>
+          <button class="popup-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  const urlInput = popup.querySelector('#linkButtonUrl');
+  const labelInput = popup.querySelector('#linkButtonLabel');
+
+  // Focus on URL input
+  urlInput.focus();
+
+  popup.querySelector('.popup-close').addEventListener('click', () => popup.remove());
+  popup.querySelector('.popup-cancel').addEventListener('click', () => popup.remove());
+
+  popup.querySelector('.popup-confirm').addEventListener('click', () => {
+    const url = urlInput.value.trim();
+    const label = labelInput.value.trim();
+
+    if (!url) {
+      alert('Please enter a URL');
+      return;
+    }
+
+    // Validate URL format: must start with /s/ (local) or https:// (external)
+    if (!url.startsWith('/s/') && !url.startsWith('https://')) {
+      alert('URL must start with /s/ (local link) or https:// (external link)');
+      return;
+    }
+
+    if (!label) {
+      alert('Please enter a button label');
+      return;
+    }
+
+    popup.remove();
+    if (callback) callback(url, label);
   });
 }
 

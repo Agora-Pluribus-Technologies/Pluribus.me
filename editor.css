@@ -1648,6 +1648,68 @@ nav {
   font-size: 24px;
 }
 
+/* Link Button Block Preview */
+.block-preview .link-button-container {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.block-preview .link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 25px;
+  background-color: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.block-preview .link-button:hover {
+  border-color: var(--link-color);
+  background-color: var(--bg-secondary);
+}
+
+.block-preview .link-icon {
+  font-size: 24px;
+}
+
+/* Link Button Popup */
+.link-button-form .form-group {
+  margin-bottom: 16px;
+}
+
+.link-button-form .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.link-button-form .form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.link-button-form .form-group input:focus {
+  outline: none;
+  border-color: var(--link-color);
+}
+
+.link-button-form .form-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* Add Block Button */
 .add-block-wrapper {
   position: relative;

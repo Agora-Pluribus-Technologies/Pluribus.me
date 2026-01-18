@@ -102,6 +102,7 @@ function decodeEmbeds(origin, basePath) {
     const pre = preList[i];
     let embedContent;
     let pdfAttachment;
+    let linkButtonContent;
     for (let j = 0; j < pre.children.length; j++) {
       const preChild = pre.children[j];
       if (preChild.classList.contains("language-embed")) {
@@ -112,6 +113,36 @@ function decodeEmbeds(origin, basePath) {
         pdfAttachment = preChild.innerText.trim();
         break;
       }
+      if (preChild.classList.contains("language-link-button")) {
+        linkButtonContent = preChild.innerText.trim();
+        break;
+      }
+    }
+
+    // Handle link buttons
+    if (linkButtonContent) {
+      // Content format: url|label
+      const parts = linkButtonContent.split('|');
+      const url = parts[0] || '';
+      const label = parts[1] || 'Link';
+      const isExternal = url.startsWith('https://');
+      const icon = isExternal ? '🌐' : '🔗';
+
+      const buttonContainer = document.createElement("div");
+      buttonContainer.classList.add("link-button-container");
+
+      const linkButton = document.createElement("a");
+      linkButton.href = url;
+      linkButton.classList.add("link-button");
+      if (isExternal) {
+        linkButton.setAttribute("target", "_blank");
+        linkButton.setAttribute("rel", "noopener noreferrer");
+      }
+      linkButton.innerHTML = `<span class="link-icon">${icon}</span> ${escapeHtml(label)}`;
+
+      buttonContainer.appendChild(linkButton);
+      pre.parentElement.parentElement.replaceWith(buttonContainer);
+      continue;
     }
 
     // Handle PDF/DOCX attachments

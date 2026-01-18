@@ -33,6 +33,18 @@ export async function onRequestGet(context) {
 
   console.log("Site id:", siteId);
 
+  // Look up site configuration in D1 to verify the site exists
+  const cfg = await env.USERS_DB.prepare(
+    "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
+  ).bind(siteId).first();
+
+  if (!cfg) {
+    // Fail closed: if we don't know this site, return 404
+    return new Response("Unknown site", { status: 404 });
+  }
+
+  console.log("Site config:", cfg);
+
   // Compute the path inside the site, after /s/:username/:site/
   // e.g. /s/alice/myblog/about/team.html -> "about/team.html"
   const segments = url.pathname.split("/").filter(Boolean); // ["s","alice","myblog","about","team.html"]
@@ -49,19 +61,12 @@ export async function onRequestGet(context) {
     return new Response("Invalid path", { status: 400 });
   }
 
-  console.log("File path:", filePath);
-
-  // Look up site configuration in D1 to verify the site exists
-  const cfg = await env.USERS_DB.prepare(
-    "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
-  ).bind(siteId).first();
-
-  if (!cfg) {
-    // Fail closed: if we don't know this site, return 404
-    return new Response("Unknown site", { status: 404 });
+  // Default to HTML
+  if (!filePath.includes(".")) {
+    filePath += ".html";
   }
 
-  console.log("Site config:", cfg);
+  console.log("File path:", filePath);
 
   // basePath is always "/public"
   let basePath = "/public";
