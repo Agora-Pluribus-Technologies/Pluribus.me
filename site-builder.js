@@ -395,7 +395,7 @@ function renderEmbedPreview(content) {
 function renderDocumentPreview(filename) {
   const isDocx = filename.toLowerCase().endsWith('.docx');
   const icon = isDocx ? '&#x1F4DD;' : '&#x1F4C4;';
-  const url = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
+  const url = `/s/${currentSitePathFull}/${filename}`;
   return `<div class="pdf-download-container"><a href="${escapeHtml(url)}" class="pdf-download-button" target="_blank" download="${escapeHtml(filename)}"><span class="pdf-icon">${icon}</span> Download ${escapeHtml(filename)}</a></div>`;
 }
 
