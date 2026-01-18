@@ -501,7 +501,7 @@ function editBlock(index) {
       const captionMatch = block.content.match(/!\[[^\]]*\]\([^)]+\s+"([^"]+)"\)/);
       const currentCaption = captionMatch ? captionMatch[1] : '';
       showImageUploadPopup(({ filename, caption }) => {
-        const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
+        const imageUrl = `/s/${currentSitePathFull}/${filename}`;
         if (caption) {
           block.content = `![${filename}](${imageUrl} "${caption}")`;
         } else {
@@ -780,7 +780,7 @@ function populateImageGalleryForBlock(galleryElement, popup, captionInput, confi
   }
 
   imageCache.forEach(filename => {
-    const imageUrl = `${document.location.origin}/s/${currentSitePathFull}/${filename}`;
+    const imageUrl = `/s/${currentSitePathFull}/${filename}`;
 
     const itemDiv = document.createElement('div');
     itemDiv.className = 'image-gallery-item';
