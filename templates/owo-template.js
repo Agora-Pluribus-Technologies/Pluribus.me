@@ -148,7 +148,7 @@ function decodeEmbeds(origin, basePath) {
     // Handle PDF/DOCX attachments
     if (pdfAttachment) {
       const filename = pdfAttachment;
-      const fileUrl = `${origin}${basePath}/${filename}`;
+      const fileUrl = `${basePath}/${filename}`;
       const isDocx = filename.toLowerCase().endsWith('.docx');
       const icon = isDocx ? '📝' : '📄';
 
