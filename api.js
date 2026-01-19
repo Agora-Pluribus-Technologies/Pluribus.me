@@ -898,7 +898,7 @@ async function deployChanges(siteId) {
   const pages = markdownCache.map(item => {
     const fileName = item.fileName.replace("public/", "").replace(".md", "");
     return {
-      displayName: fileName === "index" ? "Home" : item.displayName,
+      displayName: item.displayName,
       fileName: fileName,
       createdAt: item.createdAt || new Date().toISOString(),
       modifiedAt: item.modifiedAt || new Date().toISOString(),
@@ -938,6 +938,13 @@ async function deployChanges(siteId) {
   } catch (error) {
     console.log("No site.json found in git, skipping");
   }
+
+  // Update index.html (use the same template as other pages)
+  files.push({
+    filePath: "public/index.html",
+    content: owoTemplate,
+    contentType: "text/html",
+  });
 
   if (files.length > 0) {
     const result = await saveFilesToR2(siteId, files);
