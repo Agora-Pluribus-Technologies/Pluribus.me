@@ -99,9 +99,6 @@ function isDocumentInCache(filename) {
   return documentCache.includes(filename);
 }
 
-// Interval for checking site availability
-let siteAvailabilityInterval = null;
-
 // Helper function to refresh and display collaborators list
 async function refreshCollaboratorsList(siteId, isOwner) {
   const collaboratorsList = document.getElementById("collaboratorsList");
@@ -177,22 +174,7 @@ async function openSiteInEditor(site, initialPage = "index") {
     visitSiteButton.onclick = function () {
       window.open(pluribusSiteUrl, "_blank");
     };
-    visitSiteButton.disabled = false;
     console.log("Visit Site button updated to:", pluribusSiteUrl);
-
-    // Start site availability check
-    // Clear any existing interval first
-    if (siteAvailabilityInterval) {
-      clearInterval(siteAvailabilityInterval);
-      siteAvailabilityInterval = null;
-    }
-
-    // Check immediately
-    checkSiteAvailability();
-
-    // Then check every 5 seconds
-    siteAvailabilityInterval = setInterval(checkSiteAvailability, 3000);
-    console.log("Started site availability check interval");
   }
 
   modified = false;
@@ -231,7 +213,11 @@ async function openSiteInEditor(site, initialPage = "index") {
     // Mark as modified for new sites (needs to be published)
     modified = true;
     updateDeployButtonState();
+    // Disable Visit Site button for unpublished sites
+    setSiteAvailable(false);
   } else {
+    // Site has been published before, enable Visit Site button
+    setSiteAvailable(true);
     // Initialize markdownCache from pages.json
     markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
     for (let i=0; i < markdownCache.length; i++) {
@@ -849,6 +835,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Show success or failure message
         if (deploySuccess) {
           showAlertBar("Deployed successfully!", true);
+          // Enable Visit Site button after successful deploy
+          setSiteAvailable(true);
         } else {
           showAlertBar("Deploy failed. Please check the console for errors.", false);
         }
@@ -1288,6 +1276,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         if (deploySuccess) {
           showAlertBar("Successfully reverted to commit " + shortSha, true);
+          // Enable Visit Site button after successful deploy
+          setSiteAvailable(true);
         } else {
           showAlertBar("Revert commit created but deploy failed", false);
         }
@@ -1442,46 +1432,20 @@ function hideDeployOverlay() {
   overlay.style.display = "none";
 }
 
-async function checkSiteAvailability() {
-  if (!currentSitePathFull) {
-    return;
-  }
-
+function setSiteAvailable(available) {
   const visitSiteButton = document.getElementById("visitSiteButton");
-  const pluribusSiteUrl = `/s/${currentSitePathFull}`;
+  if (!visitSiteButton) return;
 
-  try {
-    console.log("Checking site availability:", pluribusSiteUrl);
-    const response = await fetch(pluribusSiteUrl, {
-      method: "GET",
-      cache: "no-cache"
-    });
-
-    if (response.status === 404) {
-      // Site not available, disable button
-      visitSiteButton.disabled = true;
-      visitSiteButton.style.opacity = "0.5";
-      visitSiteButton.style.cursor = "not-allowed";
-      console.log("Site not available (404), button disabled");
-    } else {
-      // Site is available, enable button and stop checking
-      visitSiteButton.disabled = false;
-      visitSiteButton.style.opacity = "1";
-      visitSiteButton.style.cursor = "pointer";
-      console.log("Site is available, button enabled, stopping availability check");
-
-      // Stop the interval
-      if (siteAvailabilityInterval) {
-        clearInterval(siteAvailabilityInterval);
-        siteAvailabilityInterval = null;
-      }
-    }
-  } catch (error) {
-    console.error("Error checking site availability:", error);
-    // On error, disable the button
+  if (available) {
+    visitSiteButton.disabled = false;
+    visitSiteButton.style.opacity = "1";
+    visitSiteButton.style.cursor = "pointer";
+    console.log("Site is available, Visit Site button enabled");
+  } else {
     visitSiteButton.disabled = true;
     visitSiteButton.style.opacity = "0.5";
     visitSiteButton.style.cursor = "not-allowed";
+    console.log("Site not yet published, Visit Site button disabled");
   }
 }
 
