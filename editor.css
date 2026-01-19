@@ -1669,7 +1669,7 @@ nav {
 }
 
 .block-preview .link-button:hover {
-  border-color: var(--link-color);
+  border-color: var(--border-color);
   background-color: var(--bg-secondary);
 }
 

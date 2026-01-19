@@ -434,7 +434,7 @@ tr:hover {
     display: inline-block;
     padding: 12px 24px;
     background-color: var(--bg-secondary);
-    border: 2px solid var(--accent-color);
+    border: 2px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-primary);
     font-size: 16pt;
@@ -443,8 +443,8 @@ tr:hover {
 }
 
 .pdf-download-button:hover {
-    background-color: var(--accent-color);
-    color: var(--bg-primary);
+    background-color: var(--border-color);
+    color: var(--text-primary);
     text-decoration: none;
     transform: scale(1.02);
 }
@@ -467,7 +467,7 @@ tr:hover {
     display: inline-block;
     padding: 12px 24px;
     background-color: var(--bg-secondary);
-    border: 2px solid var(--accent-color);
+    border: 2px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-primary);
     font-size: 16pt;
@@ -476,8 +476,8 @@ tr:hover {
 }
 
 .link-button:hover {
-    background-color: var(--accent-color);
-    color: var(--bg-primary);
+    background-color: var(--border-color);
+    color: var(--text-primary);
     text-decoration: none;
     transform: scale(1.02);
 }
