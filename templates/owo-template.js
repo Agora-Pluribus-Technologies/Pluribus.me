@@ -327,10 +327,12 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson) {
 
   // Set tab title
   if (pagesJson) {
-    let siteName;
     if (siteName) {
       siteName = siteName;
-    } else {
+    } else if (
+        document.location.origin.includes("agorapages.com") ||
+        document.location.origin.includes("pluribus-me.pages.dev")
+      ){
       // Convert site name to Title Case
       siteName = basePath.split("/")[3];
       siteName = siteName.replace(/^-*(.)|-+(.)/g, (s, c, d) =>
