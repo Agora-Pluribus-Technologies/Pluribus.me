@@ -1505,10 +1505,12 @@ function populateSitesList(ownedSites, sharedSites = []) {
         if (confirm(confirmMessage)) {
           console.log("Deleting site:", site.repo);
 
-          // Disable button during deletion
+          // Disable buttons during deletion
           deleteButton.disabled = true;
           deleteButton.textContent = "...";
           deleteButton.style.opacity = "0.5";
+          siteDiv.style.pointerEvents = "none";
+          siteDiv.style.opacity = "0.5";
 
           const deleteSiteHeaders = await getHeadersWithTurnstile({
             "Content-Type": "application/json",
@@ -1532,10 +1534,12 @@ function populateSitesList(ownedSites, sharedSites = []) {
             console.error("Failed to delete site");
             alert("Failed to delete site. Please try again.");
 
-            // Re-enable button on failure
+            // Re-enable buttons on failure
             deleteButton.disabled = false;
             deleteButton.textContent = "×";
             deleteButton.style.opacity = "1";
+            siteDiv.style.pointerEvents = "auto";
+            siteDiv.style.opacity = "1";
           }
         }
       });
