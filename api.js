@@ -693,41 +693,6 @@ function guessContentType(filename) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
-async function initialCommit(siteId, siteSettings = {}) {
-  const { siteName, repo, owner } = siteSettings;
-
-  const siteJson = {
-    siteName: siteName || repo || "Untitled Site",
-    repo: repo || siteId.split("/")[1] || "",
-    owner: owner || siteId.split("/")[0] || "",
-    createdAt: new Date().toISOString(),
-  };
-
-  const files = [
-    {
-      filePath: "public/pages.json",
-      content: "[]",
-      contentType: "application/json",
-    },
-    {
-      filePath: "public/images.json",
-      content: "[]",
-      contentType: "application/json",
-    },
-    {
-      filePath: "public/site.json",
-      content: JSON.stringify(siteJson, null, 2),
-      contentType: "application/json",
-    },
-  ];
-
-  const result = await saveFilesToR2(siteId, files);
-  if (result) {
-    console.log("Initial commit completed successfully (via R2)");
-  }
-  return result;
-}
-
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const { siteName, repo, owner } = siteSettings;
@@ -739,24 +704,10 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     createdAt: new Date().toISOString(),
   };
 
-  // Fetch index.html template from owo-template.html
-  let indexHtml = "";
-  try {
-    const templateResponse = await fetch("/templates/owo-template.html");
-    if (templateResponse.ok) {
-      indexHtml = await templateResponse.text();
-    } else {
-      console.error("Failed to fetch owo-template.html");
-    }
-  } catch (error) {
-    console.error("Error fetching owo-template.html:", error);
-  }
-
   // Initialize git repository and create initial commit
   await gitInit(siteId);
   await gitWriteFile(siteId, "public/pages.json", "[]");
   await gitWriteFile(siteId, "public/images.json", "[]");
-  await gitWriteFile(siteId, "public/index.html", indexHtml);
   await gitCommit(siteId, "Initial commit");
   console.log("Git repo initialized for site:", siteId);
 
@@ -784,11 +735,6 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
       filePath: "public/site.json",
       content: JSON.stringify(siteJson, null, 2),
       contentType: "application/json",
-    },
-    {
-      filePath: "public/index.html",
-      content: indexHtml,
-      contentType: "text/html",
     },
     {
       filePath: ".git-history.json",

@@ -1409,9 +1409,9 @@ function updateDeployButtonState() {
     deployButton.style.cursor = "pointer";
     console.log("Deploy button enabled - modifications present");
 
-    // Update publish status to "Changes not yet Published"
+    // Update publish status to "Changes Not Yet Published"
     if (publishStatus) {
-      publishStatus.textContent = "Changes not yet Published";
+      publishStatus.textContent = "Changes Not Yet Published";
       publishStatus.className = "publish-status pending-changes";
     }
   }

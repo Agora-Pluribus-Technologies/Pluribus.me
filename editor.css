@@ -2334,10 +2334,6 @@ nav {
     z-index: 10002;
   }
 
-  #editor-topbar {
-    top: 50px;
-  }
-
   .dropdown {
     display: inline-block;
   }
