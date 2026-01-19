@@ -1729,6 +1729,12 @@ async function populateMenubar(siteId) {
           // Refresh the menubar
           await populateMenubar(siteId);
 
+          // Click on the leftmost page tab to display its content
+          const firstPageTab = document.querySelector(".menubar-item .menubar-item-text");
+          if (firstPageTab) {
+            firstPageTab.click();
+          }
+
           console.log("Page deleted from cache:", displayName);
         }
       });
