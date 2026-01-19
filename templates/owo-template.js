@@ -19,12 +19,12 @@ document.addEventListener("DOMContentLoaded", async function () {
   const showHistory = siteJson ? siteJson.showHistory : false;
   await createMenubar(origin, basePath, pagesJson);
   await fetchPageContent(origin, basePath, siteName, pagesJson);
-  decodeEmbeds(origin, basePath);
-  decodeImages();
+  decodeEmbeds(basePath);
+  decodeImages(basePath);
   createFooter(origin, basePath, showHistory);
 });
 
-function decodeImages() {
+function decodeImages(basePath) {
   const pList = document.getElementsByTagName("p");
   for (let i = 0; i < pList.length; i++) {
     let p = pList[i];
@@ -39,6 +39,17 @@ function decodeImages() {
 
       // Check if image has a title attribute (used as caption)
       const img = p.children[0];
+
+      // Reconstruct image URL: /s/<owner>/<siteName>/imageFileName -> basePath/imageFileName
+      const src = img.getAttribute("src");
+      if (src) {
+        const sitePathMatch = src.match(/^\/s\/[^/]+\/[^/]+\/(.+)$/);
+        if (sitePathMatch) {
+          const imageFileName = sitePathMatch[1];
+          img.setAttribute("src", `${basePath}/${imageFileName}`);
+        }
+      }
+
       const caption = img.getAttribute("title");
       if (caption) {
         // Create caption element
@@ -96,7 +107,7 @@ function soundcloudUrlToEmbed(url) {
   return `<iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>`;
 }
 
-function decodeEmbeds(origin, basePath) {
+function decodeEmbeds(basePath) {
   const preList = document.getElementsByTagName("pre");
   for (let i = preList.length - 1; i >= 0; i--) {
     const pre = preList[i];
