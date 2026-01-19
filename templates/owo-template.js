@@ -285,12 +285,7 @@ async function createMenubar(origin, basePath, pagesJson) {
       const displayName = page.displayName;
       const fileName = page.fileName;
 
-      let relPage;
-      if (fileName === "index") {
-        relPage = "";
-      } else {
-        relPage = `${fileName}.html`;
-      }
+      const relPage = `${fileName}.html`;
       const pageLink = document.createElement("a");
       pageLink.classList.add("menu-link");
       pageLink.href = `${origin}${basePath}/${relPage}`;
@@ -321,8 +316,14 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson) {
   } else {
     pathName = window.location.pathname.substring(1).replace(".html", "");
   }
-  if (!pathName) {
-    pathName = "index";
+  // If path is empty or "index", redirect to the first page in pages.json
+  if (!pathName || pathName === "index") {
+    if (pagesJson && pagesJson.length > 0) {
+      pathName = pagesJson[0].fileName;
+      console.log("Redirecting index to first page:", pathName);
+    } else {
+      pathName = "index"; // fallback
+    }
   }
 
   // Set tab title

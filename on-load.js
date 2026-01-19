@@ -285,6 +285,25 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Initialize git repo and load files from R2
   await loadR2ToGit(currentSiteId);
 
+  // Migration: Ensure index.html exists for existing sites
+  try {
+    const indexHtmlContent = await getFileContent(currentSiteId, "public/index.html");
+    if (!indexHtmlContent) {
+      console.log("index.html not found, creating it for existing site");
+      const templateResponse = await fetch("/templates/owo-template.html");
+      if (templateResponse.ok) {
+        const indexHtml = await templateResponse.text();
+        await gitWriteFile(currentSiteId, "public/index.html", indexHtml);
+        modified = true;
+        console.log("Created index.html for existing site");
+      } else {
+        console.error("Failed to fetch owo-template.html");
+      }
+    }
+  } catch (error) {
+    console.error("Error checking/creating index.html:", error);
+  }
+
   // Populate menubar from cache
   await populateMenubar(site.siteId);
 

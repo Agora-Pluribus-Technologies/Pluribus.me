@@ -75,27 +75,6 @@ export async function onRequestGet(context) {
   if (basePath.startsWith("/")) basePath = basePath.slice(1);
   if (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
 
-  // If requesting index.html, look up pages.json and serve the first page
-  if (filePath === "index.html") {
-    try {
-      const pagesKey = `${siteId}/${basePath}/pages.json`;
-      const pagesObject = await env.PLURIBUS_BUCKET.get(pagesKey);
-      if (pagesObject) {
-        const pagesJson = await pagesObject.json();
-        if (Array.isArray(pagesJson) && pagesJson.length > 0) {
-          // Get the first page's fileName and use that instead
-          const firstPage = pagesJson[0];
-          const firstPageFileName = firstPage.fileName.replace(".md", ".html");
-          filePath = firstPageFileName;
-          console.log("Redirecting index.html to first page:", filePath);
-        }
-      }
-    } catch (error) {
-      console.error("Error reading pages.json:", error);
-      // Fall through to try index.html anyway
-    }
-  }
-
   // Build the R2 key: siteId/basePath/filePath
   const r2Key = basePath ? `${siteId}/${basePath}/${filePath}` : `${siteId}/${filePath}`;
 
