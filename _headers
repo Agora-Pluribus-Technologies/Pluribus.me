@@ -1,0 +1,11 @@
+/templates/*.css
+  Cache-Control: max-age=300
+
+/templates/*.js
+  Cache-Control: max-age=300
+
+/*.css
+  Cache-Control: max-age=300
+
+/*.js
+  Cache-Control: max-age=300
