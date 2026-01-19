@@ -1713,14 +1713,11 @@ async function populateMenubar(siteId) {
         if (confirm(`Are you sure you want to delete "${displayName}"?`)) {
           console.log("Deleting page:", displayName);
 
+          // Check if deleted file was the currently selected one
+          const wasSelected = currentSitePath === cacheItem.fileName;
+
           // Remove from cache
           removeCacheByFileName(cacheItem.fileName);
-
-          // Clear editor if the deleted file was open
-          if (currentSitePath === cacheItem.fileName) {
-            loadPageIntoBlockEditor("");
-            currentSitePath = null;
-          }
 
           // Mark as modified
           modified = true;
@@ -1729,10 +1726,12 @@ async function populateMenubar(siteId) {
           // Refresh the menubar
           await populateMenubar(siteId);
 
-          // Click on the leftmost page tab to display its content
-          const firstPageTab = document.querySelector(".menubar-item .menubar-item-text");
-          if (firstPageTab) {
-            firstPageTab.click();
+          // If the deleted page was selected, click on the leftmost page tab
+          if (wasSelected) {
+            const firstPageTab = document.querySelector(".menubar-item .menubar-item-text");
+            if (firstPageTab) {
+              firstPageTab.click();
+            }
           }
 
           console.log("Page deleted from cache:", displayName);
