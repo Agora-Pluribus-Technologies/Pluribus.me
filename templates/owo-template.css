@@ -135,6 +135,26 @@ nav {
     font-size: 16pt;
 }
 
+.h-entry ul,
+.h-entry ol {
+    font-size: 16pt;
+    margin: 1em 0;
+    padding-left: 2em;
+}
+
+.h-entry li {
+    margin-bottom: 0.5em;
+    line-height: 1.5;
+}
+
+.h-entry ul li {
+    list-style-type: disc;
+}
+
+.h-entry ol li {
+    list-style-type: decimal;
+}
+
 .h-entry .p-author,
 .h-entry .dt-published,
 .h-entry .dt-updated {
@@ -516,6 +536,11 @@ body {
     }
 
     .h-entry p {
+        font-size: 10pt;
+    }
+
+    .h-entry ul,
+    .h-entry ol {
         font-size: 10pt;
     }
 

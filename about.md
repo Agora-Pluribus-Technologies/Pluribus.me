@@ -1,9 +1,13 @@
 # About this tool
 
-This website builder is a mobile-friendly web app that allows users to create and edit webpages easily. Optionally, the user can add collaborators to provide shared access to editable websites.
+AgoraPages is a mobile-friendly web app that allows users to create and edit webpages easily for free. Optionally, the user can add collaborators to provide shared access to editable websites.
+
+---
 
 ## The Goal
 The goal of AgoraPages is to democratize the open web by lowering the barrier to entry for creative and non-technical people to create an online presence on the internet.
+
+---
 
 ## How it works
 When creating an Agora site, this app uses a Cloudflare Pages function to dynamically link to the user's files in Cloudflare R2 storage.

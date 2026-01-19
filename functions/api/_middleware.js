@@ -19,23 +19,32 @@ async function validateTurnstileToken(token, secretKey, ip) {
   return result;
 }
 
+// GET endpoints that require Turnstile validation (sensitive data downloads)
+const PROTECTED_GET_ENDPOINTS = [
+  "/api/sites/download",
+  "/api/users/download",
+];
+
 export async function onRequest(context) {
   const { request, env, next } = context;
 
   const method = request.method.toUpperCase();
-
-  // Only validate Turnstile for PUT, POST, DELETE requests
-  if (method !== "PUT" && method !== "POST" && method !== "DELETE") {
-    return next();
-  }
+  const url = new URL(request.url);
 
   // Skip Turnstile validation for OPTIONS requests (CORS preflight)
   if (method === "OPTIONS") {
     return next();
   }
 
+  // Check if this is a protected GET endpoint
+  const isProtectedGetEndpoint = method === "GET" && PROTECTED_GET_ENDPOINTS.includes(url.pathname);
+
+  // Only validate Turnstile for PUT, POST, DELETE requests OR protected GET endpoints
+  if (method !== "PUT" && method !== "POST" && method !== "DELETE" && !isProtectedGetEndpoint) {
+    return next();
+  }
+
   // Skip Turnstile validation for collaborators endpoints
-  const url = new URL(request.url);
   if (url.pathname === "/api/collaborators") {
     return next();
   }

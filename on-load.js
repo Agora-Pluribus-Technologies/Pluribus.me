@@ -1002,6 +1002,102 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
 
+  // Handle download site button click
+  document
+    .getElementById("downloadSiteButton")
+    .addEventListener("click", async function () {
+      if (!currentSiteId) {
+        console.error("No site selected");
+        return;
+      }
+
+      const downloadButton = document.getElementById("downloadSiteButton");
+      const originalHtml = downloadButton.innerHTML;
+      downloadButton.disabled = true;
+      downloadButton.innerHTML = '<span class="glyphicon glyphicon-refresh"></span> Downloading...';
+
+      try {
+        const headers = await getHeadersWithTurnstile();
+        const response = await fetch(`/api/sites/download?siteId=${encodeURIComponent(currentSiteId)}`, {
+          method: "GET",
+          headers,
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to download site data");
+        }
+
+        const data = await response.json();
+
+        // Create ZIP file using JSZip
+        const zip = new JSZip();
+
+        // Add site config
+        zip.file("site-config.json", JSON.stringify(data.site, null, 2));
+
+        // Add all files, converting .git-history.json to proper .git directory
+        for (const file of data.files) {
+          // Check if this is the git history file
+          if (file.path === ".git-history.json") {
+            // Parse the git history JSON and create proper .git directory structure
+            try {
+              const gitHistoryJson = atob(file.content);
+              const gitData = JSON.parse(gitHistoryJson);
+
+              // Add each git file to the .git directory
+              for (const [gitFilePath, gitFileBase64] of Object.entries(gitData)) {
+                const binaryString = atob(gitFileBase64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                zip.file(`.git/${gitFilePath}`, bytes);
+              }
+              console.log("Converted .git-history.json to .git directory");
+            } catch (e) {
+              console.error("Error converting git history:", e);
+              // Fall back to including the raw file
+              const binaryString = atob(file.content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              zip.file(file.path, bytes);
+            }
+          } else {
+            // Regular file - decode base64 content
+            const binaryString = atob(file.content);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            zip.file(file.path, bytes);
+          }
+        }
+
+        // Generate ZIP and download
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = window.URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        // Use site name for filename (replace / with _)
+        const siteName = currentSiteId.replace("/", "_");
+        a.download = `${siteName}-backup.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+
+        console.log("Site download completed");
+      } catch (error) {
+        console.error("Download error:", error);
+        alert("Failed to download site. Please try again.");
+      } finally {
+        downloadButton.disabled = false;
+        downloadButton.innerHTML = originalHtml;
+      }
+    });
+
   // Handle click on commit links in history (event delegation)
   document
     .getElementById("historyList")
@@ -1698,7 +1794,11 @@ document.addEventListener("DOMContentLoaded", function() {
       downloadDataButton.textContent = "Downloading...";
 
       try {
-        const response = await fetch(`/api/users/download?username=${encodeURIComponent(username)}`);
+        const headers = await getHeadersWithTurnstile();
+        const response = await fetch(`/api/users/download?username=${encodeURIComponent(username)}`, {
+          method: "GET",
+          headers,
+        });
 
         if (!response.ok) {
           throw new Error("Failed to download data");

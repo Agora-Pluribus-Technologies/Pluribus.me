@@ -299,8 +299,8 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson) {
   // https://agorapages.com/s/username/sitename/path/to/page.html --> path/to/page
   let pathName;
   if (
-    document.location.origin.includes("agorapages.com") ||
-    document.location.origin.includes("pluribus-me.pages.dev")
+    document.location.href.includes("agorapages.com/s") ||
+    document.location.href.includes("pluribus-me.pages.dev/s")
   ) {
     pathName = window.location.pathname
       .split("/")
