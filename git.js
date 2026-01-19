@@ -375,7 +375,7 @@ async function getMarkdownFilesAtCommit(siteId, commitOid) {
 
           // Extract display name from filename
           const fileName = filepath.replace("public/", "").replace(".md", "");
-          const displayName = fileName === "index" ? "Home" : fileName;
+          const displayName = fileName;
 
           markdownFiles.push({
             fileName: filepath,
@@ -423,11 +423,10 @@ async function formatCommitChanges(siteId, commitOid) {
         ? "-"
         : "M";
 
-    // Display a cleaner file name (e.g., "public/index.md" -> "Home")
+    // Display a cleaner file name (e.g., "public/about.md" -> "about")
     let displayPath = change.filepath;
     if (change.filepath.startsWith("public/") && change.filepath.endsWith(".md")) {
-      const fileName = change.filepath.replace("public/", "").replace(".md", "");
-      displayPath = fileName === "index" ? "Home" : fileName;
+      displayPath = change.filepath.replace("public/", "").replace(".md", "");
     }
 
     html += `<div style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;">`;
@@ -707,11 +706,10 @@ async function formatChangesForDisplay(siteId) {
         ? "-"
         : "M";
 
-    // Display a cleaner file name (e.g., "public/index.md" -> "Home")
+    // Display a cleaner file name (e.g., "public/about.md" -> "about")
     let displayPath = change.filepath;
     if (change.filepath.startsWith("public/") && change.filepath.endsWith(".md")) {
-      const fileName = change.filepath.replace("public/", "").replace(".md", "");
-      displayPath = fileName === "index" ? "Home" : fileName;
+      displayPath = change.filepath.replace("public/", "").replace(".md", "");
     }
 
     html += `<div style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;">`;
@@ -802,7 +800,7 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
     const pages = markdownCache.map((item) => {
       const fileName = item.fileName.replace("public/", "").replace(".md", "");
       return {
-        displayName: fileName === "index" ? "Home" : item.displayName,
+        displayName: item.displayName,
         fileName: fileName,
       };
     });

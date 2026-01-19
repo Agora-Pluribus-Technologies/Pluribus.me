@@ -213,10 +213,10 @@ async function openSiteInEditor(site, initialPage = "index") {
 
   console.log("Markdown files:", markdownFiles);
   if (markdownFiles.length === 0) {
-    // No markdown files found - create a dummy index.md
-    console.log("Site is empty - created dummy index.md");
+    // No markdown files found - create a dummy home.md
+    console.log("Site is empty - created dummy home.md");
     addOrUpdateCache(
-      "public/index.md",
+      "public/home.md",
       "Home",
       "# Welcome to your Agora Site!\n\nThis is your site's homepage. Edit this file to customize your site."
     );
@@ -226,7 +226,13 @@ async function openSiteInEditor(site, initialPage = "index") {
     // Initialize markdownCache from pages.json
     markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
     for (let i=0; i < markdownCache.length; i++) {
-      const fileName = markdownCache[i].fileName;
+      let fileName = markdownCache[i].fileName;
+      // Migrate old index.md files to use displayName-based filename
+      if (fileName === "index") {
+        const newFileName = markdownCache[i].displayName.toLowerCase().replace(/\s+/g, "-");
+        console.log(`Migrating index.md to ${newFileName}.md`);
+        fileName = newFileName;
+      }
       markdownCache[i].fileName = `public/${fileName}.md`
     }
 
@@ -234,7 +240,13 @@ async function openSiteInEditor(site, initialPage = "index") {
     for (const file of markdownFiles) {
       console.log("Loading file into cache:", file);
       const content = await getFileContent(currentSiteId, file);
-      addOrUpdateCache(file, null, content, { preserveTimestamps: true });
+      // Map old index.md to the new filename from markdownCache
+      let cacheFileName = file;
+      if (file === "public/index.md" && markdownCache.length > 0) {
+        cacheFileName = markdownCache[0].fileName;
+        console.log(`Mapping ${file} to ${cacheFileName}`);
+      }
+      addOrUpdateCache(cacheFileName, null, content, { preserveTimestamps: true });
     }
 
     // Initialize imageCache from images.json
@@ -293,8 +305,7 @@ async function openSiteInEditor(site, initialPage = "index") {
         // Check if this menubar item matches the requested page
         const cacheItem = markdownCache.find(c =>
           c.fileName === fileName ||
-          c.displayName.toLowerCase() === initialPage.toLowerCase() ||
-          (initialPage === "index" && c.displayName === "Home")
+          c.displayName.toLowerCase() === initialPage.toLowerCase()
         );
 
         if (cacheItem && text.textContent === cacheItem.displayName) {
@@ -309,16 +320,13 @@ async function openSiteInEditor(site, initialPage = "index") {
       }
     }
 
-    // Fallback to Home if requested page not found
+    // Fallback to first page if requested page not found
     if (!pageFound) {
-      console.log("Page not found:", initialPage, "- opening Home");
-      for (const item of menubarItems) {
-        const text = item.querySelector("span");
-        if (text && text.textContent === "Home") {
-          text.click();
-          modified = false;
-          break;
-        }
+      console.log("Page not found:", initialPage, "- opening first page");
+      const firstPageTab = document.querySelector(".menubar-item .menubar-item-text");
+      if (firstPageTab) {
+        firstPageTab.click();
+        modified = false;
       }
     }
   }, 100);
@@ -775,8 +783,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const mdChanges = changes.filter(c => c.filepath.endsWith(".md"));
         if (mdChanges.length > 0) {
           const fileNames = mdChanges.map(c => {
-            const name = c.filepath.replace("public/", "").replace(".md", "");
-            return name === "index" ? "Home" : name;
+            return c.filepath.replace("public/", "").replace(".md", "");
           });
           commitMessage = `Modified ${fileNames.join(", ")}`;
         } else {
@@ -1563,9 +1570,6 @@ async function populateMenubar(siteId) {
     fileText.textContent = displayName;
     fileText.classList.add("menubar-item-text");
 
-    // Check if this is the index page (Home)
-    const isIndexPage = cacheItem.fileName === "public/index.md";
-
     // Create button container
     const buttonContainer = document.createElement("div");
     buttonContainer.style.display = "flex";
@@ -1619,47 +1623,38 @@ async function populateMenubar(siteId) {
           const oldFilePath = cacheItem.fileName;
           const existing = getCacheByFileName(oldFilePath);
 
-          if (isIndexPage) {
-            // For index page, only update displayName (keep filename as index.md)
-            console.log("Renaming Home page display name to:", newPageName);
-            if (existing) {
-              existing.displayName = newPageName;
-              existing.modifiedAt = new Date().toISOString();
-            }
+          // Sanitize page name: lowercase and replace spaces with hyphens
+          const sanitizedNewPageName = newPageName
+            .toLowerCase()
+            .replace(/\s+/g, "-");
+          const oldPageName = oldFilePath
+            .replace("public/", "")
+            .replace(".md", "");
+
+          console.log(
+            "Renaming page from:",
+            oldPageName,
+            "to:",
+            sanitizedNewPageName
+          );
+
+          // Update cache - rename the file in cache
+          const newFilePath = `public/${sanitizedNewPageName}.md`;
+          if (existing) {
+            existing.displayName = newPageName;
+            existing.fileName = newFilePath;
+            existing.modifiedAt = new Date().toISOString();
           } else {
-            // Sanitize page name: lowercase and replace spaces with hyphens
-            const sanitizedNewPageName = newPageName
-              .toLowerCase()
-              .replace(/\s+/g, "-");
-            const oldPageName = currentSitePath
-              .replace("public/", "")
-              .replace(".md", "");
+            // If not in cache yet, fetch it first then rename
+            const content = await getFileContent(siteId, oldFilePath);
+            addOrUpdateCache(newFilePath, newPageName, content);
+          }
 
-            console.log(
-              "Renaming page from:",
-              oldPageName,
-              "to:",
-              sanitizedNewPageName
-            );
-
-            // Update cache - rename the file in cache
-            const newFilePath = `public/${sanitizedNewPageName}.md`;
-            if (existing) {
-              existing.displayName = newPageName;
-              existing.fileName = newFilePath;
-              existing.modifiedAt = new Date().toISOString();
-            } else {
-              // If not in cache yet, fetch it first then rename
-              const content = await getFileContent(siteId, oldFilePath);
-              addOrUpdateCache(newFilePath, newPageName, content);
-            }
-
-            // Update current file path if it was the renamed file
-            if (currentSitePath === oldFilePath) {
-              currentSitePath = newFilePath;
-              const updatedItem = getCacheByFileName(newFilePath);
-              loadPageIntoBlockEditor(updatedItem.content);
-            }
+          // Update current file path if it was the renamed file
+          if (currentSitePath === oldFilePath) {
+            currentSitePath = newFilePath;
+            const updatedItem = getCacheByFileName(newFilePath);
+            loadPageIntoBlockEditor(updatedItem.content);
           }
 
           // Mark as modified
