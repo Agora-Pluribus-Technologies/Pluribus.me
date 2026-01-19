@@ -405,6 +405,16 @@ nav {
   padding: 0 5px;
 }
 
+.menubar-item.dragging {
+  opacity: 0.5;
+  border: 2px dashed #1890ff;
+}
+
+.menubar-item.drag-over {
+  border: 2px solid #68c0ff;
+  background-color: rgba(24, 144, 255, 0.2);
+}
+
 #footer {
   position: fixed;
   bottom: 0;
