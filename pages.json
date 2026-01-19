@@ -1,1 +1,18 @@
-["index", "about", "terms-of-use", "privacy-policy"]
+[
+  {
+    "displayName": "Home",
+    "fileName": "index"
+  },
+  {
+    "displayName": "About",
+    "fileName": "about"
+  },
+  {
+    "displayName": "Terms of Use",
+    "fileName": "terms-of-use"
+  },
+  {
+    "displayName": "Privacy Policy",
+    "fileName": "privacy-policy"
+  }
+]

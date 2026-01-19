@@ -1,86 +1,19 @@
 # About this tool
 
-This website builder is intended to be a mobile-friendly web app that allows the user to create and edit webpages easily.
+This website builder is a mobile-friendly web app that allows users to create and edit webpages easily. Optionally, the user can add collaborators to provide shared access to editable websites.
 
-How it works: This Oauth2 application can operate on behalf of a user's GitHub or GitLab account, and it allows for the creation, modification, and deletion of markdown files that are persisted in public git repositories on the user's account. When creating an Agora site, this app uses a Cloudflare Pages function to link to the user's files. In other words, for each Agora site, where the site is served (Cloudflare Pages function) is different from the location of the site's contents (the user's git repository). This distributed model is inspired by a tool created in Taiwan's g0v movement called [hackfoldr](https://github.com/hackfoldr/hackfoldr).
+## The Goal
+The goal of AgoraPages is to democratize the open web by lowering the barrier to entry for creative and non-technical people to create an online presence on the internet.
 
-Eventually, it will adhere to the below WIP specification.
+## How it works
+When creating an Agora site, this app uses a Cloudflare Pages function to dynamically link to the user's files in Cloudflare R2 storage.
 
-***
+This distributed model is inspired by a tool created in Taiwan's g0v movement called [hackfoldr](https://github.com/hackfoldr/hackfoldr). Similar to hackfoldr, AgoraPages dynamically links various files when the main page is accessed.
 
-## **Agora Openweb Object (OwO) Specification — v0.1 (Work in Progress)**
+An Agora site is made up of JSON, markdown, and image files:
 
-**Author:** Michael Yee (Agora Pluribus Technologies)
+* site.json - top-level site settings
+* pages.json - a list of pages, each of which has a corresponding markdown file
+* images.json - a list of images, each of which has a corresponding image file
 
-**Status:** Early draft – conceptual specification
-
-**License:** *Public Domain / CC0 1.0 Universal Dedication*
-
-**Website:** [AgoraPages](https://agorapages.com/)
-
-***
-
-### **Overview**
-
-The **Agora Openweb Object (OwO)** format is a proposed open specification for a lightweight, decentralized, static-first, modular web publishing framework. Its purpose is to make it radically simple for anyone to create, host, and share portable websites without relying on centralized platforms, databases, or proprietary formats.
-
-Each OwO site is made of plaintext, images, and a lightweight manifest that describes how to render the content. **The text and images themselves aren't stored directly in the page; they're linked and loaded on demand**, allowing smarter use of CDN caching and faster load times. The purpose is to cleanly separate a website's content from its presentation.
-
-Overall, the file structure for representing a website can be zipped into a **single, portable object** that can be freely copied, forked, mirrored, or rendered by any compliant reader.
-
-***
-
-### **Design Goals**
-
-1. **Radical Simplicity:** Websites are bundles of plain files (Markdown, images, CBOR manifests), and plain HTML, CSS, and vanilla JavaScript is used instead of bloated frameworks.
-2. **Transparency & Portability:** Each site is easily inspectable, exportable, and versionable.
-3. **Modularity:** Content is stored as modular building blocks with references in a root manifest.
-4. **Interoperability:** Fully compatible with IndieWeb and Semantic Web principles (Microformats 2, optional RDFa/JSON-LD).
-5. **Open Hosting:** Designed for static deployment on any host (e.g. GitLab Pages, Cloudflare Pages).
-6. **Future-Proof:** Binary manifest format uses CBOR for compactness, allowing efficient archiving and validation.
-
-***
-
-### **Core Structure**
-
-A `.OwO` file represents a compressed website archive:
-
-```
-/index.html.cbor         ← CBOR-encoded HTML document
-/manifest.json      ← Content and metadata manifest (title, description, assets)
-/assets/*.avif      ← Images (AVIF or WebP)
-/content/*.md       ← Text content (Markdown)
-/style.css          ← Optional site-wide styling
-/license.html       ← Optional license metadata (e.g., CC BY-NC-ND 4.0)
-```
-
-Compliant readers or tools should be able to:
-
-* Parse and render OwO packages,
-* Export them as plain static sites,
-* Or re-import them for editing and remixing.
-
-***
-
-### **Implementation Notes**
-
-* The **Service Worker** may be used to decompress and render `.cbor` files dynamically.
-* OwO sites should support optional verification via **GPG-signed commits** or **Git repositories** for provenance.
-* Recommended image formats: **AVIF**, fallback **WebP**.
-* Recommended checksum: **SHA-256** or **BLAKE3** for archive integrity.
-
-***
-
-### **Legal Status**
-
-This specification is released under the **CC0 1.0 Universal Public Domain Dedication**.
-
-Anyone is free to use, modify, or redistribute it without restriction.
-Reference implementations (e.g. editors, readers) may be licensed separately under the **AGPL-3.0-only** license to preserve freedom and transparency.
-
-***
-
-### **Current Stage**
-
-⚙️ *Work in progress.*
-The goal of this first publication is to establish the specification’s authorship and intent for future collaborative development.
+When an Agora site is accessed, these JSON files are fetched, and the contents of the site are fetched and rendered dynamically.
