@@ -208,6 +208,12 @@ async function openSiteInEditor(site, initialPage = "index") {
   const editorContainer = document.getElementById("editorContainer");
   editorContainer.style.display = "flex";
 
+  // Hide user menu when in editor
+  const userMenuContainer = document.getElementById("userMenuContainer");
+  if (userMenuContainer) {
+    userMenuContainer.style.display = "none";
+  }
+
   // Fetch site tree from R2
   const markdownFiles = await getPublicFiles(currentSiteId);
 
@@ -1381,17 +1387,30 @@ async function triggerCreateNewSite(displayName) {
 
 function updateDeployButtonState() {
   const deployButton = document.getElementById("deployButton");
+  const publishStatus = document.getElementById("publishStatus");
 
   if (!modified) {
     deployButton.disabled = true;
     deployButton.style.opacity = "0.5";
     deployButton.style.cursor = "not-allowed";
     console.log("Deploy button disabled - no modifications");
+
+    // Update publish status to "Published"
+    if (publishStatus) {
+      publishStatus.textContent = "Published";
+      publishStatus.className = "publish-status published";
+    }
   } else {
     deployButton.disabled = false;
     deployButton.style.opacity = "1";
     deployButton.style.cursor = "pointer";
     console.log("Deploy button enabled - modifications present");
+
+    // Update publish status to "Changes not yet Published"
+    if (publishStatus) {
+      publishStatus.textContent = "Changes not yet Published";
+      publishStatus.className = "publish-status pending-changes";
+    }
   }
 }
 

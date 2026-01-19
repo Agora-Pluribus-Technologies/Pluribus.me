@@ -334,6 +334,26 @@ nav {
   padding: 10px 0 5px 0;
 }
 
+.publish-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0 8px;
+  vertical-align: middle;
+}
+
+.publish-status.pending-changes {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.publish-status.published {
+  background-color: #28a745;
+  color: white;
+}
+
 #pageMenubar {
   display: flex;
   align-items: center;
