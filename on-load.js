@@ -1075,6 +1075,29 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         }
 
+        // Fetch and include template files in public/templates/
+        try {
+          const [cssResponse, jsResponse] = await Promise.all([
+            fetch("/templates/owo-template.css"),
+            fetch("/templates/owo-template.js"),
+          ]);
+
+          if (cssResponse.ok) {
+            const cssContent = await cssResponse.text();
+            zip.file("public/templates/owo-template.css", cssContent);
+          }
+
+          if (jsResponse.ok) {
+            const jsContent = await jsResponse.text();
+            zip.file("public/templates/owo-template.js", jsContent);
+          }
+
+          console.log("Added template files to ZIP");
+        } catch (templateError) {
+          console.error("Error fetching template files:", templateError);
+          // Continue without templates - not critical
+        }
+
         // Generate ZIP and download
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const url = window.URL.createObjectURL(zipBlob);
