@@ -191,7 +191,7 @@ async function openSiteInEditor(site, initialPage = "index") {
     checkSiteAvailability();
 
     // Then check every 5 seconds
-    siteAvailabilityInterval = setInterval(checkSiteAvailability, 5000);
+    siteAvailabilityInterval = setInterval(checkSiteAvailability, 3000);
     console.log("Started site availability check interval");
   }
 
