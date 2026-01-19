@@ -228,6 +228,9 @@ async function openSiteInEditor(site, initialPage = "index") {
     );
     // Initialize empty imageCache
     imageCache = [];
+    // Mark as modified for new sites (needs to be published)
+    modified = true;
+    updateDeployButtonState();
   } else {
     // Initialize markdownCache from pages.json
     markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
