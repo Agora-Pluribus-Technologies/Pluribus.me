@@ -324,24 +324,26 @@ nav {
 
 #editor-topbar {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   z-index: 10000;
-  display: block;
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
   background-color: var(--bg-tertiary);
   width: 100%;
-  padding: 10px 0 5px 0;
+  padding: 10px 15px 5px 15px;
 }
 
 .publish-status {
-  display: inline-block;
+  position: relative;
+  margin-left: auto;
   padding: 4px 10px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
-  margin: 0 8px;
-  vertical-align: middle;
 }
 
 .publish-status.pending-changes {
