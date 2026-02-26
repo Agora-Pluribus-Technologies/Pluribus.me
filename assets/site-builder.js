@@ -221,6 +221,18 @@ function initBlockEditor() {
     editorSection.classList.remove('blog-mode');
   }
 
+  // Show the publish button for pages sites
+  const deployButton = document.getElementById('deployButton');
+  if (deployButton) {
+    deployButton.style.display = '';
+  }
+
+  // Show the publish status for pages sites
+  const publishStatus = document.getElementById('publishStatus');
+  if (publishStatus) {
+    publishStatus.style.display = '';
+  }
+
   editorContainer.innerHTML = '';
   editorContainer.className = 'block-editor';
 
@@ -1431,6 +1443,18 @@ function initBlogEditor() {
     editorSection.classList.add('blog-mode');
   }
 
+  // Hide the publish button for blog sites (auto-publish on save)
+  const deployButton = document.getElementById('deployButton');
+  if (deployButton) {
+    deployButton.style.display = 'none';
+  }
+
+  // Hide the publish status for blog sites
+  const publishStatus = document.getElementById('publishStatus');
+  if (publishStatus) {
+    publishStatus.style.display = 'none';
+  }
+
   // Set top margin based on editor-topbar height
   const editorTopbar = document.getElementById('editor-topbar');
   if (editorTopbar) {
@@ -1523,13 +1547,14 @@ function addNewBlogPost() {
     body: 'Write your post content here...'
   });
 
-  showBlogPostEditModal(defaultContent, 'New Post', (newContent, newTitle) => {
+  showBlogPostEditModal(defaultContent, 'New Post', async (newContent, newTitle) => {
     const sanitizedFileName = `public/${newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.md`;
 
     addOrUpdateCache(sanitizedFileName, newTitle, newContent);
-    modified = true;
-    updateDeployButtonState();
     renderBlogPostsList();
+
+    // Auto-publish for blog sites
+    await autoPublishBlogChanges();
   });
 }
 
@@ -1538,7 +1563,7 @@ function editBlogPost(index) {
   const cacheItem = markdownCache[index];
   if (!cacheItem) return;
 
-  showBlogPostEditModal(cacheItem.content, cacheItem.displayName, (newContent, newTitle) => {
+  showBlogPostEditModal(cacheItem.content, cacheItem.displayName, async (newContent, newTitle) => {
     // Update cache
     cacheItem.content = newContent;
     cacheItem.displayName = newTitle;
@@ -1550,14 +1575,15 @@ function editBlogPost(index) {
       cacheItem.fileName = newFileName;
     }
 
-    modified = true;
-    updateDeployButtonState();
     renderBlogPostsList();
+
+    // Auto-publish for blog sites
+    await autoPublishBlogChanges();
   });
 }
 
 // Delete blog post
-function deleteBlogPost(index) {
+async function deleteBlogPost(index) {
   const cacheItem = markdownCache[index];
   if (!cacheItem) return;
 
@@ -1567,9 +1593,57 @@ function deleteBlogPost(index) {
   if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
 
   markdownCache.splice(index, 1);
-  modified = true;
-  updateDeployButtonState();
   renderBlogPostsList();
+
+  // Auto-publish for blog sites
+  await autoPublishBlogChanges();
+}
+
+// Auto-publish changes for blog sites
+async function autoPublishBlogChanges() {
+  // Show publishing indicator
+  showBlogPublishingIndicator(true);
+
+  try {
+    // Commit changes to git
+    await gitCommit(currentSiteId, "Update blog post");
+
+    // Deploy to R2
+    const success = await deployChanges(currentSiteId);
+
+    if (success) {
+      console.log("Blog changes auto-published successfully");
+      // Enable visit site button after first publish
+      setSiteAvailable(true);
+    } else {
+      console.error("Failed to auto-publish blog changes");
+      alert("Failed to publish changes. Please try again.");
+    }
+  } catch (error) {
+    console.error("Error auto-publishing blog changes:", error);
+    alert("Error publishing changes: " + error.message);
+  } finally {
+    // Hide publishing indicator
+    showBlogPublishingIndicator(false);
+  }
+}
+
+// Show/hide publishing indicator for blog sites
+function showBlogPublishingIndicator(show) {
+  let indicator = document.getElementById('blogPublishingIndicator');
+
+  if (show) {
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'blogPublishingIndicator';
+      indicator.className = 'blog-publishing-indicator';
+      indicator.innerHTML = '<span class="publishing-spinner"></span> Publishing...';
+      document.body.appendChild(indicator);
+    }
+    indicator.style.display = 'flex';
+  } else if (indicator) {
+    indicator.style.display = 'none';
+  }
 }
 
 // Load blog posts into editor (called from on-load.js)

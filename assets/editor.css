@@ -2640,6 +2640,40 @@ nav {
   overflow: hidden;
 }
 
+/* Blog Publishing Indicator */
+.blog-publishing-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px 30px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10005;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.publishing-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--link-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 768px) {
 
   #main {
