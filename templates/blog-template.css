@@ -72,12 +72,12 @@ a:hover {
     padding: 30px 20px;
     text-align: center;
     border-bottom: 1px solid var(--border-color);
-    margin-bottom: 30px;
+    margin-bottom: 0;
     transition: background-color 0.3s ease;
 }
 
 .blog-header h1 {
-    margin: 0;
+    margin: 0 0 15px 0;
     font-size: 32pt;
     color: var(--text-primary);
 }
@@ -88,29 +88,100 @@ a:hover {
     color: var(--text-secondary);
 }
 
-/* Tag Filter Bar */
-.tag-filter-bar {
-    text-align: center;
-    padding: 15px 20px;
-    margin-bottom: 20px;
+/* Search Bar */
+.search-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 400px;
+    margin: 0 auto;
+    position: relative;
 }
 
-.tag-filter-bar span {
+.search-icon {
+    position: absolute;
+    left: 12px;
+    font-size: 16px;
     color: var(--text-muted);
-    margin-right: 10px;
+    pointer-events: none;
+}
+
+.search-input {
+    width: 100%;
+    padding: 10px 15px 10px 40px;
+    font-size: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 25px;
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2);
+}
+
+body.light-mode .search-input:focus {
+    box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.2);
+}
+
+.search-clear {
+    position: absolute;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+    line-height: 1;
+    transition: color 0.2s ease;
+}
+
+.search-clear:hover {
+    color: var(--text-primary);
+}
+
+/* Tag Filter Container */
+#tagFilterContainer {
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Tag Filter Bar */
+.tag-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 15px 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.tag-filter-label {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-right: 5px;
 }
 
 .tag-filter {
     display: inline-block;
     padding: 6px 14px;
-    margin: 4px;
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 20px;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 12pt;
-    transition: all 0.3s ease;
+    font-size: 13px;
+    transition: all 0.2s ease;
 }
 
 .tag-filter:hover {
@@ -128,7 +199,7 @@ a:hover {
 .blog-feed {
     max-width: 800px;
     margin: 0 auto;
-    padding: 0 20px;
+    padding: 30px 20px;
 }
 
 /* Blog Post Card */

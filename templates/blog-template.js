@@ -1,3 +1,8 @@
+// Global state for filtering
+let allPosts = [];
+let currentSearchQuery = "";
+let currentTagFilter = "";
+
 document.addEventListener("DOMContentLoaded", async function () {
   const origin = document.location.origin;
 
@@ -66,7 +71,56 @@ function createBlogHeader(siteName) {
   h1.textContent = siteName;
   header.appendChild(h1);
 
+  // Search bar
+  const searchContainer = document.createElement("div");
+  searchContainer.className = "search-container";
+
+  const searchIcon = document.createElement("span");
+  searchIcon.className = "search-icon";
+  searchIcon.innerHTML = "&#x1F50D;";
+
+  const searchInput = document.createElement("input");
+  searchInput.type = "text";
+  searchInput.id = "blogSearchInput";
+  searchInput.className = "search-input";
+  searchInput.placeholder = "Search posts...";
+  searchInput.addEventListener("input", handleSearchInput);
+
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "search-clear";
+  clearBtn.id = "searchClearBtn";
+  clearBtn.innerHTML = "&times;";
+  clearBtn.style.display = "none";
+  clearBtn.addEventListener("click", clearSearch);
+
+  searchContainer.appendChild(searchIcon);
+  searchContainer.appendChild(searchInput);
+  searchContainer.appendChild(clearBtn);
+  header.appendChild(searchContainer);
+
   document.body.appendChild(header);
+}
+
+function handleSearchInput(e) {
+  currentSearchQuery = e.target.value.toLowerCase().trim();
+  const clearBtn = document.getElementById("searchClearBtn");
+  if (clearBtn) {
+    clearBtn.style.display = currentSearchQuery ? "block" : "none";
+  }
+  applyFilters();
+}
+
+function clearSearch() {
+  const searchInput = document.getElementById("blogSearchInput");
+  const clearBtn = document.getElementById("searchClearBtn");
+  if (searchInput) {
+    searchInput.value = "";
+    currentSearchQuery = "";
+  }
+  if (clearBtn) {
+    clearBtn.style.display = "none";
+  }
+  applyFilters();
 }
 
 async function loadBlogPosts(origin, basePath, pagesJson) {
@@ -75,9 +129,15 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
     breaks: false,
   });
 
+  // Create tag filter bar container (will be populated after loading posts)
+  const tagFilterContainer = document.createElement("div");
+  tagFilterContainer.id = "tagFilterContainer";
+  document.body.appendChild(tagFilterContainer);
+
   // Create blog feed container
   const feedContainer = document.createElement("main");
   feedContainer.className = "blog-feed";
+  feedContainer.id = "blogFeed";
   feedContainer.innerHTML = '<div class="loading-posts">Loading posts...</div>';
   document.body.appendChild(feedContainer);
 
@@ -115,6 +175,9 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
     return dateB - dateA;
   });
 
+  // Store posts globally for filtering
+  allPosts = posts;
+
   // Collect all unique tags
   const allTags = new Set();
   posts.forEach(post => {
@@ -123,10 +186,8 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
     }
   });
 
-  // Create tag filter bar if there are tags
-  if (allTags.size > 0) {
-    createTagFilterBar(allTags, feedContainer, posts);
-  }
+  // Create tag filter bar
+  createTagFilterBar(allTags, tagFilterContainer);
 
   // Render posts
   feedContainer.innerHTML = "";
@@ -188,12 +249,19 @@ function parsePostMarkdown(markdown, pageInfo, basePath) {
   };
 }
 
-function createTagFilterBar(allTags, feedContainer, posts) {
+function createTagFilterBar(allTags, container) {
+  container.innerHTML = "";
+
+  if (allTags.size === 0) {
+    return;
+  }
+
   const tagBar = document.createElement("div");
   tagBar.className = "tag-filter-bar";
 
   const label = document.createElement("span");
-  label.textContent = "Filter:";
+  label.className = "tag-filter-label";
+  label.textContent = "Tags:";
   tagBar.appendChild(label);
 
   // "All" button
@@ -201,7 +269,7 @@ function createTagFilterBar(allTags, feedContainer, posts) {
   allBtn.className = "tag-filter active";
   allBtn.textContent = "All";
   allBtn.dataset.tag = "";
-  allBtn.addEventListener("click", () => filterByTag("", posts, feedContainer));
+  allBtn.addEventListener("click", () => handleTagClick(""));
   tagBar.appendChild(allBtn);
 
   // Individual tag buttons
@@ -210,15 +278,16 @@ function createTagFilterBar(allTags, feedContainer, posts) {
     tagBtn.className = "tag-filter";
     tagBtn.textContent = tag;
     tagBtn.dataset.tag = tag;
-    tagBtn.addEventListener("click", () => filterByTag(tag, posts, feedContainer));
+    tagBtn.addEventListener("click", () => handleTagClick(tag));
     tagBar.appendChild(tagBtn);
   });
 
-  // Insert before feed container
-  feedContainer.parentNode.insertBefore(tagBar, feedContainer);
+  container.appendChild(tagBar);
 }
 
-function filterByTag(tag, posts, feedContainer) {
+function handleTagClick(tag) {
+  currentTagFilter = tag;
+
   // Update active state on filter buttons
   document.querySelectorAll(".tag-filter").forEach(btn => {
     btn.classList.remove("active");
@@ -227,10 +296,33 @@ function filterByTag(tag, posts, feedContainer) {
     }
   });
 
-  // Filter and render posts
-  const filteredPosts = tag
-    ? posts.filter(post => post.tags && post.tags.includes(tag))
-    : posts;
+  applyFilters();
+}
+
+function applyFilters() {
+  const feedContainer = document.getElementById("blogFeed");
+  if (!feedContainer) return;
+
+  let filteredPosts = allPosts;
+
+  // Apply tag filter
+  if (currentTagFilter) {
+    filteredPosts = filteredPosts.filter(post =>
+      post.tags && post.tags.includes(currentTagFilter)
+    );
+  }
+
+  // Apply search filter
+  if (currentSearchQuery) {
+    filteredPosts = filteredPosts.filter(post => {
+      const titleMatch = post.title.toLowerCase().includes(currentSearchQuery);
+      const bodyMatch = post.body.toLowerCase().includes(currentSearchQuery);
+      const tagMatch = post.tags && post.tags.some(tag =>
+        tag.toLowerCase().includes(currentSearchQuery)
+      );
+      return titleMatch || bodyMatch || tagMatch;
+    });
+  }
 
   feedContainer.innerHTML = "";
   renderPosts(feedContainer, filteredPosts);
@@ -238,7 +330,16 @@ function filterByTag(tag, posts, feedContainer) {
 
 function renderPosts(container, posts) {
   if (posts.length === 0) {
-    container.innerHTML = '<div class="no-posts">No posts found.</div>';
+    let message = "No posts found.";
+    if (currentSearchQuery || currentTagFilter) {
+      message = "No posts match your search.";
+      if (currentTagFilter && !currentSearchQuery) {
+        message = `No posts found with tag "${currentTagFilter}".`;
+      }
+    } else if (allPosts.length === 0) {
+      message = "No posts yet.";
+    }
+    container.innerHTML = `<div class="no-posts">${message}</div>`;
     return;
   }
 
@@ -338,8 +439,9 @@ function renderPosts(container, posts) {
         tagSpan.className = "post-tag";
         tagSpan.textContent = tag;
         tagSpan.addEventListener("click", () => {
-          const tagBtn = document.querySelector(`.tag-filter[data-tag="${tag}"]`);
-          if (tagBtn) tagBtn.click();
+          handleTagClick(tag);
+          // Scroll to top to see filtered results
+          window.scrollTo({ top: 0, behavior: "smooth" });
         });
         tagsDiv.appendChild(tagSpan);
       });
