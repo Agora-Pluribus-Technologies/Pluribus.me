@@ -215,6 +215,12 @@ function initBlockEditor() {
     return;
   }
 
+  // Remove blog-mode class from editorSection if present
+  const editorSection = document.getElementById('editorSection');
+  if (editorSection) {
+    editorSection.classList.remove('blog-mode');
+  }
+
   editorContainer.innerHTML = '';
   editorContainer.className = 'block-editor';
 
@@ -1419,15 +1425,23 @@ function initBlogEditor() {
     return;
   }
 
+  // Add blog-mode class to editorSection for proper scrolling
+  const editorSection = document.getElementById('editorSection');
+  if (editorSection) {
+    editorSection.classList.add('blog-mode');
+  }
+
   editorContainer.innerHTML = '';
   editorContainer.className = 'blog-editor';
 
+  console.log('Blog editor initialized, rendering posts...');
   renderBlogPostsList();
 }
 
 // Render list of blog posts for editing
 function renderBlogPostsList() {
   const container = document.getElementById('editor');
+  console.log('renderBlogPostsList called, markdownCache length:', markdownCache.length);
   container.innerHTML = '';
 
   // Add new post button at top

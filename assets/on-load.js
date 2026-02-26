@@ -281,19 +281,26 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Initialize git repo and load files from R2
   await loadR2ToGit(currentSiteId);
 
-  // Load site type from site.json
+  // Load site type from site.json or site config
   try {
     const siteJsonContent = await getFileContent(currentSiteId, "public/site.json");
     if (siteJsonContent) {
       const siteJson = JSON.parse(siteJsonContent);
       currentSiteType = siteJson.siteType || "pages";
-      console.log("Site type:", currentSiteType);
+      console.log("Site type from site.json:", currentSiteType);
+    } else if (site.siteType) {
+      // Fallback to site config (for new sites before first deploy)
+      currentSiteType = site.siteType;
+      console.log("Site type from site config:", currentSiteType);
     } else {
       currentSiteType = "pages"; // default for older sites
+      console.log("Site type defaulting to pages");
     }
   } catch (error) {
     console.error("Error loading site.json:", error);
-    currentSiteType = "pages";
+    // Fallback to site config
+    currentSiteType = site.siteType || "pages";
+    console.log("Site type from fallback:", currentSiteType);
   }
 
   // Migration: Ensure index.html exists for existing sites

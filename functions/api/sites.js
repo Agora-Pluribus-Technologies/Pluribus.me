@@ -11,7 +11,7 @@ export async function onRequestPost(context) {
   }
 
   // Validate required fields
-  const { siteId, owner, repo } = data;
+  const { siteId, owner, repo, siteType } = data;
 
   if (!siteId || !owner || !repo) {
     return new Response("Missing required fields", { status: 400 });
@@ -21,6 +21,9 @@ export async function onRequestPost(context) {
   if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
+
+  // Validate siteType if provided
+  const validSiteType = siteType === "blog" ? "blog" : "pages";
 
   try {
     // Check if site already exists
@@ -32,10 +35,18 @@ export async function onRequestPost(context) {
       return new Response("Site ID already exists", { status: 409 });
     }
 
-    // Insert the new site
-    await env.USERS_DB.prepare(
-      "INSERT INTO Sites (siteId, owner, repo) VALUES (?, ?, ?)"
-    ).bind(siteId, owner, repo).run();
+    // Insert the new site (siteType column may not exist in older schemas, so use try/catch)
+    try {
+      await env.USERS_DB.prepare(
+        "INSERT INTO Sites (siteId, owner, repo, siteType) VALUES (?, ?, ?, ?)"
+      ).bind(siteId, owner, repo, validSiteType).run();
+    } catch (dbError) {
+      // Fallback if siteType column doesn't exist
+      console.log("siteType column may not exist, falling back to basic insert");
+      await env.USERS_DB.prepare(
+        "INSERT INTO Sites (siteId, owner, repo) VALUES (?, ?, ?)"
+      ).bind(siteId, owner, repo).run();
+    }
 
     return new Response("Created", { status: 201 });
   } catch (error) {
@@ -57,12 +68,14 @@ export async function onRequestGet(context) {
     if (siteIdEncoded) {
       const siteId = decodeURIComponent(siteIdEncoded);
       const site = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
+        "SELECT siteId, owner, repo, siteType FROM Sites WHERE siteId = ?"
       ).bind(siteId).first();
 
       if (site) {
         // Add displayName for compatibility (uses repo as fallback)
         site.displayName = site.repo;
+        // Default siteType to "pages" if not set
+        site.siteType = site.siteType || "pages";
         return new Response(JSON.stringify(site), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -76,20 +89,21 @@ export async function onRequestGet(context) {
     let sites;
     if (ownerParam) {
       const result = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo FROM Sites WHERE owner = ?"
+        "SELECT siteId, owner, repo, siteType FROM Sites WHERE owner = ?"
       ).bind(ownerParam).all();
       sites = result.results || [];
     } else {
       const result = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo FROM Sites"
+        "SELECT siteId, owner, repo, siteType FROM Sites"
       ).all();
       sites = result.results || [];
     }
 
-    // Add displayName for compatibility
+    // Add displayName for compatibility and default siteType
     sites = sites.map(site => ({
       ...site,
-      displayName: site.repo
+      displayName: site.repo,
+      siteType: site.siteType || "pages"
     }));
 
     return new Response(JSON.stringify(sites), {
