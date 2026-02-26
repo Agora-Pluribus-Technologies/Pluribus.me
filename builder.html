@@ -112,6 +112,14 @@
                 <input type="text" class="form-control" id="siteName" placeholder="my-site" required pattern="[a-z][a-z0-9-]{0,28}[a-z0-9]" maxlength="30">
               </div>
             </div>
+            <div class="form-group">
+              <label for="siteType">Site Type</label>
+              <select class="form-control" id="siteType" required>
+                <option value="pages">Pages - Multiple pages with navigation</option>
+                <option value="blog">Blog - Single page feed of posts</option>
+              </select>
+              <p class="help-block" id="siteTypeHelp">Each markdown file becomes a separate page with its own URL.</p>
+            </div>
           </form>
         </div>
         <div class="modal-footer">
@@ -418,6 +426,16 @@
 
     // Initialize theme on page load
     initTheme();
+
+    // Site type dropdown help text
+    document.getElementById('siteType').addEventListener('change', function() {
+      const helpText = document.getElementById('siteTypeHelp');
+      if (this.value === 'blog') {
+        helpText.textContent = 'Posts appear in a single-page feed. Each markdown file is a blog post with title, date, and tags.';
+      } else {
+        helpText.textContent = 'Each markdown file becomes a separate page with its own URL.';
+      }
+    });
   </script>
 </body>
 

@@ -3,6 +3,7 @@ let markdownCache = [];
 let currentSitePath = null;
 let currentSiteId = null;
 let currentSitePathFull = null;
+let currentSiteType = "pages"; // "pages" or "blog"
 let lastDeployTimeInterval = null;
 let modified = false;
 
@@ -280,30 +281,58 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Initialize git repo and load files from R2
   await loadR2ToGit(currentSiteId);
 
+  // Load site type from site.json
+  try {
+    const siteJsonContent = await getFileContent(currentSiteId, "public/site.json");
+    if (siteJsonContent) {
+      const siteJson = JSON.parse(siteJsonContent);
+      currentSiteType = siteJson.siteType || "pages";
+      console.log("Site type:", currentSiteType);
+    } else {
+      currentSiteType = "pages"; // default for older sites
+    }
+  } catch (error) {
+    console.error("Error loading site.json:", error);
+    currentSiteType = "pages";
+  }
+
   // Migration: Ensure index.html exists for existing sites
   try {
     const indexHtmlContent = await getFileContent(currentSiteId, "public/index.html");
     if (!indexHtmlContent) {
       console.log("index.html not found, creating it for existing site");
-      const templateResponse = await fetch("/templates/owo-template.html");
+      const templateName = currentSiteType === "blog" ? "/templates/blog-template.html" : "/templates/owo-template.html";
+      const templateResponse = await fetch(templateName);
       if (templateResponse.ok) {
         const indexHtml = await templateResponse.text();
         await gitWriteFile(currentSiteId, "public/index.html", indexHtml);
         modified = true;
         console.log("Created index.html for existing site");
       } else {
-        console.error("Failed to fetch owo-template.html");
+        console.error("Failed to fetch template");
       }
     }
   } catch (error) {
     console.error("Error checking/creating index.html:", error);
   }
 
-  // Populate menubar from cache
-  await populateMenubar(site.siteId);
-
-  // Load the block editor
-  initBlockEditor();
+  // For blog sites, hide the page menubar since posts are managed differently
+  const pageMenubar = document.getElementById("pageMenubar");
+  if (currentSiteType === "blog") {
+    if (pageMenubar) {
+      pageMenubar.style.display = "none";
+    }
+    // Load the blog editor
+    initBlogEditor();
+  } else {
+    if (pageMenubar) {
+      pageMenubar.style.display = "flex";
+    }
+    // Populate menubar from cache
+    await populateMenubar(site.siteId);
+    // Load the block editor
+    initBlockEditor();
+  }
 
   // Find and click the appropriate page tab
   setTimeout(() => {
@@ -609,6 +638,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     const username = getStoredUsername();
     document.getElementById("siteNamePrefix").textContent = username + "/";
     document.getElementById("siteName").value = "";
+    document.getElementById("siteType").value = "pages";
+    document.getElementById("siteTypeHelp").textContent = "Each markdown file becomes a separate page with its own URL.";
   });
 
   // Handle create site form submission
@@ -627,6 +658,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       try {
         const rawSiteName = document.getElementById("siteName").value.trim();
+        const siteType = document.getElementById("siteType").value;
 
         // Sanitize site name: lowercase, only letters, numbers, and hyphens
         let siteName = rawSiteName
@@ -683,6 +715,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             branch: "main",
             basePath: "/public",
             displayName: siteName,
+            siteType: siteType,
           }),
         });
 
@@ -696,7 +729,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.log("Site config stored successfully");
 
         // Create initial files and git history in R2 (single API call)
-        await initialCommitWithGitHistory(siteId, { siteName, repo, owner });
+        await initialCommitWithGitHistory(siteId, { siteName, repo, owner, siteType });
 
         // Add new site to cache
         const newSite = {
@@ -707,6 +740,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           branch: "main",
           basePath: "/public",
           displayName: siteName,
+          siteType: siteType,
         };
         sitesCache.unshift(newSite);
 

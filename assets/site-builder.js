@@ -1225,3 +1225,334 @@ async function handleDocumentUploadForBlock(file, popup, progressContainer, docu
     alert('Failed to upload: ' + error.message);
   }
 }
+
+// ============================================
+// Blog Post Editor
+// ============================================
+
+let blogPostEditor = null;
+
+// Parse blog post frontmatter from markdown
+function parseBlogPostFrontmatter(markdown) {
+  const result = {
+    title: '',
+    date: new Date().toISOString().split('T')[0],
+    tags: '',
+    image: '',
+    embed: '',
+    body: markdown || ''
+  };
+
+  const frontmatterMatch = markdown.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (frontmatterMatch) {
+    const frontmatter = frontmatterMatch[1];
+    result.body = frontmatterMatch[2];
+
+    const titleMatch = frontmatter.match(/^title:\s*(.+)$/m);
+    if (titleMatch) result.title = titleMatch[1].trim();
+
+    const dateMatch = frontmatter.match(/^date:\s*(.+)$/m);
+    if (dateMatch) result.date = dateMatch[1].trim();
+
+    const tagsMatch = frontmatter.match(/^tags:\s*(.+)$/m);
+    if (tagsMatch) result.tags = tagsMatch[1].trim();
+
+    const imageMatch = frontmatter.match(/^image:\s*(.+)$/m);
+    if (imageMatch) result.image = imageMatch[1].trim();
+
+    const embedMatch = frontmatter.match(/^embed:\s*(.+)$/m);
+    if (embedMatch) result.embed = embedMatch[1].trim();
+  }
+
+  return result;
+}
+
+// Generate markdown with frontmatter from blog post data
+function generateBlogPostMarkdown(postData) {
+  let frontmatter = '---\n';
+  frontmatter += `title: ${postData.title || 'Untitled'}\n`;
+  frontmatter += `date: ${postData.date || new Date().toISOString().split('T')[0]}\n`;
+  if (postData.tags) {
+    frontmatter += `tags: ${postData.tags}\n`;
+  }
+  if (postData.image) {
+    frontmatter += `image: ${postData.image}\n`;
+  }
+  if (postData.embed) {
+    frontmatter += `embed: ${postData.embed}\n`;
+  }
+  frontmatter += '---\n';
+
+  return frontmatter + (postData.body || '');
+}
+
+// Show blog post edit modal
+function showBlogPostEditModal(content, displayName, callback) {
+  const existingModal = document.querySelector('.blog-post-modal-overlay');
+  if (existingModal) existingModal.remove();
+
+  const postData = parseBlogPostFrontmatter(content);
+  // Use displayName as title if no title in frontmatter
+  if (!postData.title && displayName) {
+    postData.title = displayName;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'blog-post-modal-overlay';
+
+  const modal = document.createElement('div');
+  modal.className = 'blog-post-modal';
+
+  modal.innerHTML = `
+    <div class="blog-post-header">
+      <h3>Edit Blog Post</h3>
+      <button class="blog-post-close">&times;</button>
+    </div>
+    <div class="blog-post-form">
+      <div class="blog-post-field">
+        <label for="blogPostTitle">Title</label>
+        <input type="text" id="blogPostTitle" placeholder="Post title..." value="${escapeHtml(postData.title)}">
+      </div>
+      <div class="blog-post-field-row">
+        <div class="blog-post-field">
+          <label for="blogPostDate">Date</label>
+          <input type="date" id="blogPostDate" value="${postData.date}">
+        </div>
+        <div class="blog-post-field" style="flex: 2;">
+          <label for="blogPostTags">Tags (comma separated)</label>
+          <input type="text" id="blogPostTags" placeholder="tag1, tag2, tag3" value="${escapeHtml(postData.tags)}">
+        </div>
+      </div>
+      <div class="blog-post-field-row">
+        <div class="blog-post-field">
+          <label for="blogPostImage">Featured Image</label>
+          <div class="blog-post-media-input">
+            <input type="text" id="blogPostImage" placeholder="image-filename.avif" value="${escapeHtml(postData.image)}" readonly>
+            <button type="button" id="blogPostImageSelect" class="blog-post-media-btn">Select</button>
+            <button type="button" id="blogPostImageClear" class="blog-post-media-clear">&times;</button>
+          </div>
+        </div>
+        <div class="blog-post-field">
+          <label for="blogPostEmbed">Or Embed URL</label>
+          <input type="text" id="blogPostEmbed" placeholder="https://youtube.com/..." value="${escapeHtml(postData.embed)}">
+        </div>
+      </div>
+      <div class="blog-post-field">
+        <label>Body</label>
+        <div id="blogPostBodyEditor"></div>
+      </div>
+    </div>
+    <div class="blog-post-footer">
+      <button class="blog-post-cancel">Cancel</button>
+      <button class="blog-post-save">Save Post</button>
+    </div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Initialize ToastUI editor for body
+  blogPostEditor = new toastui.Editor({
+    el: document.querySelector('#blogPostBodyEditor'),
+    initialEditType: 'wysiwyg',
+    previewStyle: 'vertical',
+    theme: 'dark',
+    height: '300px',
+    initialValue: postData.body,
+    toolbarItems: [
+      ['heading', 'bold', 'italic', 'strike'],
+      ['ul', 'ol', 'task', 'indent', 'outdent'],
+      ['table', 'link']
+    ]
+  });
+
+  // Image select button
+  modal.querySelector('#blogPostImageSelect').addEventListener('click', () => {
+    showImageUploadPopup(({ filename }) => {
+      document.getElementById('blogPostImage').value = filename;
+      // Clear embed if image is selected
+      document.getElementById('blogPostEmbed').value = '';
+    });
+  });
+
+  // Image clear button
+  modal.querySelector('#blogPostImageClear').addEventListener('click', () => {
+    document.getElementById('blogPostImage').value = '';
+  });
+
+  // Close button
+  modal.querySelector('.blog-post-close').addEventListener('click', () => {
+    overlay.remove();
+    blogPostEditor = null;
+  });
+
+  // Cancel button
+  modal.querySelector('.blog-post-cancel').addEventListener('click', () => {
+    overlay.remove();
+    blogPostEditor = null;
+  });
+
+  // Save button
+  modal.querySelector('.blog-post-save').addEventListener('click', () => {
+    const newPostData = {
+      title: document.getElementById('blogPostTitle').value.trim(),
+      date: document.getElementById('blogPostDate').value,
+      tags: document.getElementById('blogPostTags').value.trim(),
+      image: document.getElementById('blogPostImage').value.trim(),
+      embed: document.getElementById('blogPostEmbed').value.trim(),
+      body: blogPostEditor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim()
+    };
+
+    const newMarkdown = generateBlogPostMarkdown(newPostData);
+    overlay.remove();
+    blogPostEditor = null;
+
+    if (callback) callback(newMarkdown, newPostData.title);
+  });
+}
+
+// Initialize blog editor (called for blog sites)
+function initBlogEditor() {
+  const editorContainer = document.getElementById('editor');
+  if (!editorContainer) {
+    console.error('Editor container not found');
+    return;
+  }
+
+  editorContainer.innerHTML = '';
+  editorContainer.className = 'blog-editor';
+
+  renderBlogPostsList();
+}
+
+// Render list of blog posts for editing
+function renderBlogPostsList() {
+  const container = document.getElementById('editor');
+  container.innerHTML = '';
+
+  // Add new post button at top
+  const addBtn = document.createElement('button');
+  addBtn.className = 'blog-add-post-btn';
+  addBtn.innerHTML = '+ New Post';
+  addBtn.addEventListener('click', () => {
+    addNewBlogPost();
+  });
+  container.appendChild(addBtn);
+
+  // Render each post
+  markdownCache.forEach((cacheItem, index) => {
+    const postData = parseBlogPostFrontmatter(cacheItem.content);
+    const postCard = document.createElement('div');
+    postCard.className = 'blog-post-card';
+
+    const postInfo = document.createElement('div');
+    postInfo.className = 'blog-post-card-info';
+
+    const title = document.createElement('div');
+    title.className = 'blog-post-card-title';
+    title.textContent = postData.title || cacheItem.displayName || 'Untitled';
+    postInfo.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'blog-post-card-meta';
+    meta.textContent = postData.date || '';
+    if (postData.tags) {
+      meta.textContent += ' | ' + postData.tags;
+    }
+    postInfo.appendChild(meta);
+
+    postCard.appendChild(postInfo);
+
+    const actions = document.createElement('div');
+    actions.className = 'blog-post-card-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'blog-post-card-edit';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => editBlogPost(index));
+    actions.appendChild(editBtn);
+
+    if (markdownCache.length > 1) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'blog-post-card-delete';
+      deleteBtn.innerHTML = '&times;';
+      deleteBtn.title = 'Delete post';
+      deleteBtn.addEventListener('click', () => deleteBlogPost(index));
+      actions.appendChild(deleteBtn);
+    }
+
+    postCard.appendChild(actions);
+    container.appendChild(postCard);
+  });
+}
+
+// Add new blog post
+function addNewBlogPost() {
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const displayName = `Post ${now.getTime()}`;
+  const fileName = `public/${displayName.toLowerCase().replace(/\s+/g, '-')}.md`;
+
+  const defaultContent = generateBlogPostMarkdown({
+    title: 'New Post',
+    date: dateStr,
+    tags: '',
+    image: '',
+    embed: '',
+    body: 'Write your post content here...'
+  });
+
+  showBlogPostEditModal(defaultContent, 'New Post', (newContent, newTitle) => {
+    const sanitizedFileName = `public/${newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.md`;
+
+    addOrUpdateCache(sanitizedFileName, newTitle, newContent);
+    modified = true;
+    updateDeployButtonState();
+    renderBlogPostsList();
+  });
+}
+
+// Edit existing blog post
+function editBlogPost(index) {
+  const cacheItem = markdownCache[index];
+  if (!cacheItem) return;
+
+  showBlogPostEditModal(cacheItem.content, cacheItem.displayName, (newContent, newTitle) => {
+    // Update cache
+    cacheItem.content = newContent;
+    cacheItem.displayName = newTitle;
+    cacheItem.modifiedAt = new Date().toISOString();
+
+    // Update filename if title changed
+    const newFileName = `public/${newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.md`;
+    if (newFileName !== cacheItem.fileName) {
+      cacheItem.fileName = newFileName;
+    }
+
+    modified = true;
+    updateDeployButtonState();
+    renderBlogPostsList();
+  });
+}
+
+// Delete blog post
+function deleteBlogPost(index) {
+  const cacheItem = markdownCache[index];
+  if (!cacheItem) return;
+
+  const postData = parseBlogPostFrontmatter(cacheItem.content);
+  const title = postData.title || cacheItem.displayName || 'this post';
+
+  if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+
+  markdownCache.splice(index, 1);
+  modified = true;
+  updateDeployButtonState();
+  renderBlogPostsList();
+}
+
+// Load blog posts into editor (called from on-load.js)
+function loadBlogPostsIntoEditor(content) {
+  // For blog sites, we show the posts list, not the block editor
+  renderBlogPostsList();
+}

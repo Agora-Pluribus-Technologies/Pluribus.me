@@ -695,12 +695,13 @@ function guessContentType(filename) {
 
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
-  const { siteName, repo, owner } = siteSettings;
+  const { siteName, repo, owner, siteType } = siteSettings;
 
   const siteJson = {
     siteName: siteName || repo || "Untitled Site",
     repo: repo || siteId.split("/")[1] || "",
     owner: owner || siteId.split("/")[0] || "",
+    siteType: siteType || "pages",
     createdAt: new Date().toISOString(),
   };
 
@@ -804,13 +805,17 @@ async function deployChanges(siteId) {
   modified = false;
   updateDeployButtonState();
 
-  var owoTemplateResp = await fetch("/templates/owo-template.html", {
+  // Determine which template to use based on site type
+  const isBlogSite = currentSiteType === "blog";
+  const templatePath = isBlogSite ? "/templates/blog-template.html" : "/templates/owo-template.html";
+
+  var templateResp = await fetch(templatePath, {
     method: "GET",
     headers: {
       "Cache-Control": "no-cache, must-revalidate",
     },
   });
-  const owoTemplate = await owoTemplateResp.text();
+  const template = await templateResp.text();
 
   const existingMarkdownFiles = await getPublicFiles(siteId);
   const files = [];
@@ -820,7 +825,10 @@ async function deployChanges(siteId) {
   for (const existingFile of existingMarkdownFiles) {
     if (!cacheFileNames.includes(existingFile)) {
       console.log("Preparing to delete file:", existingFile);
-      files.push({ filePath: existingFile.replace(".md", ".html"), action: "delete" });
+      // For blog sites, we don't create individual HTML files per post
+      if (!isBlogSite) {
+        files.push({ filePath: existingFile.replace(".md", ".html"), action: "delete" });
+      }
       files.push({ filePath: existingFile, action: "delete" });
     }
   }
@@ -828,11 +836,15 @@ async function deployChanges(siteId) {
   // Handle creates and updates: files in cache
   for (const cacheItem of markdownCache) {
     console.log("Preparing to update file:", cacheItem.fileName);
-    files.push({
-      filePath: cacheItem.fileName.replace(".md", ".html"),
-      content: owoTemplate,
-      contentType: "text/html",
-    });
+    // For blog sites, only save markdown files (posts are loaded dynamically)
+    // For pages sites, save both HTML and markdown
+    if (!isBlogSite) {
+      files.push({
+        filePath: cacheItem.fileName.replace(".md", ".html"),
+        content: template,
+        contentType: "text/html",
+      });
+    }
     files.push({
       filePath: cacheItem.fileName,
       content: cacheItem.content,
@@ -885,10 +897,10 @@ async function deployChanges(siteId) {
     console.log("No site.json found in git, skipping");
   }
 
-  // Update index.html (use the same template as other pages)
+  // Update index.html (use the appropriate template)
   files.push({
     filePath: "public/index.html",
-    content: owoTemplate,
+    content: template,
     contentType: "text/html",
   });
 
