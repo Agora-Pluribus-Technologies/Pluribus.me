@@ -236,7 +236,7 @@ nav {
 }
 
 .modal {
-  z-index: 11000;
+  z-index: 11000 !important;
 }
 
 .modal-content {
@@ -2337,7 +2337,7 @@ nav {
   display: flex !important;
   flex-direction: column;
   gap: 15px;
-  padding: 120px 20px 20px 20px;
+  padding: 20px;
   max-width: 800px;
   margin: 0 auto;
   width: 100%;

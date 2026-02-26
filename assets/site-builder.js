@@ -1431,6 +1431,13 @@ function initBlogEditor() {
     editorSection.classList.add('blog-mode');
   }
 
+  // Set top margin based on editor-topbar height
+  const editorTopbar = document.getElementById('editor-topbar');
+  if (editorTopbar) {
+    const topbarHeight = editorTopbar.getBoundingClientRect().height;
+    editorContainer.style.marginTop = topbarHeight + 'px';
+  }
+
   editorContainer.innerHTML = '';
   editorContainer.className = 'blog-editor';
 
