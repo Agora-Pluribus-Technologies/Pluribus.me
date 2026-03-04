@@ -1,7 +1,9 @@
-// Global state for filtering
+// Global state for filtering and pagination
 let allPosts = [];
 let currentSearchQuery = "";
 let currentTagFilter = "";
+let currentPage = 1;
+const POSTS_PER_PAGE = 10;
 
 document.addEventListener("DOMContentLoaded", async function () {
   const origin = document.location.origin;
@@ -146,10 +148,9 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
     return;
   }
 
-  // Fetch all posts
-  const posts = [];
-  for (const page of pagesJson) {
-    try {
+  // Fetch all posts in parallel
+  const postResults = await Promise.allSettled(
+    pagesJson.map(async (page) => {
       const mdUrl = `${origin}${basePath}/${page.fileName}.md`;
       const response = await fetch(mdUrl, {
         method: "GET",
@@ -157,16 +158,16 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
           "Cache-Control": "no-cache, must-revalidate",
         },
       });
-
       if (response.ok) {
         const markdown = await response.text();
-        const postData = parsePostMarkdown(markdown, page, basePath);
-        posts.push(postData);
+        return parsePostMarkdown(markdown, page, basePath);
       }
-    } catch (error) {
-      console.error("Error fetching post:", page.fileName, error);
-    }
-  }
+      return null;
+    })
+  );
+  const posts = postResults
+    .filter(r => r.status === "fulfilled" && r.value)
+    .map(r => r.value);
 
   // Sort posts by date (newest first)
   posts.sort((a, b) => {
@@ -189,9 +190,9 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
   // Create tag filter bar
   createTagFilterBar(allTags, tagFilterContainer);
 
-  // Render posts
-  feedContainer.innerHTML = "";
-  renderPosts(feedContainer, posts, basePath);
+  // Render first page of posts
+  currentPage = 1;
+  renderCurrentPage();
 }
 
 function parsePostMarkdown(markdown, pageInfo, basePath) {
@@ -300,9 +301,11 @@ function handleTagClick(tag) {
 }
 
 function applyFilters() {
-  const feedContainer = document.getElementById("blogFeed");
-  if (!feedContainer) return;
+  currentPage = 1;
+  renderCurrentPage();
+}
 
+function getFilteredPosts() {
   let filteredPosts = allPosts;
 
   // Apply tag filter
@@ -324,8 +327,65 @@ function applyFilters() {
     });
   }
 
+  return filteredPosts;
+}
+
+function renderCurrentPage() {
+  const feedContainer = document.getElementById("blogFeed");
+  if (!feedContainer) return;
+
+  const filteredPosts = getFilteredPosts();
+  const totalPages = Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = (currentPage - 1) * POSTS_PER_PAGE;
+  const pagePosts = filteredPosts.slice(start, start + POSTS_PER_PAGE);
+
   feedContainer.innerHTML = "";
-  renderPosts(feedContainer, filteredPosts);
+  renderPosts(feedContainer, pagePosts);
+
+  // Remove existing pagination
+  const existing = document.getElementById("paginationContainer");
+  if (existing) existing.remove();
+
+  if (totalPages > 1) {
+    const paginationDiv = document.createElement("div");
+    paginationDiv.id = "paginationContainer";
+    paginationDiv.className = "pagination";
+
+    const prevBtn = document.createElement("button");
+    prevBtn.className = "pagination-btn";
+    prevBtn.textContent = "Previous";
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.addEventListener("click", () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderCurrentPage();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+    paginationDiv.appendChild(prevBtn);
+
+    const pageInfo = document.createElement("span");
+    pageInfo.className = "pagination-info";
+    pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+    paginationDiv.appendChild(pageInfo);
+
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "pagination-btn";
+    nextBtn.textContent = "Next";
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.addEventListener("click", () => {
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderCurrentPage();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+    paginationDiv.appendChild(nextBtn);
+
+    feedContainer.after(paginationDiv);
+  }
 }
 
 function renderPosts(container, posts) {
@@ -358,25 +418,18 @@ function renderPosts(container, posts) {
     const article = document.createElement("article");
     article.className = "blog-post";
 
-    // Featured image or embed
+    // Placeholder for featured media (rendered after all posts are in DOM)
     if (post.image || post.embed) {
       const mediaDiv = document.createElement("div");
-      mediaDiv.className = "post-media";
-
+      mediaDiv.className = "post-media deferred-media";
       if (post.embed) {
-        mediaDiv.innerHTML = renderEmbed(post.embed);
+        mediaDiv.dataset.embed = post.embed;
       } else if (post.image) {
-        const img = document.createElement("img");
-        // Handle image path
-        if (post.image.startsWith("http")) {
-          img.src = post.image;
-        } else {
-          img.src = `${basePath}/${post.image}`;
-        }
-        img.alt = post.title;
-        mediaDiv.appendChild(img);
+        mediaDiv.dataset.imageSrc = post.image.startsWith("http")
+          ? post.image
+          : `${basePath}/${post.image}`;
+        mediaDiv.dataset.imageAlt = post.title;
       }
-
       article.appendChild(mediaDiv);
     }
 
@@ -451,6 +504,19 @@ function renderPosts(container, posts) {
 
     article.appendChild(contentDiv);
     container.appendChild(article);
+  });
+
+  // Now render deferred media (images and embeds)
+  container.querySelectorAll(".deferred-media").forEach(mediaDiv => {
+    if (mediaDiv.dataset.embed) {
+      mediaDiv.innerHTML = renderEmbed(mediaDiv.dataset.embed);
+    } else if (mediaDiv.dataset.imageSrc) {
+      const img = document.createElement("img");
+      img.src = mediaDiv.dataset.imageSrc;
+      img.alt = mediaDiv.dataset.imageAlt || "";
+      mediaDiv.appendChild(img);
+    }
+    mediaDiv.classList.remove("deferred-media");
   });
 }
 

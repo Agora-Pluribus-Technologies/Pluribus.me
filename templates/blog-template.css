@@ -661,6 +661,42 @@ tr:last-child td {
     margin-top: 4px;
 }
 
+/* Pagination */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.pagination-btn {
+    padding: 8px 20px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background-color: var(--border-color);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.pagination-info {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
     .blog-header h1 {
