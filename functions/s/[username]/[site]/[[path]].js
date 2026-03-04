@@ -3,8 +3,30 @@
 // This function serves user sites from Cloudflare R2 storage.
 // URL shape: /s/:username/:site/... -> fetch from R2 and return the file.
 
-export async function onRequestGet(context) {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Cache-Control",
+};
+
+function corsResponse(body, status) {
+  return new Response(body, { status, headers: corsHeaders });
+}
+
+export async function onRequest(context) {
   const { request, env, params } = context;
+
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...corsHeaders,
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+
   const url = new URL(request.url);
 
   for (const k of url.searchParams.keys()) {
@@ -23,12 +45,12 @@ export async function onRequestGet(context) {
   const site = params && params.site ? String(params.site) : null;
   const siteId = username && site ? `${username}/${site}` : null;
   if (!siteId) {
-    return new Response("Missing site id", { status: 400 });
+    return corsResponse("Missing site id", 400);
   }
 
   // Basic validation for siteId (avoid weird characters / traversal tricks)
   if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
-    return new Response("Invalid site id", { status: 400 });
+    return corsResponse("Invalid site id", 400);
   }
 
   console.log("Site id:", siteId);
@@ -40,7 +62,7 @@ export async function onRequestGet(context) {
 
   if (!cfg) {
     // Fail closed: if we don't know this site, return 404
-    return new Response("Unknown site", { status: 404 });
+    return corsResponse("Unknown site", 404);
   }
 
   console.log("Site config:", cfg);
@@ -58,7 +80,7 @@ export async function onRequestGet(context) {
 
   // Very simple path traversal guard
   if (filePath.includes("..")) {
-    return new Response("Invalid path", { status: 400 });
+    return corsResponse("Invalid path", 400);
   }
 
   // Default to HTML
@@ -84,7 +106,7 @@ export async function onRequestGet(context) {
     const object = await env.PLURIBUS_BUCKET.get(r2Key);
 
     // Build response headers
-    const headers = new Headers();
+    const headers = new Headers(corsHeaders);
     headers.set("Cache-Control", "public, max-age=0, s-maxage=30"); // Cache for 30 seconds at CDN
 
     let response;
@@ -97,7 +119,7 @@ export async function onRequestGet(context) {
     }
     else {
       headers.set("Content-Type", object.httpMetadata?.contentType || guessContentType(filePath));
-  
+
       response = new Response(object.body, {
         status: 200,
         headers,
@@ -110,7 +132,7 @@ export async function onRequestGet(context) {
     return response;
   } catch (error) {
     console.error("R2 get error:", error);
-    return new Response("Failed to retrieve file", { status: 500 });
+    return corsResponse("Failed to retrieve file", 500);
   }
 }
 
