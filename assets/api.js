@@ -868,6 +868,41 @@ async function deployChanges(siteId) {
     contentType: "application/json",
   });
 
+  // Generate latest.md for blog sites (the most recent post by date)
+  if (isBlogSite && markdownCache.length > 0) {
+    let latestItem = null;
+    let latestDate = null;
+
+    for (const item of markdownCache) {
+      let postDate = null;
+      // Try to extract date from frontmatter
+      const frontmatterMatch = item.content.match(/^---\n([\s\S]*?)\n---\n/);
+      if (frontmatterMatch) {
+        const dateMatch = frontmatterMatch[1].match(/^date:\s*(.+)$/m);
+        if (dateMatch) {
+          postDate = new Date(dateMatch[1].trim());
+        }
+      }
+      // Fall back to modifiedAt
+      if (!postDate || isNaN(postDate.getTime())) {
+        postDate = new Date(item.modifiedAt || item.createdAt || 0);
+      }
+
+      if (!latestDate || postDate > latestDate) {
+        latestDate = postDate;
+        latestItem = item;
+      }
+    }
+
+    if (latestItem) {
+      files.push({
+        filePath: "public/latest.md",
+        content: latestItem.content,
+        contentType: "text/markdown",
+      });
+    }
+  }
+
   // Update images.json
   files.push({
     filePath: "public/images.json",
