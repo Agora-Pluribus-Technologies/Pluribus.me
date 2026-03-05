@@ -170,6 +170,28 @@ body.light-mode .search-input:focus {
     color: var(--text-muted);
     font-size: 13px;
     margin-right: 5px;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.tag-filter-label:hover {
+    color: var(--text-primary);
+}
+
+.tag-filter-label .chevron {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    margin-left: 2px;
+    font-size: 10px;
+}
+
+.tag-filter-bar.collapsed .chevron {
+    transform: rotate(-90deg);
+}
+
+.tag-filter-bar.collapsed .tag-filter {
+    display: none;
 }
 
 .tag-filter {

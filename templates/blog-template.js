@@ -262,7 +262,10 @@ function createTagFilterBar(allTags, container) {
 
   const label = document.createElement("span");
   label.className = "tag-filter-label";
-  label.textContent = "Tags:";
+  label.innerHTML = 'Tags: <span class="chevron">&#x25BC;</span>';
+  label.addEventListener("click", () => {
+    tagBar.classList.toggle("collapsed");
+  });
   tagBar.appendChild(label);
 
   // "All" button
