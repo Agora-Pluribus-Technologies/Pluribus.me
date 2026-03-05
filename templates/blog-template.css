@@ -162,7 +162,7 @@ body.light-mode .search-input:focus {
     justify-content: center;
     gap: 8px;
     padding: 15px 20px;
-    max-width: 800px;
+    max-width: 95%;
     margin: 0 auto;
 }
 

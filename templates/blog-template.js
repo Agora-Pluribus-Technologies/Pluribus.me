@@ -258,7 +258,7 @@ function createTagFilterBar(allTags, container) {
   }
 
   const tagBar = document.createElement("div");
-  tagBar.className = "tag-filter-bar";
+  tagBar.className = "tag-filter-bar collapsed";
 
   const label = document.createElement("span");
   label.className = "tag-filter-label";
