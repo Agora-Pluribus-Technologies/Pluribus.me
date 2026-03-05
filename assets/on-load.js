@@ -232,11 +232,19 @@ async function openSiteInEditor(site, initialPage = "index") {
       markdownCache[i].fileName = `public/${fileName}.md`
     }
 
-    // Load all markdown files into cache (preserve timestamps from pages.json)
-    for (const file of markdownFiles) {
-      console.log("Loading file into cache:", file);
-      const content = await getFileContent(currentSiteId, file);
-      // Map old index.md to the new filename from markdownCache
+    // Load all markdown files, images.json, and documents.json in parallel
+    const [mdResults, imagesJsonContent, documentsJsonContent] = await Promise.all([
+      Promise.all(markdownFiles.map(async (file) => {
+        console.log("Loading file into cache:", file);
+        const content = await getFileContent(currentSiteId, file);
+        return { file, content };
+      })),
+      getFileContent(currentSiteId, "public/images.json").catch(() => null),
+      getFileContent(currentSiteId, "public/documents.json").catch(() => null),
+    ]);
+
+    // Process markdown results into cache
+    for (const { file, content } of mdResults) {
       let cacheFileName = file;
       if (file === "public/index.md" && markdownCache.length > 0) {
         cacheFileName = markdownCache[0].fileName;
@@ -247,8 +255,6 @@ async function openSiteInEditor(site, initialPage = "index") {
 
     // Initialize imageCache from images.json
     try {
-      const imagesJsonContent = await getFileContent(currentSiteId, "public/images.json");
-
       if (imagesJsonContent) {
         imageCache = JSON.parse(imagesJsonContent);
         console.log("Loaded imageCache:", imageCache);
@@ -263,8 +269,6 @@ async function openSiteInEditor(site, initialPage = "index") {
 
     // Initialize documentCache from documents.json
     try {
-      const documentsJsonContent = await getFileContent(currentSiteId, "public/documents.json");
-
       if (documentsJsonContent) {
         documentCache = JSON.parse(documentsJsonContent);
         console.log("Loaded documentCache:", documentCache);

@@ -850,30 +850,25 @@ async function loadR2ToGit(siteId) {
 
           await pfs.writeFile(`${dir}/public/pages.json`, pagesJson, "utf8");
 
-          // Load each page into working directory
+          // Load all page files and metadata in parallel
           const pages = JSON.parse(pagesJson);
-          for (const page of pages) {
-            const mdContent = await getFileFromR2(siteId, `public/${page.fileName}.md`);
-            if (mdContent) {
-              await pfs.writeFile(`${dir}/public/${page.fileName}.md`, mdContent, "utf8");
-            }
-            const htmlContent = await getFileFromR2(siteId, `public/${page.fileName}.html`);
-            if (htmlContent) {
-              await pfs.writeFile(`${dir}/public/${page.fileName}.html`, htmlContent, "utf8");
-            }
-          }
-        }
-
-        // Load images.json
-        const imagesJson = await getFileFromR2(siteId, "public/images.json");
-        if (imagesJson) {
-          await pfs.writeFile(`${dir}/public/images.json`, imagesJson, "utf8");
-        }
-
-        // Load documents.json
-        const documentsJson = await getFileFromR2(siteId, "public/documents.json");
-        if (documentsJson) {
-          await pfs.writeFile(`${dir}/public/documents.json`, documentsJson, "utf8");
+          const pagePromises = pages.flatMap(page => [
+            getFileFromR2(siteId, `public/${page.fileName}.md`).then(content =>
+              content ? pfs.writeFile(`${dir}/public/${page.fileName}.md`, content, "utf8") : null
+            ),
+            getFileFromR2(siteId, `public/${page.fileName}.html`).then(content =>
+              content ? pfs.writeFile(`${dir}/public/${page.fileName}.html`, content, "utf8") : null
+            ),
+          ]);
+          const metaPromises = [
+            getFileFromR2(siteId, "public/images.json").then(content =>
+              content ? pfs.writeFile(`${dir}/public/images.json`, content, "utf8") : null
+            ),
+            getFileFromR2(siteId, "public/documents.json").then(content =>
+              content ? pfs.writeFile(`${dir}/public/documents.json`, content, "utf8") : null
+            ),
+          ];
+          await Promise.all([...pagePromises, ...metaPromises]);
         }
 
         console.log("Git history restored from R2 successfully");
@@ -885,33 +880,34 @@ async function loadR2ToGit(siteId) {
     console.log("No git history in R2, initializing new repo...");
     await gitInit(siteId);
 
-    // Load pages.json from R2
-    const pagesJson = await getFileFromR2(siteId, "public/pages.json");
+    // Load pages.json and metadata from R2 in parallel
+    const [pagesJson, imagesJson, documentsJson] = await Promise.all([
+      getFileFromR2(siteId, "public/pages.json"),
+      getFileFromR2(siteId, "public/images.json"),
+      getFileFromR2(siteId, "public/documents.json"),
+    ]);
+
     if (pagesJson) {
       await gitWriteFile(siteId, "public/pages.json", pagesJson);
 
-      // Load each page
+      // Load all page files in parallel, then write to git sequentially
       const pages = JSON.parse(pagesJson);
-      for (const page of pages) {
-        const mdContent = await getFileFromR2(siteId, `public/${page.fileName}.md`);
-        if (mdContent) {
-          await gitWriteFile(siteId, `public/${page.fileName}.md`, mdContent);
-        }
-        const htmlContent = await getFileFromR2(siteId, `public/${page.fileName}.html`);
-        if (htmlContent) {
-          await gitWriteFile(siteId, `public/${page.fileName}.html`, htmlContent);
-        }
+      const pageContents = await Promise.all(
+        pages.map(async (page) => ({
+          fileName: page.fileName,
+          md: await getFileFromR2(siteId, `public/${page.fileName}.md`),
+          html: await getFileFromR2(siteId, `public/${page.fileName}.html`),
+        }))
+      );
+      for (const { fileName, md, html } of pageContents) {
+        if (md) await gitWriteFile(siteId, `public/${fileName}.md`, md);
+        if (html) await gitWriteFile(siteId, `public/${fileName}.html`, html);
       }
     }
 
-    // Load images.json from R2
-    const imagesJson = await getFileFromR2(siteId, "public/images.json");
     if (imagesJson) {
       await gitWriteFile(siteId, "public/images.json", imagesJson);
     }
-
-    // Load documents.json from R2
-    const documentsJson = await getFileFromR2(siteId, "public/documents.json");
     if (documentsJson) {
       await gitWriteFile(siteId, "public/documents.json", documentsJson);
     }
