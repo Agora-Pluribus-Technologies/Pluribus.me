@@ -208,7 +208,7 @@ function parsePostMarkdown(markdown, pageInfo, basePath) {
   // Body content here...
 
   let title = pageInfo.displayName || "Untitled";
-  let date = pageInfo.modifiedAt || pageInfo.createdAt || null;
+  let date = null;
   let tags = [];
   let image = null;
   let embed = null;

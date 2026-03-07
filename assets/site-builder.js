@@ -1484,8 +1484,21 @@ function renderBlogPostsList() {
   });
   container.appendChild(addBtn);
 
+  // Sort posts by date (newest first) for display
+  const sortedIndices = markdownCache
+    .map((cacheItem, index) => ({
+      index,
+      date: parseBlogPostFrontmatter(cacheItem.content).date
+    }))
+    .sort((a, b) => {
+      const dateA = a.date ? new Date(a.date) : new Date(0);
+      const dateB = b.date ? new Date(b.date) : new Date(0);
+      return dateB - dateA;
+    });
+
   // Render each post
-  markdownCache.forEach((cacheItem, index) => {
+  sortedIndices.forEach(({ index }) => {
+    const cacheItem = markdownCache[index];
     const postData = parseBlogPostFrontmatter(cacheItem.content);
     const postCard = document.createElement('div');
     postCard.className = 'blog-post-card';

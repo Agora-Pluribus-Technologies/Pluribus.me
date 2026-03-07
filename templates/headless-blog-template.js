@@ -213,7 +213,7 @@ async function loadBlogPosts(sourceUrl, pagesJson) {
 
 function parsePostMarkdown(markdown, pageInfo) {
   let title = pageInfo.displayName || "Untitled";
-  let date = pageInfo.modifiedAt || pageInfo.createdAt || null;
+  let date = null;
   let tags = [];
   let image = null;
   let embed = null;
