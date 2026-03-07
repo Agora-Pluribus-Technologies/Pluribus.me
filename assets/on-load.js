@@ -219,8 +219,9 @@ async function openSiteInEditor(site, initialPage = "index") {
   } else {
     // Site has been published before, enable Visit Site button
     setSiteAvailable(true);
-    // Initialize markdownCache from pages.json
+    // Initialize markdownCache from pages.json (exclude latest.md)
     markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
+    markdownCache = markdownCache.filter(item => item.fileName !== "latest");
     for (let i=0; i < markdownCache.length; i++) {
       let fileName = markdownCache[i].fileName;
       // Migrate old index.md files to use displayName-based filename

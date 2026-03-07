@@ -852,16 +852,18 @@ async function deployChanges(siteId) {
     });
   }
 
-  // Update pages.json
-  const pages = markdownCache.map(item => {
-    const fileName = item.fileName.replace("public/", "").replace(".md", "");
-    return {
-      displayName: item.displayName,
-      fileName: fileName,
-      createdAt: item.createdAt || new Date().toISOString(),
-      modifiedAt: item.modifiedAt || new Date().toISOString(),
-    };
-  });
+  // Update pages.json (exclude latest.md)
+  const pages = markdownCache
+    .filter(item => item.fileName !== "public/latest.md")
+    .map(item => {
+      const fileName = item.fileName.replace("public/", "").replace(".md", "");
+      return {
+        displayName: item.displayName,
+        fileName: fileName,
+        createdAt: item.createdAt || new Date().toISOString(),
+        modifiedAt: item.modifiedAt || new Date().toISOString(),
+      };
+    });
   files.push({
     filePath: "public/pages.json",
     content: JSON.stringify(pages),
@@ -978,16 +980,18 @@ async function deployBlogPost(siteId, changedPost) {
     }
   }
 
-  // Always update pages.json
-  const pages = markdownCache.map(item => {
-    const fileName = item.fileName.replace("public/", "").replace(".md", "");
-    return {
-      displayName: item.displayName,
-      fileName: fileName,
-      createdAt: item.createdAt || new Date().toISOString(),
-      modifiedAt: item.modifiedAt || new Date().toISOString(),
-    };
-  });
+  // Always update pages.json (exclude latest.md)
+  const pages = markdownCache
+    .filter(item => item.fileName !== "public/latest.md")
+    .map(item => {
+      const fileName = item.fileName.replace("public/", "").replace(".md", "");
+      return {
+        displayName: item.displayName,
+        fileName: fileName,
+        createdAt: item.createdAt || new Date().toISOString(),
+        modifiedAt: item.modifiedAt || new Date().toISOString(),
+      };
+    });
   files.push({
     filePath: "public/pages.json",
     content: JSON.stringify(pages),

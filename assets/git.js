@@ -796,14 +796,16 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       await gitWriteFile(siteId, item.fileName, item.content);
     }
 
-    // Write pages.json
-    const pages = markdownCache.map((item) => {
-      const fileName = item.fileName.replace("public/", "").replace(".md", "");
-      return {
-        displayName: item.displayName,
-        fileName: fileName,
-      };
-    });
+    // Write pages.json (exclude latest.md)
+    const pages = markdownCache
+      .filter(item => item.fileName !== "public/latest.md")
+      .map((item) => {
+        const fileName = item.fileName.replace("public/", "").replace(".md", "");
+        return {
+          displayName: item.displayName,
+          fileName: fileName,
+        };
+      });
     await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pages));
 
     // Write images.json
