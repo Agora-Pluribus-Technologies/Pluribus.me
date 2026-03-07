@@ -1566,8 +1566,11 @@ function addNewBlogPost() {
     addOrUpdateCache(sanitizedFileName, newTitle, newContent);
     renderBlogPostsList();
 
-    // Auto-publish for blog sites
-    await autoPublishBlogChanges();
+    // Auto-publish for blog sites - only send the new post
+    await autoPublishBlogChanges({
+      fileName: sanitizedFileName,
+      content: newContent,
+    });
   });
 }
 
@@ -1576,6 +1579,7 @@ function editBlogPost(index) {
   const cacheItem = markdownCache[index];
   if (!cacheItem) return;
 
+  const oldFileName = cacheItem.fileName;
   showBlogPostEditModal(cacheItem.content, cacheItem.displayName, async (newContent, newTitle) => {
     // Update cache
     cacheItem.content = newContent;
@@ -1584,14 +1588,19 @@ function editBlogPost(index) {
 
     // Update filename if title changed
     const newFileName = `public/${newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.md`;
-    if (newFileName !== cacheItem.fileName) {
+    const renamed = newFileName !== oldFileName;
+    if (renamed) {
       cacheItem.fileName = newFileName;
     }
 
     renderBlogPostsList();
 
-    // Auto-publish for blog sites
-    await autoPublishBlogChanges();
+    // Auto-publish for blog sites - only send the modified post
+    await autoPublishBlogChanges({
+      fileName: newFileName,
+      content: newContent,
+      oldFileName: renamed ? oldFileName : null,
+    });
   });
 }
 
@@ -1605,15 +1614,20 @@ async function deleteBlogPost(index) {
 
   if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
 
+  const deletedFileName = cacheItem.fileName;
   markdownCache.splice(index, 1);
   renderBlogPostsList();
 
-  // Auto-publish for blog sites
-  await autoPublishBlogChanges();
+  // Auto-publish for blog sites - only delete the removed post
+  await autoPublishBlogChanges({
+    fileName: deletedFileName,
+    action: 'delete',
+  });
 }
 
 // Auto-publish changes for blog sites
-async function autoPublishBlogChanges() {
+// changedPost: { fileName, content?, oldFileName?, action? }
+async function autoPublishBlogChanges(changedPost) {
   // Show publishing indicator
   showBlogPublishingIndicator(true);
 
@@ -1621,8 +1635,8 @@ async function autoPublishBlogChanges() {
     // Commit changes to git
     await gitCommit(currentSiteId, "Update blog post");
 
-    // Deploy to R2
-    const success = await deployChanges(currentSiteId);
+    // Deploy only the changed post to R2
+    const success = await deployBlogPost(currentSiteId, changedPost);
 
     if (success) {
       console.log("Blog changes auto-published successfully");

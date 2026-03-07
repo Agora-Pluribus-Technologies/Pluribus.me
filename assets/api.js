@@ -954,6 +954,124 @@ async function deployChanges(siteId) {
   return true;
 }
 
+// Deploy only a single changed blog post plus essential metadata
+// changedPost: { fileName, content?, oldFileName?, action? }
+async function deployBlogPost(siteId, changedPost) {
+  modified = false;
+  updateDeployButtonState();
+
+  const files = [];
+
+  // Handle the changed post
+  if (changedPost.action === 'delete') {
+    files.push({ filePath: changedPost.fileName, action: "delete" });
+  } else {
+    // Add or update the post
+    files.push({
+      filePath: changedPost.fileName,
+      content: changedPost.content,
+      contentType: "text/markdown",
+    });
+    // If renamed, delete the old file
+    if (changedPost.oldFileName) {
+      files.push({ filePath: changedPost.oldFileName, action: "delete" });
+    }
+  }
+
+  // Always update pages.json
+  const pages = markdownCache.map(item => {
+    const fileName = item.fileName.replace("public/", "").replace(".md", "");
+    return {
+      displayName: item.displayName,
+      fileName: fileName,
+      createdAt: item.createdAt || new Date().toISOString(),
+      modifiedAt: item.modifiedAt || new Date().toISOString(),
+    };
+  });
+  files.push({
+    filePath: "public/pages.json",
+    content: JSON.stringify(pages),
+    contentType: "application/json",
+  });
+
+  // Generate latest.md (most recent post by date)
+  if (markdownCache.length > 0) {
+    let latestItem = null;
+    let latestDate = null;
+
+    for (const item of markdownCache) {
+      let postDate = null;
+      const frontmatterMatch = item.content.match(/^---\n([\s\S]*?)\n---\n/);
+      if (frontmatterMatch) {
+        const dateMatch = frontmatterMatch[1].match(/^date:\s*(.+)$/m);
+        if (dateMatch) {
+          postDate = new Date(dateMatch[1].trim());
+        }
+      }
+      if (!postDate || isNaN(postDate.getTime())) {
+        postDate = new Date(item.modifiedAt || item.createdAt || 0);
+      }
+
+      if (!latestDate || postDate > latestDate) {
+        latestDate = postDate;
+        latestItem = item;
+      }
+    }
+
+    if (latestItem) {
+      files.push({
+        filePath: "public/latest.md",
+        content: latestItem.content,
+        contentType: "text/markdown",
+      });
+    }
+  }
+
+  // Generate history.json from git log
+  const historyJson = await generateHistoryJson(siteId);
+  files.push({
+    filePath: "public/history.json",
+    content: JSON.stringify(historyJson),
+    contentType: "application/json",
+  });
+
+  // Update site.json
+  try {
+    const siteJsonContent = await gitReadFile(siteId, "public/site.json");
+    if (siteJsonContent) {
+      files.push({
+        filePath: "public/site.json",
+        content: siteJsonContent,
+        contentType: "application/json",
+      });
+    }
+  } catch (error) {
+    console.log("No site.json found in git, skipping");
+  }
+
+  // Update index.html with blog template
+  const templateResp = await fetch("/templates/blog-template.html", {
+    method: "GET",
+    headers: { "Cache-Control": "no-cache, must-revalidate" },
+  });
+  const template = await templateResp.text();
+  files.push({
+    filePath: "public/index.html",
+    content: template,
+    contentType: "text/html",
+  });
+
+  const result = await saveFilesToR2(siteId, files);
+  if (result) {
+    console.log("Blog post deployed to R2");
+  } else {
+    modified = true;
+    console.error("Failed to deploy blog post to R2");
+  }
+  updateDeployButtonState();
+  return result;
+}
+
 async function createPage(siteId, pageName) {
   var owoTemplateResp = await fetch("/templates/owo-template.html", {
     method: "GET",
