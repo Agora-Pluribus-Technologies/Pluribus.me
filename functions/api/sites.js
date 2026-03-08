@@ -68,12 +68,12 @@ export async function onRequestGet(context) {
     if (siteIdEncoded) {
       const siteId = decodeURIComponent(siteIdEncoded);
       const site = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo, siteType FROM Sites WHERE siteId = ?"
+        "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE siteId = ?"
       ).bind(siteId).first();
 
       if (site) {
-        // Add displayName for compatibility (uses repo as fallback)
-        site.displayName = site.repo;
+        // Use stored displayName, fall back to repo
+        site.displayName = site.displayName || site.repo;
         // Default siteType to "pages" if not set
         site.siteType = site.siteType || "pages";
         return new Response(JSON.stringify(site), {
@@ -89,20 +89,20 @@ export async function onRequestGet(context) {
     let sites;
     if (ownerParam) {
       const result = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo, siteType FROM Sites WHERE owner = ?"
+        "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE owner = ?"
       ).bind(ownerParam).all();
       sites = result.results || [];
     } else {
       const result = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo, siteType FROM Sites"
+        "SELECT siteId, owner, repo, siteType, displayName FROM Sites"
       ).all();
       sites = result.results || [];
     }
 
-    // Add displayName for compatibility and default siteType
+    // Use stored displayName with repo as fallback, and default siteType
     sites = sites.map(site => ({
       ...site,
-      displayName: site.repo,
+      displayName: site.displayName || site.repo,
       siteType: site.siteType || "pages"
     }));
 
@@ -113,6 +113,47 @@ export async function onRequestGet(context) {
   } catch (error) {
     console.error("Error fetching sites:", error);
     return new Response("Failed to fetch sites", { status: 500 });
+  }
+}
+
+// PATCH /api/sites - Update site display name
+export async function onRequestPatch(context) {
+  const { request, env } = context;
+
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+
+  const { siteId, displayName } = data;
+
+  if (!siteId || !displayName) {
+    return new Response("Missing required fields", { status: 400 });
+  }
+
+  try {
+    // Ensure displayName column exists
+    try {
+      await env.USERS_DB.prepare(
+        "ALTER TABLE Sites ADD COLUMN displayName TEXT"
+      ).run();
+    } catch {
+      // Column already exists
+    }
+
+    await env.USERS_DB.prepare(
+      "UPDATE Sites SET displayName = ? WHERE siteId = ?"
+    ).bind(displayName, siteId).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("Error updating site:", error);
+    return new Response("Failed to update site", { status: 500 });
   }
 }
 

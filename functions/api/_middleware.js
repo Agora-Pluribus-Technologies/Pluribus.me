@@ -40,7 +40,7 @@ export async function onRequest(context) {
   const isProtectedGetEndpoint = method === "GET" && PROTECTED_GET_ENDPOINTS.includes(url.pathname);
 
   // Only validate Turnstile for PUT, POST, DELETE requests OR protected GET endpoints
-  if (method !== "PUT" && method !== "POST" && method !== "DELETE" && !isProtectedGetEndpoint) {
+  if (method !== "PUT" && method !== "POST" && method !== "DELETE" && method !== "PATCH" && !isProtectedGetEndpoint) {
     return next();
   }
 

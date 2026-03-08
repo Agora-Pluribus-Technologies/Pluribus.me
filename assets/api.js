@@ -1170,6 +1170,24 @@ async function getCollaborators(siteId) {
   return await response.json();
 }
 
+async function renameSite(siteId, displayName) {
+  const headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+
+  const response = await fetch("/api/sites", {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ siteId, displayName }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  return await response.json();
+}
+
 async function addCollaborator(siteId, username) {
   const response = await fetch("/api/collaborators", {
     method: "POST",

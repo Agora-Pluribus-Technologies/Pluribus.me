@@ -930,7 +930,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const isOwner = site && site.owner.toLowerCase() === username.toLowerCase();
 
       // Update modal content
-      document.getElementById("siteSettingsName").textContent = site ? (site.displayName || site.repo) : currentSiteId;
+      document.getElementById("siteSettingsNameInput").value = site ? (site.displayName || site.repo) : currentSiteId;
       document.getElementById("siteSettingsOwner").textContent = site ? site.owner : currentSiteId.split("/")[0];
 
       // Show/hide add collaborator section based on ownership
@@ -948,6 +948,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (siteJsonContent) {
           const siteJson = JSON.parse(siteJsonContent);
           document.getElementById("showHistoryCheckbox").checked = siteJson.showHistory || false;
+          if (siteJson.siteName) {
+            document.getElementById("siteSettingsNameInput").value = siteJson.siteName;
+          }
         } else {
           document.getElementById("showHistoryCheckbox").checked = false;
         }
@@ -1050,6 +1053,21 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Update showHistory setting
         const showHistory = document.getElementById("showHistoryCheckbox").checked;
         siteJson.showHistory = showHistory;
+
+        // Update site display name
+        const newDisplayName = document.getElementById("siteSettingsNameInput").value.trim();
+        if (newDisplayName) {
+          siteJson.siteName = newDisplayName;
+
+          // Update the display name in the database
+          await renameSite(currentSiteId, newDisplayName);
+
+          // Update local cache
+          const site = sitesCache.find(s => s.siteId === currentSiteId);
+          if (site) {
+            site.displayName = newDisplayName;
+          }
+        }
 
         // Save to git working directory
         await gitWriteFile(currentSiteId, "public/site.json", JSON.stringify(siteJson, null, 2));
