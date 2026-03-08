@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   const pagesJson = await fetchPagesJson(sourceBaseUrl);
   const siteJson = await fetchSiteJson(sourceBaseUrl);
-  const siteName = siteJson ? siteJson.siteName : "Blog";
+  const siteName = siteJson ? (siteJson.displayName || siteJson.siteName) : "Blog";
   const showHistory = siteJson ? siteJson.showHistory : false;
 
   document.title = siteName;

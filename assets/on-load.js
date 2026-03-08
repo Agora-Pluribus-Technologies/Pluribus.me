@@ -1058,6 +1058,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const newDisplayName = document.getElementById("siteSettingsNameInput").value.trim();
         if (newDisplayName) {
           siteJson.siteName = newDisplayName;
+          siteJson.displayName = newDisplayName;
 
           // Update the display name in the database
           await renameSite(currentSiteId, newDisplayName);

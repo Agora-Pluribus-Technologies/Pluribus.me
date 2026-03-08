@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   const pagesJson = await fetchPagesJson(origin, basePath);
   const siteJson = await fetchSiteJson(origin, basePath);
-  const siteName = siteJson ? siteJson.siteName : "Blog";
+  const siteName = siteJson ? (siteJson.displayName || siteJson.siteName) : "Blog";
   const showHistory = siteJson ? siteJson.showHistory : false;
 
   createBlogHeader(siteName);
