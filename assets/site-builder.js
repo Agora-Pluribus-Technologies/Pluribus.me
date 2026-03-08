@@ -1673,6 +1673,29 @@ function showBlogPublishingIndicator(show) {
   }
 }
 
+// Auto-publish site settings changes for blog sites
+async function autoPublishBlogSettings() {
+  showBlogPublishingIndicator(true);
+
+  try {
+    await gitCommit(currentSiteId, "Update site settings");
+    const success = await deployChanges(currentSiteId);
+
+    if (success) {
+      console.log("Blog settings auto-published successfully");
+      setSiteAvailable(true);
+    } else {
+      console.error("Failed to auto-publish blog settings");
+      showAlertBar("Failed to publish settings. Please try again.", false);
+    }
+  } catch (error) {
+    console.error("Error auto-publishing blog settings:", error);
+    showAlertBar("Error publishing settings: " + error.message, false);
+  } finally {
+    showBlogPublishingIndicator(false);
+  }
+}
+
 // Load blog posts into editor (called from on-load.js)
 function loadBlogPostsIntoEditor(content) {
   // For blog sites, we show the posts list, not the block editor

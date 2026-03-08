@@ -1073,14 +1073,18 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Save to git working directory
         await gitWriteFile(currentSiteId, "public/site.json", JSON.stringify(siteJson, null, 2));
 
-        // Mark as modified so user needs to deploy
-        modified = true;
-        updateDeployButtonState();
-
         // Close modal
         $("#siteSettingsModal").modal("hide");
 
-        showAlertBar("Settings saved. Deploy to apply changes.", true);
+        // For blog sites, auto-deploy; for pages sites, mark as modified
+        if (currentSiteType === "blog") {
+          await autoPublishBlogSettings();
+          showAlertBar("Settings saved and published.", true);
+        } else {
+          modified = true;
+          updateDeployButtonState();
+          showAlertBar("Settings saved. Deploy to apply changes.", true);
+        }
       } catch (error) {
         console.error("Error saving site settings:", error);
         showAlertBar("Failed to save settings: " + error.message, false);
