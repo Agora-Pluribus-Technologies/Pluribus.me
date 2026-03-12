@@ -1167,24 +1167,25 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         }
 
-        // Fetch and include template files in public/templates/
+        // Fetch and include the correct template files based on site type
         try {
+          const templateName = currentSiteType === "blog" ? "blog-template" : "owo-template";
           const [cssResponse, jsResponse] = await Promise.all([
-            fetch("/templates/owo-template.css"),
-            fetch("/templates/owo-template.js"),
+            fetch(`/templates/${templateName}.css`),
+            fetch(`/templates/${templateName}.js`),
           ]);
 
           if (cssResponse.ok) {
             const cssContent = await cssResponse.text();
-            zip.file("public/templates/owo-template.css", cssContent);
+            zip.file(`public/templates/${templateName}.css`, cssContent);
           }
 
           if (jsResponse.ok) {
             const jsContent = await jsResponse.text();
-            zip.file("public/templates/owo-template.js", jsContent);
+            zip.file(`public/templates/${templateName}.js`, jsContent);
           }
 
-          console.log("Added template files to ZIP");
+          console.log(`Added ${templateName} template files to ZIP`);
         } catch (templateError) {
           console.error("Error fetching template files:", templateError);
           // Continue without templates - not critical
@@ -2018,6 +2019,27 @@ document.addEventListener("DOMContentLoaded", function() {
               }
               zip.file(`${siteFolderName}/${file.path}`, bytes);
             }
+          }
+
+          // Fetch and include the correct template files for each site
+          try {
+            const templateName = site.config.siteType === "blog" ? "blog-template" : "owo-template";
+            const [cssResponse, jsResponse] = await Promise.all([
+              fetch(`/templates/${templateName}.css`),
+              fetch(`/templates/${templateName}.js`),
+            ]);
+
+            if (cssResponse.ok) {
+              const cssContent = await cssResponse.text();
+              zip.file(`${siteFolderName}/public/templates/${templateName}.css`, cssContent);
+            }
+
+            if (jsResponse.ok) {
+              const jsContent = await jsResponse.text();
+              zip.file(`${siteFolderName}/public/templates/${templateName}.js`, jsContent);
+            }
+          } catch (templateError) {
+            console.error(`Error fetching template files for ${siteFolderName}:`, templateError);
           }
         }
 
