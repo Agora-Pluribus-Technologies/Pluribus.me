@@ -662,66 +662,23 @@ function createFooter(origin, basePath, showHistory, siteName) {
     }
   }
 
-  // Subscribe widget (above the fixed footer bar)
+  // Fixed footer bar
+  const footer = document.createElement("footer");
+  footer.classList.add("pluribus-footer");
+
+  // Subscribe widget inside footer
   if (siteId) {
     const widget = document.createElement("div");
     widget.className = "subscribe-widget";
     widget.innerHTML = `
-      <h3 class="subscribe-title">Subscribe to ${escapeHtml(siteName)}</h3>
-      <p class="subscribe-description">Get notified when new posts are published.</p>
       <form class="subscribe-form" id="subscribeForm">
-        <input type="email" class="subscribe-input" id="subscribeEmail" placeholder="Enter your email" required>
+        <input type="email" class="subscribe-input" id="subscribeEmail" placeholder="Subscribe via email" required>
         <button type="submit" class="subscribe-button" id="subscribeButton">Subscribe</button>
       </form>
-      <p class="subscribe-status" id="subscribeStatus"></p>
+      <span class="subscribe-status" id="subscribeStatus"></span>
     `;
-    document.body.appendChild(widget);
-
-    const form = document.getElementById("subscribeForm");
-    const emailInput = document.getElementById("subscribeEmail");
-    const button = document.getElementById("subscribeButton");
-    const status = document.getElementById("subscribeStatus");
-
-    form.addEventListener("submit", async function (e) {
-      e.preventDefault();
-      const email = emailInput.value.trim();
-      if (!email) return;
-
-      button.disabled = true;
-      button.textContent = "Subscribing...";
-      status.textContent = "";
-      status.className = "subscribe-status";
-
-      try {
-        const response = await fetch(`${origin}/api/subscribers`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ siteId, email }),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          status.textContent = "You're subscribed! You'll receive an email when new posts are published.";
-          status.className = "subscribe-status subscribe-success";
-          emailInput.value = "";
-        } else {
-          status.textContent = result.message || "Failed to subscribe. Please try again.";
-          status.className = "subscribe-status subscribe-error";
-        }
-      } catch (err) {
-        status.textContent = "An error occurred. Please try again.";
-        status.className = "subscribe-status subscribe-error";
-      } finally {
-        button.disabled = false;
-        button.textContent = "Subscribe";
-      }
-    });
+    footer.appendChild(widget);
   }
-
-  // Fixed footer bar
-  const footer = document.createElement("footer");
-  footer.classList.add("pluribus-footer");
 
   const poweredBy = document.createElement("span");
   poweredBy.innerHTML =
@@ -748,6 +705,50 @@ function createFooter(origin, basePath, showHistory, siteName) {
   footer.appendChild(themeToggle);
 
   document.body.appendChild(footer);
+
+  // Attach subscribe handler after footer is in DOM
+  if (siteId) {
+    const form = document.getElementById("subscribeForm");
+    const emailInput = document.getElementById("subscribeEmail");
+    const button = document.getElementById("subscribeButton");
+    const status = document.getElementById("subscribeStatus");
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const email = emailInput.value.trim();
+      if (!email) return;
+
+      button.disabled = true;
+      button.textContent = "Subscribing...";
+      status.textContent = "";
+      status.className = "subscribe-status";
+
+      try {
+        const response = await fetch(`${origin}/api/subscribers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteId, email }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          status.textContent = "Subscribed!";
+          status.className = "subscribe-status subscribe-success";
+          emailInput.value = "";
+        } else {
+          status.textContent = result.message || "Failed to subscribe.";
+          status.className = "subscribe-status subscribe-error";
+        }
+      } catch (err) {
+        status.textContent = "An error occurred.";
+        status.className = "subscribe-status subscribe-error";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Subscribe";
+      }
+    });
+  }
 
   // Create history modal overlay
   const overlay = document.createElement("div");
