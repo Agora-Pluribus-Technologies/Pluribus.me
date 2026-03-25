@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   createBlogHeader(siteName);
   await loadBlogPosts(sourceBaseUrl, pagesJson);
-  createFooter(sourceBaseUrl, showHistory);
+  createFooter(sourceBaseUrl, showHistory, siteName);
 });
 
 async function fetchSiteJson(sourceUrl) {
@@ -233,7 +233,14 @@ function parsePostMarkdown(markdown, pageInfo) {
 
     const tagsMatch = frontmatter.match(/^tags:\s*(.+)$/m);
     if (tagsMatch) {
-      tags = tagsMatch[1].split(",").map(t => t.trim()).filter(t => t);
+      const raw = tagsMatch[1].trim();
+      if (raw.includes("#")) {
+        // Hashtag format: #tag1 #tag2 #tag3
+        tags = raw.split(/\s+/).map(t => t.replace(/^#/, "").trim()).filter(t => t);
+      } else {
+        // Legacy comma format: tag1, tag2, tag3
+        tags = raw.split(",").map(t => t.trim()).filter(t => t);
+      }
     }
 
     const imageMatch = frontmatter.match(/^image:\s*(.+)$/m);
@@ -650,14 +657,46 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function createFooter(sourceUrl, showHistory) {
+function createFooter(sourceUrl, showHistory, siteName) {
+  // Derive siteId and API origin from sourceUrl (e.g. https://agorapages.com/s/user/site)
+  let siteId = "";
+  let apiOrigin = "";
+  try {
+    const parsed = new URL(sourceUrl);
+    apiOrigin = parsed.origin;
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts.length >= 3 && parts[0] === "s") {
+      siteId = parts[1] + "/" + parts[2];
+    }
+  } catch {
+    // Invalid URL, skip subscribe widget
+  }
+
   const footer = document.createElement("footer");
   footer.classList.add("pluribus-footer");
+
+  // Subscribe widget inside footer
+  if (siteId) {
+    const widget = document.createElement("div");
+    widget.className = "subscribe-widget";
+    widget.innerHTML = `
+      <form class="subscribe-form" id="subscribeForm">
+        <input type="email" class="subscribe-input" id="subscribeEmail" placeholder="Subscribe via email" required>
+        <div id="subscribeTurnstile"></div>
+        <button type="submit" class="subscribe-button" id="subscribeButton">Subscribe</button>
+      </form>
+      <span class="subscribe-status" id="subscribeStatus"></span>
+    `;
+    footer.appendChild(widget);
+  }
+
+  const footerRight = document.createElement("div");
+  footerRight.className = "footer-right";
 
   const poweredBy = document.createElement("span");
   poweredBy.innerHTML =
     'Powered by <a href="https://agorapages.com" target="_blank">AgoraPages.com</a>';
-  footer.appendChild(poweredBy);
+  footerRight.appendChild(poweredBy);
 
   if (showHistory) {
     const historyLink = document.createElement("span");
@@ -666,7 +705,7 @@ function createFooter(sourceUrl, showHistory) {
     historyLink.addEventListener("click", function () {
       showHistoryModal(sourceUrl);
     });
-    footer.appendChild(historyLink);
+    footerRight.appendChild(historyLink);
   }
 
   const themeToggle = document.createElement("button");
@@ -676,9 +715,109 @@ function createFooter(sourceUrl, showHistory) {
   themeToggle.addEventListener("click", toggleTheme);
   themeToggle.addEventListener("mouseenter", showThemePreview);
   themeToggle.addEventListener("mouseleave", hideThemePreview);
-  footer.appendChild(themeToggle);
+  footerRight.appendChild(themeToggle);
+
+  footer.appendChild(footerRight);
 
   document.body.appendChild(footer);
+
+  // Attach subscribe handler after footer is in DOM
+  if (siteId) {
+    const form = document.getElementById("subscribeForm");
+    const emailInput = document.getElementById("subscribeEmail");
+    const button = document.getElementById("subscribeButton");
+    const status = document.getElementById("subscribeStatus");
+
+    // Initialize invisible Turnstile widget for subscribe form
+    let subscribeTurnstileToken = null;
+    let subscribeTurnstileWidgetId = null;
+
+    function initSubscribeTurnstile() {
+      if (typeof turnstile === "undefined") {
+        setTimeout(initSubscribeTurnstile, 200);
+        return;
+      }
+      subscribeTurnstileWidgetId = turnstile.render("#subscribeTurnstile", {
+        sitekey: "0x4AAAAAACJNWjSEPW9SeZxb",
+        size: "invisible",
+        callback: function (token) {
+          subscribeTurnstileToken = token;
+        },
+        "expired-callback": function () {
+          subscribeTurnstileToken = null;
+        },
+      });
+    }
+    initSubscribeTurnstile();
+
+    async function getSubscribeTurnstileToken() {
+      if (subscribeTurnstileToken) {
+        const token = subscribeTurnstileToken;
+        subscribeTurnstileToken = null;
+        return token;
+      }
+      if (typeof turnstile !== "undefined" && subscribeTurnstileWidgetId !== null) {
+        turnstile.reset(subscribeTurnstileWidgetId);
+      }
+      return new Promise((resolve) => {
+        let attempts = 0;
+        const check = setInterval(() => {
+          attempts++;
+          if (subscribeTurnstileToken) {
+            clearInterval(check);
+            const token = subscribeTurnstileToken;
+            subscribeTurnstileToken = null;
+            resolve(token);
+          } else if (attempts >= 100) {
+            clearInterval(check);
+            resolve(null);
+          }
+        }, 100);
+      });
+    }
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const email = emailInput.value.trim();
+      if (!email) return;
+
+      button.disabled = true;
+      button.textContent = "Subscribing...";
+      status.textContent = "";
+      status.className = "subscribe-status";
+
+      try {
+        const turnstileToken = await getSubscribeTurnstileToken();
+        const headers = { "Content-Type": "application/json" };
+        if (turnstileToken) {
+          headers["X-Turnstile-Token"] = turnstileToken;
+        }
+
+        const response = await fetch(`${apiOrigin}/api/subscribers`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ siteId, email }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          status.textContent = result.message || "Check your email to confirm!";
+          status.className = "subscribe-status subscribe-success";
+          emailInput.value = "";
+        } else {
+          status.textContent = result.message || result.error || "Failed to subscribe.";
+          status.className = "subscribe-status subscribe-error";
+        }
+      } catch (err) {
+        status.textContent = "An error occurred.";
+        status.className = "subscribe-status subscribe-error";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Subscribe";
+      }
+    });
+  }
 
   // Create history modal overlay
   const overlay = document.createElement("div");
