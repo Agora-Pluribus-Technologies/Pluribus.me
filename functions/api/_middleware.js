@@ -49,14 +49,14 @@ export async function onRequest(context) {
     return next();
   }
 
-  // Skip Turnstile validation for public subscriber operations:
-  // - POST to subscribe (from public blog pages without Turnstile)
+  // Skip Turnstile for token-based subscriber operations (public, no UI):
   // - DELETE with token param (unsubscribe via email link)
+  // - GET with confirm param (double opt-in confirmation via email link)
   if (url.pathname === "/api/subscribers") {
-    if (method === "POST" && !request.headers.get("X-Turnstile-Token")) {
+    if (method === "DELETE" && url.searchParams.get("token")) {
       return next();
     }
-    if (method === "DELETE" && url.searchParams.get("token")) {
+    if (method === "GET" && url.searchParams.get("confirm")) {
       return next();
     }
   }

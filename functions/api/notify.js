@@ -32,7 +32,7 @@ export async function onRequestPost(context) {
   let subscribers;
   try {
     const result = await env.USERS_DB.prepare(
-      "SELECT email, unsubscribeToken FROM Subscribers WHERE siteId = ?"
+      "SELECT email, unsubscribeToken FROM Subscribers WHERE siteId = ? AND confirmed = 1"
     ).bind(siteId).all();
     subscribers = result.results || [];
   } catch (error) {

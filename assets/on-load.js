@@ -2238,7 +2238,9 @@ async function loadSubscribersPanel(siteId) {
 
   try {
     const data = await getSubscribers(siteId);
-    countEl.textContent = data.count;
+    const confirmedCount = data.subscribers.filter(s => s.confirmed).length;
+    const pendingCount = data.count - confirmedCount;
+    countEl.textContent = confirmedCount + (pendingCount > 0 ? ` (+${pendingCount} pending)` : "");
 
     if (data.subscribers.length === 0) {
       listEl.innerHTML = '<p style="color: #888; font-size: 12px;">No subscribers yet.</p>';
@@ -2246,8 +2248,11 @@ async function loadSubscribersPanel(siteId) {
       let html = '<table class="table table-condensed" style="margin-bottom: 0; font-size: 12px;"><tbody>';
       for (const sub of data.subscribers) {
         const date = new Date(sub.subscribedAt).toLocaleDateString();
+        const statusBadge = sub.confirmed
+          ? '<span class="label label-success" style="font-size: 10px;">confirmed</span>'
+          : '<span class="label label-warning" style="font-size: 10px;">pending</span>';
         html += `<tr>
-          <td>${escapeHtmlOnLoad(sub.email)}</td>
+          <td>${escapeHtmlOnLoad(sub.email)} ${statusBadge}</td>
           <td style="color: #888;">${date}</td>
           <td style="width: 30px;">
             <button class="btn btn-xs btn-danger remove-subscriber-btn" data-id="${sub.id}" title="Remove">
