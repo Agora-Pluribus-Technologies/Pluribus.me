@@ -1273,7 +1273,15 @@ function parseBlogPostFrontmatter(markdown) {
     if (dateMatch) result.date = dateMatch[1].trim();
 
     const tagsMatch = frontmatter.match(/^tags:\s*(.+)$/m);
-    if (tagsMatch) result.tags = tagsMatch[1].trim();
+    if (tagsMatch) {
+      const raw = tagsMatch[1].trim();
+      if (raw.includes("#")) {
+        result.tags = raw;
+      } else {
+        // Convert legacy comma format to hashtag format
+        result.tags = raw.split(",").map(t => t.trim()).filter(t => t).map(t => `#${t}`).join(" ");
+      }
+    }
 
     const imageMatch = frontmatter.match(/^image:\s*(.+)$/m);
     if (imageMatch) result.image = imageMatch[1].trim();
@@ -1337,8 +1345,8 @@ function showBlogPostEditModal(content, displayName, callback) {
           <input type="date" id="blogPostDate" value="${postData.date}">
         </div>
         <div class="blog-post-field" style="flex: 2;">
-          <label for="blogPostTags">Tags (comma separated)</label>
-          <input type="text" id="blogPostTags" placeholder="tag1, tag2, tag3" value="${escapeHtml(postData.tags)}">
+          <label for="blogPostTags">Tags</label>
+          <input type="text" id="blogPostTags" placeholder="#tag1 #tag2 #tag3" value="${escapeHtml(postData.tags)}">
         </div>
       </div>
       <div class="blog-post-field-row">

@@ -229,7 +229,14 @@ function parsePostMarkdown(markdown, pageInfo, basePath) {
 
     const tagsMatch = frontmatter.match(/^tags:\s*(.+)$/m);
     if (tagsMatch) {
-      tags = tagsMatch[1].split(",").map(t => t.trim()).filter(t => t);
+      const raw = tagsMatch[1].trim();
+      if (raw.includes("#")) {
+        // Hashtag format: #tag1 #tag2 #tag3
+        tags = raw.split(/\s+/).map(t => t.replace(/^#/, "").trim()).filter(t => t);
+      } else {
+        // Legacy comma format: tag1, tag2, tag3
+        tags = raw.split(",").map(t => t.trim()).filter(t => t);
+      }
     }
 
     const imageMatch = frontmatter.match(/^image:\s*(.+)$/m);
