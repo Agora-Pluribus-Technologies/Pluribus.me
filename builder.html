@@ -330,6 +330,34 @@
             </div>
           </div>
           <hr>
+          <div class="form-group" id="subscribersSection" style="display: none;">
+            <label>Mailing List Subscribers <span id="subscriberCount" class="badge">0</span></label>
+            <p class="help-block">Manage email subscribers for this blog.</p>
+            <div id="subscribersList" style="max-height: 200px; overflow-y: auto; margin-bottom: 10px; font-size: 12px;"></div>
+            <div class="btn-group" style="margin-bottom: 10px;">
+              <button id="importSubscribersButton" class="btn btn-default btn-sm" type="button">
+                <span class="glyphicon glyphicon-import"></span> Import CSV
+              </button>
+              <button id="exportSubscribersButton" class="btn btn-default btn-sm" type="button">
+                <span class="glyphicon glyphicon-export"></span> Export CSV
+              </button>
+            </div>
+            <input type="file" id="subscribersCsvInput" accept=".csv" style="display: none;">
+            <p id="subscribersImportStatus" style="display: none; margin-top: 5px; font-size: 12px;"></p>
+            <hr style="margin: 10px 0;">
+            <label>Notify Subscribers</label>
+            <p class="help-block">Send an email to all subscribers about a post.</p>
+            <div class="form-group">
+              <select id="notifyPostSelect" class="form-control input-sm">
+                <option value="">Select a post...</option>
+              </select>
+            </div>
+            <button id="notifySubscribersButton" class="btn btn-warning btn-sm" type="button" disabled>
+              <span class="glyphicon glyphicon-envelope"></span> Send Notification
+            </button>
+            <p id="notifyStatus" style="display: none; margin-top: 5px; font-size: 12px;"></p>
+          </div>
+          <hr>
           <div class="form-group">
             <label>Download Site</label>
             <p class="help-block">Download this site as a ZIP file including all files and git history.</p>

@@ -959,6 +959,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.getElementById("showHistoryCheckbox").checked = false;
       }
 
+      // Show/hide subscribers section for blog sites
+      const subscribersSection = document.getElementById("subscribersSection");
+      if (currentSiteType === "blog" && isOwner) {
+        subscribersSection.style.display = "block";
+        loadSubscribersPanel(currentSiteId);
+      } else {
+        subscribersSection.style.display = "none";
+      }
+
       // Show modal with loading state
       const collaboratorsList = document.getElementById("collaboratorsList");
       collaboratorsList.innerHTML = "<p style='color: #888;'>Loading collaborators...</p>";
@@ -1091,6 +1100,148 @@ document.addEventListener("DOMContentLoaded", async function () {
       } finally {
         saveButton.disabled = false;
         saveButton.textContent = originalText;
+      }
+    });
+
+  // Handle subscriber CSV import button
+  document
+    .getElementById("importSubscribersButton")
+    .addEventListener("click", function () {
+      document.getElementById("subscribersCsvInput").click();
+    });
+
+  // Handle CSV file selection
+  document
+    .getElementById("subscribersCsvInput")
+    .addEventListener("change", async function (e) {
+      const file = e.target.files[0];
+      if (!file || !currentSiteId) return;
+
+      const statusEl = document.getElementById("subscribersImportStatus");
+      statusEl.style.display = "block";
+      statusEl.className = "text-info";
+      statusEl.textContent = "Parsing CSV...";
+
+      try {
+        const text = await file.text();
+        const emails = parseCsvForEmails(text);
+
+        if (emails.length === 0) {
+          statusEl.className = "text-danger";
+          statusEl.textContent = "No valid email addresses found in the CSV.";
+          return;
+        }
+
+        statusEl.textContent = `Found ${emails.length} emails. Importing...`;
+
+        const result = await importSubscribers(currentSiteId, emails);
+        statusEl.className = "text-success";
+        statusEl.textContent = `Imported ${result.imported} subscribers. ${result.skipped} skipped (duplicates or invalid).`;
+
+        // Refresh the list
+        await loadSubscribersPanel(currentSiteId);
+      } catch (error) {
+        statusEl.className = "text-danger";
+        statusEl.textContent = "Failed to import: " + error.message;
+      } finally {
+        // Reset file input
+        e.target.value = "";
+      }
+    });
+
+  // Handle subscriber CSV export
+  document
+    .getElementById("exportSubscribersButton")
+    .addEventListener("click", async function () {
+      if (!currentSiteId) return;
+
+      try {
+        const data = await getSubscribers(currentSiteId);
+        if (data.subscribers.length === 0) {
+          alert("No subscribers to export.");
+          return;
+        }
+
+        let csv = "Email,Subscribed Date\n";
+        for (const sub of data.subscribers) {
+          csv += `${sub.email},${sub.subscribedAt}\n`;
+        }
+
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `subscribers-${currentSiteId.replace("/", "-")}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        alert("Failed to export subscribers: " + error.message);
+      }
+    });
+
+  // Handle notify post selection
+  document
+    .getElementById("notifyPostSelect")
+    .addEventListener("change", function () {
+      const btn = document.getElementById("notifySubscribersButton");
+      btn.disabled = !this.value;
+    });
+
+  // Handle notify subscribers button
+  document
+    .getElementById("notifySubscribersButton")
+    .addEventListener("click", async function () {
+      const select = document.getElementById("notifyPostSelect");
+      const statusEl = document.getElementById("notifyStatus");
+
+      if (!select.value || !currentSiteId) return;
+
+      const selectedOption = select.options[select.selectedIndex];
+      const postTitle = selectedOption.textContent;
+      const postFileName = select.value;
+
+      // Build the post URL
+      const postUrl = `https://agorapages.com/s/${currentSiteId}/`;
+
+      const btn = this;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="glyphicon glyphicon-refresh"></span> Sending...';
+      statusEl.style.display = "block";
+      statusEl.className = "text-info";
+      statusEl.textContent = "Sending emails...";
+
+      try {
+        // Get a short excerpt from the post
+        let excerpt = "";
+        try {
+          const content = await getFileContent(currentSiteId, `public/${postFileName}.md`);
+          if (content) {
+            // Strip frontmatter and get first ~200 chars
+            const bodyMatch = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)/);
+            const body = bodyMatch ? bodyMatch[1] : content;
+            excerpt = body.replace(/[#*_`\[\]()]/g, "").trim().substring(0, 200);
+            if (body.trim().length > 200) excerpt += "...";
+          }
+        } catch (e) {
+          // Excerpt is optional
+        }
+
+        const result = await notifySubscribers(currentSiteId, postTitle, excerpt, postUrl);
+
+        statusEl.className = "text-success";
+        if (result.sent === 0 && result.total === 0) {
+          statusEl.textContent = "No subscribers to notify.";
+        } else {
+          statusEl.textContent = `Sent to ${result.sent} of ${result.total} subscribers.${result.failed > 0 ? ` ${result.failed} failed.` : ""}`;
+        }
+      } catch (error) {
+        statusEl.className = "text-danger";
+        statusEl.textContent = "Failed to send: " + error.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="glyphicon glyphicon-envelope"></span> Send Notification';
       }
     });
 
@@ -2141,3 +2292,131 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
 });
+
+// ==================== Subscriber Management Functions ====================
+
+async function loadSubscribersPanel(siteId) {
+  const listEl = document.getElementById("subscribersList");
+  const countEl = document.getElementById("subscriberCount");
+  const postSelect = document.getElementById("notifyPostSelect");
+
+  try {
+    const data = await getSubscribers(siteId);
+    countEl.textContent = data.count;
+
+    if (data.subscribers.length === 0) {
+      listEl.innerHTML = '<p style="color: #888; font-size: 12px;">No subscribers yet.</p>';
+    } else {
+      let html = '<table class="table table-condensed" style="margin-bottom: 0; font-size: 12px;"><tbody>';
+      for (const sub of data.subscribers) {
+        const date = new Date(sub.subscribedAt).toLocaleDateString();
+        html += `<tr>
+          <td>${escapeHtmlOnLoad(sub.email)}</td>
+          <td style="color: #888;">${date}</td>
+          <td style="width: 30px;">
+            <button class="btn btn-xs btn-danger remove-subscriber-btn" data-id="${sub.id}" title="Remove">
+              <span class="glyphicon glyphicon-remove"></span>
+            </button>
+          </td>
+        </tr>`;
+      }
+      html += '</tbody></table>';
+      listEl.innerHTML = html;
+
+      // Attach remove handlers
+      listEl.querySelectorAll(".remove-subscriber-btn").forEach(btn => {
+        btn.addEventListener("click", async function () {
+          const subId = this.dataset.id;
+          if (!confirm("Remove this subscriber?")) return;
+          this.disabled = true;
+          try {
+            await removeSubscriber(siteId, subId);
+            await loadSubscribersPanel(siteId);
+          } catch (e) {
+            alert("Failed to remove subscriber.");
+            this.disabled = false;
+          }
+        });
+      });
+    }
+  } catch (error) {
+    listEl.innerHTML = '<p style="color: #888; font-size: 12px;">Could not load subscribers.</p>';
+    countEl.textContent = "0";
+  }
+
+  // Populate the post select for notifications
+  try {
+    const pagesContent = await getFileContent(siteId, "public/pages.json");
+    postSelect.innerHTML = '<option value="">Select a post...</option>';
+    if (pagesContent) {
+      const pages = JSON.parse(pagesContent);
+      for (const page of pages) {
+        const option = document.createElement("option");
+        option.value = page.fileName;
+        option.textContent = page.displayName || page.fileName;
+        postSelect.appendChild(option);
+      }
+    }
+  } catch (error) {
+    console.error("Error loading posts for notify:", error);
+  }
+}
+
+function parseCsvForEmails(csvText) {
+  const lines = csvText.split(/\r?\n/).filter(line => line.trim());
+  if (lines.length === 0) return [];
+
+  // Parse header to find email column
+  const headerLine = lines[0];
+  const separator = headerLine.includes("\t") ? "\t" : ",";
+  const headers = headerLine.split(separator).map(h => h.trim().replace(/^["']|["']$/g, "").toLowerCase());
+
+  // Find email column index
+  let emailIndex = headers.findIndex(h =>
+    h === "email" || h === "email address" || h === "email_address" || h === "e-mail"
+  );
+
+  // Find status column index (if any)
+  const statusIndex = headers.findIndex(h =>
+    h === "status" || h === "state" || h === "subscription_status"
+  );
+
+  // If no email header found, check if first column contains emails
+  if (emailIndex === -1) {
+    const firstDataLine = lines[1] ? lines[1].split(separator) : [];
+    for (let i = 0; i < firstDataLine.length; i++) {
+      const val = firstDataLine[i].trim().replace(/^["']|["']$/g, "");
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        emailIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (emailIndex === -1) return [];
+
+  const results = [];
+  // Start from line 1 (skip header), unless header row itself had no recognizable headers
+  const startLine = headers.some(h => h.includes("@")) ? 0 : 1;
+
+  for (let i = startLine; i < lines.length; i++) {
+    const cols = lines[i].split(separator).map(c => c.trim().replace(/^["']|["']$/g, ""));
+    const email = (cols[emailIndex] || "").trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+
+    if (statusIndex !== -1) {
+      const status = (cols[statusIndex] || "").trim();
+      results.push({ email, status });
+    } else {
+      results.push(email);
+    }
+  }
+
+  return results;
+}
+
+function escapeHtmlOnLoad(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}

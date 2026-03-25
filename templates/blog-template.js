@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   createBlogHeader(siteName);
   await loadBlogPosts(origin, basePath, pagesJson);
+  createSubscribeWidget(origin, basePath, siteName);
   createFooter(origin, basePath, showHistory);
 });
 
@@ -650,6 +651,75 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+function createSubscribeWidget(origin, basePath, siteName) {
+  // Derive siteId from basePath (e.g., "/s/username/sitename" -> "username/sitename")
+  let siteId = "";
+  if (basePath) {
+    const parts = basePath.split("/").filter(Boolean);
+    // parts = ["s", "username", "sitename"]
+    if (parts.length >= 3 && parts[0] === "s") {
+      siteId = parts[1] + "/" + parts[2];
+    }
+  }
+
+  if (!siteId) return;
+
+  const widget = document.createElement("div");
+  widget.className = "subscribe-widget";
+  widget.innerHTML = `
+    <h3 class="subscribe-title">Subscribe to ${escapeHtml(siteName)}</h3>
+    <p class="subscribe-description">Get notified when new posts are published.</p>
+    <form class="subscribe-form" id="subscribeForm">
+      <input type="email" class="subscribe-input" id="subscribeEmail" placeholder="Enter your email" required>
+      <button type="submit" class="subscribe-button" id="subscribeButton">Subscribe</button>
+    </form>
+    <p class="subscribe-status" id="subscribeStatus"></p>
+  `;
+
+  document.body.appendChild(widget);
+
+  const form = document.getElementById("subscribeForm");
+  const emailInput = document.getElementById("subscribeEmail");
+  const button = document.getElementById("subscribeButton");
+  const status = document.getElementById("subscribeStatus");
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const email = emailInput.value.trim();
+    if (!email) return;
+
+    button.disabled = true;
+    button.textContent = "Subscribing...";
+    status.textContent = "";
+    status.className = "subscribe-status";
+
+    try {
+      const response = await fetch(`${origin}/api/subscribers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, email }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        status.textContent = "You're subscribed! You'll receive an email when new posts are published.";
+        status.className = "subscribe-status subscribe-success";
+        emailInput.value = "";
+      } else {
+        status.textContent = result.message || "Failed to subscribe. Please try again.";
+        status.className = "subscribe-status subscribe-error";
+      }
+    } catch (err) {
+      status.textContent = "An error occurred. Please try again.";
+      status.className = "subscribe-status subscribe-error";
+    } finally {
+      button.disabled = false;
+      button.textContent = "Subscribe";
+    }
+  });
 }
 
 function createFooter(origin, basePath, showHistory) {

@@ -1246,3 +1246,72 @@ async function getSharedSites(username) {
   return await response.json();
 }
 
+// ==================== Subscriber / Mailing List Functions ====================
+
+async function getSubscribers(siteId) {
+  const params = new URLSearchParams({ siteId });
+  const response = await fetch(`/api/subscribers?${params.toString()}`);
+
+  if (!response.ok) {
+    console.error("Failed to fetch subscribers:", response.status);
+    return { subscribers: [], count: 0 };
+  }
+
+  return await response.json();
+}
+
+async function removeSubscriber(siteId, subscriberId) {
+  const params = new URLSearchParams({ siteId, id: subscriberId });
+  const headers = await getHeadersWithTurnstile();
+
+  const response = await fetch(`/api/subscribers?${params.toString()}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  return response.ok;
+}
+
+async function importSubscribers(siteId, emails) {
+  const headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+
+  const response = await fetch("/api/subscribers", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ siteId, emails }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  return await response.json();
+}
+
+async function notifySubscribers(siteId, postTitle, postExcerpt, postUrl) {
+  const headers = await getHeadersWithTurnstile({
+    "Content-Type": "application/json",
+  });
+
+  const response = await fetch("/api/notify", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ siteId, postTitle, postExcerpt, postUrl }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    try {
+      const json = JSON.parse(text);
+      throw new Error(json.message || "Failed to send notifications");
+    } catch (e) {
+      if (e.message !== "Failed to send notifications") throw e;
+      throw new Error(text);
+    }
+  }
+
+  return await response.json();
+}
+

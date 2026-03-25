@@ -162,6 +162,15 @@ export async function onRequestDelete(context) {
         "DELETE FROM Collaborators WHERE siteId = ?"
       ).bind(siteId).run();
 
+      // Delete subscribers for this site
+      try {
+        await env.USERS_DB.prepare(
+          "DELETE FROM Subscribers WHERE siteId = ?"
+        ).bind(siteId).run();
+      } catch {
+        // Subscribers table may not exist yet
+      }
+
       // Delete site config from D1
       await env.USERS_DB.prepare(
         "DELETE FROM Sites WHERE siteId = ?"

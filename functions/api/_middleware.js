@@ -49,6 +49,18 @@ export async function onRequest(context) {
     return next();
   }
 
+  // Skip Turnstile validation for public subscriber operations:
+  // - POST to subscribe (from public blog pages without Turnstile)
+  // - DELETE with token param (unsubscribe via email link)
+  if (url.pathname === "/api/subscribers") {
+    if (method === "POST" && !request.headers.get("X-Turnstile-Token")) {
+      return next();
+    }
+    if (method === "DELETE" && url.searchParams.get("token")) {
+      return next();
+    }
+  }
+
   // Get the Turnstile secret key from environment
   const secretKey = env.TURNSTILE_SECRET_KEY;
   if (!secretKey) {
