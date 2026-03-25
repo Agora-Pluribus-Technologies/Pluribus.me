@@ -948,15 +948,18 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (siteJsonContent) {
           const siteJson = JSON.parse(siteJsonContent);
           document.getElementById("showHistoryCheckbox").checked = siteJson.showHistory || false;
+          document.getElementById("blogEmailUrl").value = siteJson.blogEmailUrl || "";
           if (siteJson.siteName) {
             document.getElementById("siteSettingsNameInput").value = siteJson.siteName;
           }
         } else {
           document.getElementById("showHistoryCheckbox").checked = false;
+          document.getElementById("blogEmailUrl").value = "";
         }
       } catch (error) {
         console.error("Error loading site.json:", error);
         document.getElementById("showHistoryCheckbox").checked = false;
+        document.getElementById("blogEmailUrl").value = "";
       }
 
       // Show/hide subscribers section for blog sites
@@ -1062,6 +1065,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Update showHistory setting
         const showHistory = document.getElementById("showHistoryCheckbox").checked;
         siteJson.showHistory = showHistory;
+
+        // Update blog email URL
+        const blogEmailUrl = document.getElementById("blogEmailUrl").value.trim();
+        if (blogEmailUrl) {
+          siteJson.blogEmailUrl = blogEmailUrl;
+        } else {
+          delete siteJson.blogEmailUrl;
+        }
 
         // Update site display name
         const newDisplayName = document.getElementById("siteSettingsNameInput").value.trim();

@@ -1708,10 +1708,23 @@ async function autoPublishBlogSettings() {
 }
 
 // Notify subscribers when a new blog post is published (fire-and-forget)
-function notifySubscribersOfNewPost(siteId, postTitle, postContent) {
+async function notifySubscribersOfNewPost(siteId, postTitle, postContent) {
   if (!siteId || !postTitle) return;
 
-  const postUrl = `https://agorapages.com/s/${siteId}/`;
+  // Read custom blog URL from site.json, fall back to AgoraPages URL
+  let postUrl = `https://agorapages.com/s/${siteId}/`;
+  try {
+    const siteJsonContent = await getFileContent(siteId, "public/site.json");
+    if (siteJsonContent) {
+      const siteJson = JSON.parse(siteJsonContent);
+      if (siteJson.blogEmailUrl) {
+        // Ensure trailing slash
+        postUrl = siteJson.blogEmailUrl.replace(/\/?$/, "/");
+      }
+    }
+  } catch (e) {
+    // Use default URL
+  }
 
   // Extract excerpt from post body
   let excerpt = "";
