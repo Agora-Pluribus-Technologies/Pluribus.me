@@ -688,10 +688,13 @@ function createFooter(origin, basePath, showHistory, siteName) {
     footer.appendChild(widget);
   }
 
+  const footerRight = document.createElement("div");
+  footerRight.className = "footer-right";
+
   const poweredBy = document.createElement("span");
   poweredBy.innerHTML =
     'Powered by <a href="https://agorapages.com" target="_blank">AgoraPages.com</a>';
-  footer.appendChild(poweredBy);
+  footerRight.appendChild(poweredBy);
 
   if (showHistory) {
     const historyLink = document.createElement("span");
@@ -700,7 +703,7 @@ function createFooter(origin, basePath, showHistory, siteName) {
     historyLink.addEventListener("click", function () {
       showHistoryModal(origin, basePath);
     });
-    footer.appendChild(historyLink);
+    footerRight.appendChild(historyLink);
   }
 
   const themeToggle = document.createElement("button");
@@ -710,7 +713,9 @@ function createFooter(origin, basePath, showHistory, siteName) {
   themeToggle.addEventListener("click", toggleTheme);
   themeToggle.addEventListener("mouseenter", showThemePreview);
   themeToggle.addEventListener("mouseleave", hideThemePreview);
-  footer.appendChild(themeToggle);
+  footerRight.appendChild(themeToggle);
+
+  footer.appendChild(footerRight);
 
   document.body.appendChild(footer);
 
