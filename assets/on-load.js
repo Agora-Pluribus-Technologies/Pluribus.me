@@ -1181,70 +1181,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
 
-  // Handle notify post selection
-  document
-    .getElementById("notifyPostSelect")
-    .addEventListener("change", function () {
-      const btn = document.getElementById("notifySubscribersButton");
-      btn.disabled = !this.value;
-    });
-
-  // Handle notify subscribers button
-  document
-    .getElementById("notifySubscribersButton")
-    .addEventListener("click", async function () {
-      const select = document.getElementById("notifyPostSelect");
-      const statusEl = document.getElementById("notifyStatus");
-
-      if (!select.value || !currentSiteId) return;
-
-      const selectedOption = select.options[select.selectedIndex];
-      const postTitle = selectedOption.textContent;
-      const postFileName = select.value;
-
-      // Build the post URL
-      const postUrl = `https://agorapages.com/s/${currentSiteId}/`;
-
-      const btn = this;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="glyphicon glyphicon-refresh"></span> Sending...';
-      statusEl.style.display = "block";
-      statusEl.className = "text-info";
-      statusEl.textContent = "Sending emails...";
-
-      try {
-        // Get a short excerpt from the post
-        let excerpt = "";
-        try {
-          const content = await getFileContent(currentSiteId, `public/${postFileName}.md`);
-          if (content) {
-            // Strip frontmatter and get first ~200 chars
-            const bodyMatch = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)/);
-            const body = bodyMatch ? bodyMatch[1] : content;
-            excerpt = body.replace(/[#*_`\[\]()]/g, "").trim().substring(0, 200);
-            if (body.trim().length > 200) excerpt += "...";
-          }
-        } catch (e) {
-          // Excerpt is optional
-        }
-
-        const result = await notifySubscribers(currentSiteId, postTitle, excerpt, postUrl);
-
-        statusEl.className = "text-success";
-        if (result.sent === 0 && result.total === 0) {
-          statusEl.textContent = "No subscribers to notify.";
-        } else {
-          statusEl.textContent = `Sent to ${result.sent} of ${result.total} subscribers.${result.failed > 0 ? ` ${result.failed} failed.` : ""}`;
-        }
-      } catch (error) {
-        statusEl.className = "text-danger";
-        statusEl.textContent = "Failed to send: " + error.message;
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span class="glyphicon glyphicon-envelope"></span> Send Notification';
-      }
-    });
-
   // Handle download site button click
   document
     .getElementById("downloadSiteButton")
@@ -2342,23 +2278,6 @@ async function loadSubscribersPanel(siteId) {
   } catch (error) {
     listEl.innerHTML = '<p style="color: #888; font-size: 12px;">Could not load subscribers.</p>';
     countEl.textContent = "0";
-  }
-
-  // Populate the post select for notifications
-  try {
-    const pagesContent = await getFileContent(siteId, "public/pages.json");
-    postSelect.innerHTML = '<option value="">Select a post...</option>';
-    if (pagesContent) {
-      const pages = JSON.parse(pagesContent);
-      for (const page of pages) {
-        const option = document.createElement("option");
-        option.value = page.fileName;
-        option.textContent = page.displayName || page.fileName;
-        postSelect.appendChild(option);
-      }
-    }
-  } catch (error) {
-    console.error("Error loading posts for notify:", error);
   }
 }
 
