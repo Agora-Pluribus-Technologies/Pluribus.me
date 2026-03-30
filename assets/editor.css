@@ -263,6 +263,50 @@ nav {
   color: #ff0000;
 }
 
+/* Site type cards */
+.site-type-cards {
+  display: flex;
+  gap: 12px;
+}
+
+.site-type-card {
+  flex: 1;
+  padding: 16px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  text-align: center;
+}
+
+.site-type-card:hover {
+  border-color: var(--text-muted);
+}
+
+.site-type-card.selected {
+  border-color: var(--accent-color);
+  background: var(--bg-primary);
+}
+
+.site-type-card-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.site-type-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.site-type-card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 /* List group styles */
 .list-group {
   margin-bottom: 0;

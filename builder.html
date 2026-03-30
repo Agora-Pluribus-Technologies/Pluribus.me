@@ -114,12 +114,20 @@
               </div>
             </div>
             <div class="form-group">
-              <label for="siteType">Site Type</label>
-              <select class="form-control" id="siteType" required>
-                <option value="pages">Pages - Multiple pages with navigation</option>
-                <option value="blog">Blog - Single page feed of posts</option>
-              </select>
-              <p class="help-block" id="siteTypeHelp">Each markdown file becomes a separate page with its own URL.</p>
+              <label>Site Type</label>
+              <input type="hidden" id="siteType" value="pages">
+              <div class="site-type-cards">
+                <div class="site-type-card selected" data-value="pages">
+                  <div class="site-type-card-icon">&#x1F4C4;</div>
+                  <div class="site-type-card-title">Pages</div>
+                  <div class="site-type-card-desc">Multiple pages with navigation. Each markdown file becomes a separate page with its own URL.</div>
+                </div>
+                <div class="site-type-card" data-value="blog">
+                  <div class="site-type-card-icon">&#x270D;&#xFE0F;</div>
+                  <div class="site-type-card-title">Blog</div>
+                  <div class="site-type-card-desc">Single page feed of posts. Each markdown file is a blog post with title, date, and tags.</div>
+                </div>
+              </div>
             </div>
           </form>
         </div>
@@ -450,14 +458,13 @@
     // Initialize theme on page load
     initTheme();
 
-    // Site type dropdown help text
-    document.getElementById('siteType').addEventListener('change', function() {
-      const helpText = document.getElementById('siteTypeHelp');
-      if (this.value === 'blog') {
-        helpText.textContent = 'Posts appear in a single-page feed. Each markdown file is a blog post with title, date, and tags.';
-      } else {
-        helpText.textContent = 'Each markdown file becomes a separate page with its own URL.';
-      }
+    // Site type card selection
+    document.querySelectorAll('.site-type-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('.site-type-card').forEach(function(c) { c.classList.remove('selected'); });
+        card.classList.add('selected');
+        document.getElementById('siteType').value = card.dataset.value;
+      });
     });
   </script>
 </body>

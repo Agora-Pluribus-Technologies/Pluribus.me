@@ -654,7 +654,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     document.getElementById("siteNamePrefix").textContent = username + "/";
     document.getElementById("siteName").value = "";
     document.getElementById("siteType").value = "pages";
-    document.getElementById("siteTypeHelp").textContent = "Each markdown file becomes a separate page with its own URL.";
+    document.querySelectorAll(".site-type-card").forEach(function(c) { c.classList.remove("selected"); });
+    const defaultCard = document.querySelector('.site-type-card[data-value="pages"]');
+    if (defaultCard) defaultCard.classList.add("selected");
   });
 
   // Handle create site form submission
