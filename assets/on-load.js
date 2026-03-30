@@ -202,20 +202,23 @@ async function openSiteInEditor(site, initialPage = "index") {
 
   console.log("Markdown files:", markdownFiles);
   if (markdownFiles.length === 0) {
-    // No markdown files found - create a dummy home.md
-    console.log("Site is empty - created dummy home.md");
-    addOrUpdateCache(
-      "public/home.md",
-      "Home",
-      "# Welcome to your Agora Site!\n\nThis is your site's homepage. Edit this file to customize your site."
-    );
     // Initialize empty imageCache
     imageCache = [];
-    // Mark as modified for new sites (needs to be published)
-    modified = true;
-    updateDeployButtonState();
     // Disable Visit Site button for unpublished sites
     setSiteAvailable(false);
+
+    // For pages sites, create a default home page; blog sites start empty
+    if (site.siteType !== "blog") {
+      console.log("Site is empty - created dummy home.md");
+      addOrUpdateCache(
+        "public/home.md",
+        "Home",
+        "# Welcome to your Agora Site!\n\nThis is your site's homepage. Edit this file to customize your site."
+      );
+      // Mark as modified for new sites (needs to be published)
+      modified = true;
+      updateDeployButtonState();
+    }
   } else {
     // Site has been published before, enable Visit Site button
     setSiteAvailable(true);

@@ -12,7 +12,23 @@ function generateBlockId() {
 // Image Processing Functions (kept from original)
 // ============================================
 
+function isHeicFile(file) {
+  const type = (file.type || '').toLowerCase();
+  if (type === 'image/heic' || type === 'image/heif') return true;
+  const name = (file.name || '').toLowerCase();
+  return name.endsWith('.heic') || name.endsWith('.heif');
+}
+
+async function convertHeicToJpeg(file) {
+  const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+  return Array.isArray(blob) ? blob[0] : blob;
+}
+
 async function processImage(file) {
+  if (isHeicFile(file)) {
+    file = await convertHeicToJpeg(file);
+  }
+
   return new Promise((resolve, reject) => {
     const img = new Image();
     const reader = new FileReader();
@@ -730,7 +746,7 @@ function showImageUploadPopup(callback, currentCaption = '') {
         <button class="popup-close">&times;</button>
       </div>
       <div class="image-upload-dropzone" id="imageDropzone">
-        <input type="file" id="imageFileInput" accept="image/*" style="display: none;" />
+        <input type="file" id="imageFileInput" accept="image/*,.heic,.heif" style="display: none;" />
         <div class="dropzone-content">
           <p class="dropzone-icon">&#x1F4C1;</p>
           <p>Click to upload a new image or drag and drop here</p>
@@ -813,7 +829,7 @@ function showImageUploadPopup(callback, currentCaption = '') {
     e.preventDefault();
     dropzone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
+    if (file && (file.type.startsWith('image/') || isHeicFile(file))) {
       await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput, confirmBtn);
     } else {
       alert('Please drop an image file');
