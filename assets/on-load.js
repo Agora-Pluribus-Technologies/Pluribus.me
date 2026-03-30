@@ -731,7 +731,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             repo: repo,
             branch: "main",
             basePath: "/public",
-            displayName: siteName,
+            displayName: rawSiteName,
             siteType: siteType,
           }),
         });
@@ -756,7 +756,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           repo: repo,
           branch: "main",
           basePath: "/public",
-          displayName: siteName,
+          displayName: rawSiteName,
           siteType: siteType,
         };
         sitesCache.unshift(newSite);
