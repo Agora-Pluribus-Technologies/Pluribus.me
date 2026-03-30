@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const siteName = siteJson ? (siteJson.displayName || siteJson.siteName) : "Blog";
   const showHistory = siteJson ? siteJson.showHistory : false;
 
-  document.title = siteName;
+  document.title = siteName + " \u2022 AgoraPages";
 
   createBlogHeader(siteName);
   await loadBlogPosts(sourceBaseUrl, pagesJson);
