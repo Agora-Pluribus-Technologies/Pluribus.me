@@ -696,6 +696,7 @@ function guessContentType(filename) {
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const { siteName, repo, owner, siteType } = siteSettings;
+  const isBlog = siteType === "blog";
 
   const siteJson = {
     siteName: siteName || repo || "Untitled Site",
@@ -705,10 +706,25 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     createdAt: new Date().toISOString(),
   };
 
-  // Initialize git repository and create initial commit
+  // Create default home page content for pages sites
+  const defaultHomeContent = "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above.";
+  const now = new Date().toISOString();
+  const pagesJson = isBlog ? [] : [
+    {
+      displayName: "Home",
+      fileName: "home",
+      createdAt: now,
+      modifiedAt: now,
+    },
+  ];
+
+  // Initialize git repository and create initial commit with content
   await gitInit(siteId);
-  await gitWriteFile(siteId, "public/pages.json", "[]");
+  await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pagesJson));
   await gitWriteFile(siteId, "public/images.json", "[]");
+  if (!isBlog) {
+    await gitWriteFile(siteId, "public/home.md", defaultHomeContent);
+  }
   await gitCommit(siteId, "Initial commit");
   console.log("Git repo initialized for site:", siteId);
 
@@ -720,11 +736,35 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   }
   const gitHistoryJson = JSON.stringify(gitData);
 
-  // Combine all files into a single batch
+  // Fetch the appropriate template for the initial deploy
+  const templatePath = isBlog ? "/templates/blog-template.html" : "/templates/owo-template.html";
+  let templateHtml = "";
+  try {
+    const templateResp = await fetch(templatePath, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache, must-revalidate" },
+    });
+    if (templateResp.ok) {
+      templateHtml = await templateResp.text();
+    }
+  } catch (e) {
+    console.warn("Failed to fetch template for initial deploy:", e);
+  }
+
+  // Build initial history.json
+  const historyJson = [{
+    shortSha: "initial",
+    date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(),
+    message: "Initial commit",
+    author: owner || "Unknown",
+    changes: [],
+  }];
+
+  // Combine all files into a single batch — full deploy so site is immediately live
   const files = [
     {
       filePath: "public/pages.json",
-      content: "[]",
+      content: JSON.stringify(pagesJson),
       contentType: "application/json",
     },
     {
@@ -738,15 +778,44 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
       contentType: "application/json",
     },
     {
+      filePath: "public/history.json",
+      content: JSON.stringify(historyJson),
+      contentType: "application/json",
+    },
+    {
       filePath: ".git-history.json",
       content: gitHistoryJson,
       contentType: "application/json",
     },
   ];
 
+  // Add template and home page content for pages sites
+  if (templateHtml) {
+    files.push({
+      filePath: "public/index.html",
+      content: templateHtml,
+      contentType: "text/html",
+    });
+  }
+
+  if (!isBlog) {
+    files.push({
+      filePath: "public/home.md",
+      content: defaultHomeContent,
+      contentType: "text/markdown",
+    });
+    if (templateHtml) {
+      files.push({
+        filePath: "public/home.html",
+        content: templateHtml,
+        contentType: "text/html",
+      });
+    }
+  }
+
   const result = await saveFilesToR2(siteId, files);
   if (result) {
-    console.log("Initial commit with git history completed successfully (single R2 call)");
+    console.log("Initial commit with full deploy completed successfully");
   }
   return result;
 }

@@ -7,6 +7,253 @@ let currentSiteType = "pages"; // "pages" or "blog"
 let lastDeployTimeInterval = null;
 let modified = false;
 
+// ==================== Auto-Save to localStorage ====================
+
+let _autoSaveTimer = null;
+const AUTO_SAVE_DELAY = 2000; // 2 seconds debounce
+
+function getAutoSaveKey(siteId) {
+  return `agorapages_autosave_${siteId}`;
+}
+
+function scheduleAutoSave() {
+  if (!currentSiteId || !modified) return;
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => performAutoSave(), AUTO_SAVE_DELAY);
+}
+
+function performAutoSave() {
+  if (!currentSiteId || !modified) return;
+  try {
+    const payload = {
+      markdownCache: markdownCache,
+      imageCache: imageCache,
+      documentCache: documentCache,
+      currentSitePath: currentSitePath,
+      currentSiteType: currentSiteType,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(getAutoSaveKey(currentSiteId), JSON.stringify(payload));
+    console.log("Auto-saved to localStorage for site:", currentSiteId);
+
+    // Show auto-save indicator briefly
+    const indicator = document.getElementById("autoSaveStatus");
+    if (indicator) {
+      indicator.textContent = "Draft saved";
+      indicator.style.display = "inline";
+      setTimeout(() => { indicator.style.display = "none"; }, 2000);
+    }
+  } catch (e) {
+    console.warn("Auto-save failed:", e);
+  }
+}
+
+function getAutoSaveData(siteId) {
+  try {
+    const raw = localStorage.getItem(getAutoSaveKey(siteId));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearAutoSave(siteId) {
+  localStorage.removeItem(getAutoSaveKey(siteId));
+}
+
+function restoreAutoSave(siteId) {
+  const data = getAutoSaveData(siteId);
+  if (!data) return false;
+
+  markdownCache = data.markdownCache || [];
+  imageCache = data.imageCache || [];
+  documentCache = data.documentCache || [];
+  if (data.currentSitePath) {
+    currentSitePath = data.currentSitePath;
+  }
+  modified = true;
+  updateDeployButtonState();
+  console.log("Restored auto-save from", data.savedAt);
+  return true;
+}
+
+// ==================== Onboarding Tour ====================
+
+const TOUR_STEPS = [
+  {
+    target: '#pageMenubarContent .menubar-item',
+    title: 'Your Pages',
+    text: 'Each tab here is a page on your site. Click a tab to edit that page. You can drag tabs to reorder them.',
+    position: 'bottom',
+  },
+  {
+    target: '#addNewPageButton',
+    title: 'Create New Pages',
+    text: 'Click the + button to add a new page to your site. Give it a name and it will appear as a new tab.',
+    position: 'bottom',
+  },
+  {
+    target: '.add-block-btn',
+    title: 'Add Content Blocks',
+    text: 'Click any + button to add a content block — text panels, images, links, embeds, or documents. Blocks are the building pieces of your page.',
+    position: 'bottom',
+  },
+  {
+    target: '.block-item',
+    title: 'Edit & Rearrange Blocks',
+    text: 'Each block has an Edit button to change its content, an X to delete it, and a drag handle to reorder. Try editing the welcome text!',
+    position: 'top',
+  },
+  {
+    target: '#deployButton',
+    title: 'Publish Your Site',
+    text: 'When you\'re ready, click Publish Site to make your changes live. Your edits are auto-saved locally, so you won\'t lose work.',
+    position: 'bottom',
+  },
+  {
+    target: '#visitSiteButton',
+    title: 'View Your Live Site',
+    text: 'Click here to see your published site. Share the URL with anyone — your site is live on the web!',
+    position: 'bottom',
+  },
+];
+
+let _tourStep = 0;
+let _tourOverlay = null;
+let _tourPopup = null;
+
+function shouldShowTour(siteId) {
+  const key = `agorapages_tour_completed_${siteId}`;
+  return !localStorage.getItem(key);
+}
+
+function markTourCompleted(siteId) {
+  const key = `agorapages_tour_completed_${siteId}`;
+  localStorage.setItem(key, '1');
+}
+
+function startOnboardingTour() {
+  if (!currentSiteId || !shouldShowTour(currentSiteId)) return;
+  // Only show tour for pages sites (blog has different UI)
+  if (currentSiteType === 'blog') return;
+
+  _tourStep = 0;
+  showTourStep();
+}
+
+function showTourStep() {
+  cleanupTour();
+
+  if (_tourStep >= TOUR_STEPS.length) {
+    markTourCompleted(currentSiteId);
+    return;
+  }
+
+  const step = TOUR_STEPS[_tourStep];
+  const targetEl = document.querySelector(step.target);
+
+  // Skip step if target doesn't exist
+  if (!targetEl) {
+    _tourStep++;
+    showTourStep();
+    return;
+  }
+
+  // Create overlay
+  _tourOverlay = document.createElement('div');
+  _tourOverlay.className = 'tour-overlay';
+  document.body.appendChild(_tourOverlay);
+
+  // Highlight the target element
+  targetEl.classList.add('tour-highlight');
+
+  // Create popup
+  _tourPopup = document.createElement('div');
+  _tourPopup.className = 'tour-popup';
+
+  const stepIndicator = `Step ${_tourStep + 1} of ${TOUR_STEPS.length}`;
+  _tourPopup.innerHTML = `
+    <div class="tour-popup-header">
+      <span class="tour-step-indicator">${stepIndicator}</span>
+      <button class="tour-close-btn" title="Skip tour">&times;</button>
+    </div>
+    <h4 class="tour-title">${step.title}</h4>
+    <p class="tour-text">${step.text}</p>
+    <div class="tour-buttons">
+      ${_tourStep > 0 ? '<button class="tour-btn tour-btn-back">Back</button>' : ''}
+      <button class="tour-btn tour-btn-next">${_tourStep === TOUR_STEPS.length - 1 ? 'Done' : 'Next'}</button>
+    </div>
+  `;
+
+  document.body.appendChild(_tourPopup);
+
+  // Position the popup relative to the target
+  positionTourPopup(targetEl, step.position);
+
+  // Event listeners
+  _tourPopup.querySelector('.tour-close-btn').addEventListener('click', () => {
+    cleanupTour();
+    markTourCompleted(currentSiteId);
+  });
+
+  _tourPopup.querySelector('.tour-btn-next').addEventListener('click', () => {
+    targetEl.classList.remove('tour-highlight');
+    _tourStep++;
+    showTourStep();
+  });
+
+  const backBtn = _tourPopup.querySelector('.tour-btn-back');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      targetEl.classList.remove('tour-highlight');
+      _tourStep--;
+      showTourStep();
+    });
+  }
+
+  // Close on overlay click
+  _tourOverlay.addEventListener('click', () => {
+    cleanupTour();
+    markTourCompleted(currentSiteId);
+  });
+}
+
+function positionTourPopup(targetEl, position) {
+  const rect = targetEl.getBoundingClientRect();
+  const popupRect = _tourPopup.getBoundingClientRect();
+  let top, left;
+
+  if (position === 'bottom') {
+    top = rect.bottom + 12;
+    left = rect.left + rect.width / 2 - popupRect.width / 2;
+  } else {
+    top = rect.top - popupRect.height - 12;
+    left = rect.left + rect.width / 2 - popupRect.width / 2;
+  }
+
+  // Keep within viewport
+  left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
+  top = Math.max(10, Math.min(top, window.innerHeight - popupRect.height - 10));
+
+  _tourPopup.style.top = top + 'px';
+  _tourPopup.style.left = left + 'px';
+}
+
+function cleanupTour() {
+  if (_tourOverlay) {
+    _tourOverlay.remove();
+    _tourOverlay = null;
+  }
+  if (_tourPopup) {
+    _tourPopup.remove();
+    _tourPopup = null;
+  }
+  document.querySelectorAll('.tour-highlight').forEach(el => {
+    el.classList.remove('tour-highlight');
+  });
+}
+
 // Global cache for sites list
 let sitesCache = [];
 let sharedSitesCache = [];
@@ -201,7 +448,26 @@ async function openSiteInEditor(site, initialPage = "index") {
   const markdownFiles = await getPublicFiles(currentSiteId);
 
   console.log("Markdown files:", markdownFiles);
-  if (markdownFiles.length === 0) {
+
+  // Check for auto-saved data from a previous session
+  const autoSaveData = getAutoSaveData(currentSiteId);
+  let restoredFromAutoSave = false;
+
+  if (autoSaveData && autoSaveData.markdownCache && autoSaveData.markdownCache.length > 0) {
+    const savedTime = new Date(autoSaveData.savedAt).toLocaleString();
+    if (confirm(`You have unsaved changes from ${savedTime}. Would you like to restore them?`)) {
+      restoredFromAutoSave = restoreAutoSave(currentSiteId);
+      if (markdownFiles.length > 0) {
+        setSiteAvailable(true);
+      } else {
+        setSiteAvailable(false);
+      }
+    } else {
+      clearAutoSave(currentSiteId);
+    }
+  }
+
+  if (!restoredFromAutoSave && markdownFiles.length === 0) {
     // Initialize empty imageCache
     imageCache = [];
     // Disable Visit Site button for unpublished sites
@@ -213,13 +479,13 @@ async function openSiteInEditor(site, initialPage = "index") {
       addOrUpdateCache(
         "public/home.md",
         "Home",
-        "# Welcome to your Agora Site!\n\nThis is your site's homepage. Edit this file to customize your site."
+        "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above."
       );
       // Mark as modified for new sites (needs to be published)
       modified = true;
       updateDeployButtonState();
     }
-  } else {
+  } else if (!restoredFromAutoSave) {
     // Site has been published before, enable Visit Site button
     setSiteAvailable(true);
     // Initialize markdownCache from pages.json (exclude latest.md)
@@ -387,6 +653,9 @@ async function openSiteInEditor(site, initialPage = "index") {
         modified = false;
       }
     }
+
+    // Start onboarding tour after editor is fully rendered
+    setTimeout(() => startOnboardingTour(), 500);
   }, 100);
 }
 
@@ -794,7 +1063,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (modified) {
       if (
         confirm(
-          "You have unsaved changes. Are you sure you want to go back? All unsaved changes will be lost."
+          "You have unpublished changes. Your edits have been auto-saved and can be restored when you return."
         )
       ) {
         window.location.href = document.location.origin + "/builder.html";
@@ -1533,7 +1802,7 @@ async function triggerCreateNewSite(displayName) {
 
     // Add to markdownCache with default content
     const fileName = `public/${sanitizedFileName}.md`;
-    const content = `# ${displayName}\n\nYour content here...`;
+    const content = `# ${displayName}\n\nClick **Edit** on this panel to start writing. Use the **+** buttons to add more panels.`;
     addOrUpdateCache(fileName, displayName, content);
     console.log("New page added to cache:", displayName);
 
@@ -1566,6 +1835,11 @@ function updateDeployButtonState() {
       publishStatus.textContent = "Published";
       publishStatus.className = "publish-status published";
     }
+
+    // Clear auto-save when changes are published
+    if (currentSiteId) {
+      clearAutoSave(currentSiteId);
+    }
   } else {
     deployButton.disabled = false;
     deployButton.style.opacity = "1";
@@ -1577,6 +1851,9 @@ function updateDeployButtonState() {
       publishStatus.textContent = "Changes Not Yet Published";
       publishStatus.className = "publish-status pending-changes";
     }
+
+    // Schedule auto-save when there are unsaved changes
+    scheduleAutoSave();
   }
 }
 
