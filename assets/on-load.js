@@ -427,8 +427,12 @@ async function openSiteInEditor(site, initialPage = "index") {
 
   modified = false;
 
-  // Update deploy button state (should be disabled since not modified)
-  updateDeployButtonState();
+  // Set initial button state directly — do NOT call updateDeployButtonState()
+  // here because it would clear any pending auto-save before we offer recovery.
+  const deployButton = document.getElementById("deployButton");
+  deployButton.disabled = true;
+  deployButton.style.opacity = "0.5";
+  deployButton.style.cursor = "not-allowed";
 
   // Hide sites list panel
   const sitesListPanel = document.getElementById("sites-list-panel");
@@ -615,6 +619,9 @@ async function openSiteInEditor(site, initialPage = "index") {
     initBlockEditor();
   }
 
+  // Remember whether we restored from auto-save so we can preserve the modified flag
+  const wasRestoredFromAutoSave = restoredFromAutoSave;
+
   // Find and click the appropriate page tab
   setTimeout(() => {
     // Position menubar after DOM is ready
@@ -637,8 +644,10 @@ async function openSiteInEditor(site, initialPage = "index") {
           text.click();
           pageFound = true;
 
-          // Ensure modified flag is false on initial load
-          modified = false;
+          // Keep modified=true if we restored auto-save (user has unpublished edits)
+          if (!wasRestoredFromAutoSave) {
+            modified = false;
+          }
           break;
         }
       }
@@ -650,9 +659,14 @@ async function openSiteInEditor(site, initialPage = "index") {
       const firstPageTab = document.querySelector(".menubar-item .menubar-item-text");
       if (firstPageTab) {
         firstPageTab.click();
-        modified = false;
+        if (!wasRestoredFromAutoSave) {
+          modified = false;
+        }
       }
     }
+
+    // After initial load, sync the deploy button state
+    updateDeployButtonState();
 
     // Start onboarding tour after editor is fully rendered
     setTimeout(() => startOnboardingTour(), 500);
