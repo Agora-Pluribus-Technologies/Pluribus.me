@@ -1112,7 +1112,7 @@ function showDocumentUploadPopup(callback) {
         <div class="dropzone-content">
           <p class="dropzone-icon">&#x1F4C4;</p>
           <p>Click to select a PDF or DOCX file</p>
-          <p style="font-size: 12px; color: #888;">Max file size: 10 MB</p>
+          <p style="font-size: 12px; color: #888;">PDF or DOCX only. Max file size: 5 MB</p>
         </div>
       </div>
       <div class="document-upload-progress" style="display: none;">
@@ -1209,9 +1209,17 @@ function populateDocumentListForBlock(listElement, popup) {
 }
 
 async function handleDocumentUploadForBlock(file, popup, progressContainer, documentList) {
-  const maxSize = 10 * 1024 * 1024;
+  // Validate file type
+  const fileName = file.name.toLowerCase();
+  if (!fileName.endsWith('.pdf') && !fileName.endsWith('.docx')) {
+    alert('Only PDF and DOCX files are accepted.');
+    return;
+  }
+
+  // Validate file size
+  const maxSize = 5 * 1024 * 1024;
   if (file.size > maxSize) {
-    alert('File is too large. Maximum size is 10 MB.');
+    alert('File is too large. Maximum size is 5 MB.');
     return;
   }
 
