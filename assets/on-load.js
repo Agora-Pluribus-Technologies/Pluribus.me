@@ -458,17 +458,9 @@ async function openSiteInEditor(site, initialPage = "index") {
   let restoredFromAutoSave = false;
 
   if (autoSaveData && autoSaveData.markdownCache && autoSaveData.markdownCache.length > 0) {
-    const savedTime = new Date(autoSaveData.savedAt).toLocaleString();
-    if (confirm(`You have unsaved changes from ${savedTime}. Would you like to restore them?`)) {
-      restoredFromAutoSave = restoreAutoSave(currentSiteId);
-      if (markdownFiles.length > 0) {
-        setSiteAvailable(true);
-      } else {
-        setSiteAvailable(false);
-      }
-    } else {
-      clearAutoSave(currentSiteId);
-    }
+    restoredFromAutoSave = restoreAutoSave(currentSiteId);
+    setSiteAvailable(markdownFiles.length > 0);
+    console.log("Auto-restored unpublished changes from", autoSaveData.savedAt);
   }
 
   if (!restoredFromAutoSave && markdownFiles.length === 0) {
