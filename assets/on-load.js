@@ -914,15 +914,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Warn user before leaving page with unsaved changes
-  window.addEventListener("beforeunload", function (event) {
-    if (modified) {
-      event.preventDefault();
-      event.returnValue = ""; // Required for Chrome
-      return ""; // Required for some browsers
-    }
-  });
-
   // Set username prefix when create site modal is shown
   $("#createSiteModal").on("show.bs.modal", function () {
     const username = getStoredUsername();
@@ -1065,20 +1056,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Handle back button click
   document.getElementById("backButton").addEventListener("click", function () {
     console.log("Back button clicked");
-
-    if (modified) {
-      if (
-        confirm(
-          "You have unpublished changes. Your edits have been auto-saved and can be restored when you return."
-        )
-      ) {
-        window.location.href = document.location.origin + "/builder.html";
-      } else {
-        document.getElementById("backButton").blur();
-      }
-    } else {
-      window.location.href = document.location.origin + "/builder.html";
-    }
+    window.location.href = document.location.origin + "/builder.html";
   });
 
   // Handle deploy button click - show commit modal
