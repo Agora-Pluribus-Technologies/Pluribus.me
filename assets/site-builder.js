@@ -1064,7 +1064,7 @@ function showLinkButtonPopup(currentUrl, currentLabel, callback) {
   popup.querySelector('.popup-cancel').addEventListener('click', () => popup.remove());
 
   popup.querySelector('.popup-confirm').addEventListener('click', () => {
-    const url = urlInput.value.trim();
+    let url = urlInput.value.trim();
     const label = labelInput.value.trim();
 
     if (!url) {
@@ -1072,10 +1072,13 @@ function showLinkButtonPopup(currentUrl, currentLabel, callback) {
       return;
     }
 
-    // Validate URL format: must start with /s/ (local) or https:// (external)
-    if (!url.startsWith('/s/') && !url.startsWith('https://')) {
-      alert('URL must start with /s/ (local link) or https:// (external link)');
-      return;
+    // Normalize external URLs: local links start with /s/, everything else is forced to https://
+    if (!url.startsWith('/s/')) {
+      if (url.startsWith('http://')) {
+        url = 'https://' + url.slice(7);
+      } else if (!url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
     }
 
     if (!label) {
