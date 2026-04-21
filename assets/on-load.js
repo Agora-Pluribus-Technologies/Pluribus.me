@@ -743,6 +743,13 @@ function positionSitesListPanel() {
     const topbarRect = userMenuButton.getBoundingClientRect();
     sitesListPanel.style.marginTop = topbarRect.bottom + "px";
   }
+
+  const footer = document.getElementById("footer");
+  if (footer) {
+    const footerRect = footer.getBoundingClientRect();
+    sitesListPanel.style.marginBottom = footerRect.height + "px";
+  }
+  
 }
 
 // Position pageMenubar below editor-topbar
