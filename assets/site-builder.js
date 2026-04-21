@@ -255,6 +255,7 @@ function initBlockEditor() {
   // Hide the Ko-fi button in the block editor
   document.querySelectorAll('.floatingchat-container-wrap').forEach(el => el.style.display = 'none');
 
+  // Reduce footer padding to prevent excessive whitespace in block editor on mobile
   document.querySelector('#footer').style.paddingBottom = '10px';
 
   editorContainer.innerHTML = '';
@@ -1521,6 +1522,15 @@ function initBlogEditor() {
 
   editorContainer.innerHTML = '';
   editorContainer.className = 'blog-editor';
+
+  // Hide footer text links in the block editor
+  document.querySelectorAll('.footer-text').forEach(el => el.style.display = 'none');
+
+  // Hide the Ko-fi button in the block editor
+  document.querySelectorAll('.floatingchat-container-wrap').forEach(el => el.style.display = 'none');
+
+  // Reduce footer padding to prevent excessive whitespace in block editor on mobile
+  document.querySelector('#footer').style.paddingBottom = '10px';
 
   console.log('Blog editor initialized, rendering posts...');
   renderBlogPostsList();
