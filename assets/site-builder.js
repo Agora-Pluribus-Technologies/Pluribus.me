@@ -513,6 +513,19 @@ function showAddBlockMenu(wrapper, afterIndex) {
 
   wrapper.appendChild(menu);
 
+  // Position: drop-down by default, drop-up if it would overlap with the footer
+  const footer = document.getElementById('footer');
+  const footerTop = footer ? footer.getBoundingClientRect().top : window.innerHeight;
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const menuHeight = menu.offsetHeight;
+  const spaceBelow = footerTop - wrapperRect.bottom;
+
+  if (spaceBelow < menuHeight + 8) {
+    menu.classList.add('drop-up');
+  } else {
+    menu.classList.add('drop-down');
+  }
+
   // Close menu when clicking outside
   const closeMenu = (e) => {
     if (!menu.contains(e.target)) {

@@ -1835,7 +1835,9 @@ nav {
 
 /* Add Block Menu */
 .add-block-menu {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10001;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -1843,7 +1845,16 @@ nav {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   padding: 8px 0;
   width: 180px;
-  margin: 0 auto;
+}
+
+.add-block-menu.drop-down {
+  top: 100%;
+  margin-top: 4px;
+}
+
+.add-block-menu.drop-up {
+  bottom: 100%;
+  margin-bottom: 4px;
 }
 
 
