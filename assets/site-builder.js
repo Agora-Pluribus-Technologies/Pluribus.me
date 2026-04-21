@@ -380,6 +380,7 @@ function renderBlockPreview(block) {
 }
 
 function renderPanelPreview(markdown) {
+  marked.setOptions({ gfm: true, breaks: true });
   const parsed = marked.parse(markdown);
   const sanitized = DOMPurify.sanitize(parsed);
   return `<article class="h-entry"><div class="e-content">${sanitized}</div></article>`;
