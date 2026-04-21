@@ -255,6 +255,8 @@ function initBlockEditor() {
   // Hide the Ko-fi button in the block editor
   document.querySelectorAll('.floatingchat-container-wrap').forEach(el => el.style.display = 'none');
 
+  document.querySelector('#footer').style.paddingBottom = '10px';
+
   editorContainer.innerHTML = '';
   editorContainer.className = 'block-editor';
 
