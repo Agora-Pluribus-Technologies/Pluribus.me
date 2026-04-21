@@ -130,7 +130,7 @@ function clearSearch() {
 async function loadBlogPosts(origin, basePath, pagesJson) {
   marked.setOptions({
     gfm: true,
-    breaks: false,
+    breaks: true,
   });
 
   // Create tag filter bar container (will be populated after loading posts)

@@ -20,17 +20,19 @@ function decodeImages() {
   const pList = document.getElementsByTagName("p");
   for (let i = 0; i < pList.length; i++) {
     let p = pList[i];
-    if (
-      p.children.length == 1 &&
-      p.children[0].nodeName.toLowerCase() == "img"
-    ) {
+    // Check if the <p> contains an <img> and only <br> siblings (handles breaks: true adding <br> before images)
+    const img = p.querySelector("img");
+    const onlyImgAndBr = img && Array.from(p.children).every(
+      ch => ch.nodeName.toLowerCase() === "img" || ch.nodeName.toLowerCase() === "br"
+    ) && p.textContent.trim() === "";
+    if (img && onlyImgAndBr) {
+      // Remove any <br> elements before the image
+      Array.from(p.querySelectorAll("br")).forEach(br => br.remove());
+
       p.style.textAlign = "center";
       p.parentElement.parentElement.classList.remove("h-entry");
       p.parentElement.parentElement.classList.add("image-container");
       p.parentElement.classList.remove("e-content");
-
-      // Check if image has a title attribute (used as caption)
-      const img = p.children[0];
       const caption = img.getAttribute("title");
       if (caption) {
         // Create caption element
@@ -285,7 +287,7 @@ async function createMenubar(origin, basePath, pagesJson) {
 async function fetchPageContent(origin, basePath, siteName, pagesJson) {
   marked.setOptions({
     gfm: true,
-    breaks: false,
+    breaks: true,
   });
 
   // https://agorapages.com/s/username/sitename/path/to/page.html --> path/to/page
