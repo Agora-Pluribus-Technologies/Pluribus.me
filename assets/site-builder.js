@@ -249,6 +249,12 @@ function initBlockEditor() {
     publishStatus.style.display = '';
   }
 
+  // Hide footer text links in the block editor
+  document.querySelectorAll('.footer-text').forEach(el => el.style.display = 'none');
+
+  // Hide the Ko-fi button in the block editor
+  document.querySelectorAll('.floatingchat-donate-button').forEach(el => el.style.display = 'none');
+
   editorContainer.innerHTML = '';
   editorContainer.className = 'block-editor';
 
