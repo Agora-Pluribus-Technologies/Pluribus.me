@@ -254,6 +254,7 @@ function initBlockEditor() {
 
   // Hide the Ko-fi button in the block editor
   document.querySelectorAll('.floatingchat-container-wrap').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.floatingchat-container-wrap-mobi').forEach(el => el.style.display = 'none');
 
   // Reduce footer padding to prevent excessive whitespace in block editor on mobile
   document.querySelector('#footer').style.paddingBottom = '10px';
