@@ -516,6 +516,10 @@ nav {
   #footer {
     padding: 10px 20px 70px 20px;
   }
+
+  #sites-list-panel {
+    margin-bottom: 90px;
+  }
 }
 
 .toastui-editor-popup,
