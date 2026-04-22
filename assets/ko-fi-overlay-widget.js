@@ -195,7 +195,7 @@ var kofiWidgetOverlayFloatingChatBuilder = kofiWidgetOverlayFloatingChatBuilder 
     };
 
     function slidePopupOpen(popup, finalHeight) {
-        popup.style = `z-index:10000;width:328px!important;height: ${finalHeight}px!important; transition: height 0.5s ease, opacity 0.3s linear; opacity:1;`;
+        popup.style = `z-index:10006;width:328px!important;height: ${finalHeight}px!important; transition: height 0.5s ease, opacity 0.3s linear; opacity:1;`;
         document.getElementsByClassName("floating-chat-kofi-popup-iframe-notice-mobi")[0].style.display = "block";
         document.getElementsByClassName("floating-chat-kofi-popup-iframe-notice")[0].style.display = "block";
     };
