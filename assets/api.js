@@ -590,8 +590,7 @@ async function createUser(username, provider, providerId) {
   }
 
   const user = await response.json();
-  CURRENT_USERNAME = user.username;
-  sessionStorage.setItem(STORAGE_KEY_USERNAME, user.username);
+  setStoredUsername(user.username);
   return user;
 }
 
@@ -605,10 +604,17 @@ function getStoredUsername() {
   return stored;
 }
 
-// Set stored username
+// Get the display username (original casing) for UI purposes
+function getDisplayUsername() {
+  return sessionStorage.getItem('DISPLAY_USERNAME') || getStoredUsername();
+}
+
+// Set stored username (lowercase for functional use, original for display)
 function setStoredUsername(username) {
-  CURRENT_USERNAME = username;
-  sessionStorage.setItem(STORAGE_KEY_USERNAME, username);
+  sessionStorage.setItem('DISPLAY_USERNAME', username);
+  const lower = username.toLowerCase();
+  CURRENT_USERNAME = lower;
+  sessionStorage.setItem(STORAGE_KEY_USERNAME, lower);
 }
 
 async function getSites(owner) {

@@ -31,7 +31,7 @@ export async function onRequestGet(context) {
 
     // Get all user's sites from D1
     const sitesResult = await env.USERS_DB.prepare(
-      "SELECT siteId, owner, repo FROM Sites WHERE owner = ?"
+      "SELECT siteId, owner, repo FROM Sites WHERE LOWER(owner) = LOWER(?)"
     ).bind(usernameLower).all();
 
     for (const siteConfig of sitesResult.results || []) {

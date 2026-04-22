@@ -97,13 +97,13 @@ export async function onRequestPost(context) {
   // Insert new user into database
   await env.USERS_DB.prepare(
     "INSERT INTO Users (id, provider, providerId, username, createdAt) VALUES (?, ?, ?, ?, ?)"
-  ).bind(id, provider, providerId, usernameLower, createdAt).run();
+  ).bind(id, provider, providerId, username, createdAt).run();
 
   const user = {
     id,
     provider,
     providerId,
-    username: usernameLower,
+    username: username,
     createdAt,
   };
 
@@ -138,7 +138,7 @@ export async function onRequestDelete(context) {
   try {
     // 1. Delete all user's sites from D1 and R2
     const sitesResult = await env.USERS_DB.prepare(
-      "SELECT siteId FROM Sites WHERE owner = ?"
+      "SELECT siteId FROM Sites WHERE LOWER(owner) = LOWER(?)"
     ).bind(usernameLower).all();
 
     for (const site of sitesResult.results || []) {

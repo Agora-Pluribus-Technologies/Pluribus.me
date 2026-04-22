@@ -804,12 +804,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       // User has a username, proceed to load sites
       console.log("User found:", existingUser.username);
       setStoredUsername(existingUser.username);
-      showUserMenu(existingUser.username);
-      await loadSitesForUser(existingUser.username);
+      showUserMenu(getDisplayUsername());
+      await loadSitesForUser(getStoredUsername());
 
       // Check if we have an edit context (from /edit route)
       if (window.PLURIBUS_EDIT_CONTEXT) {
-        await handleEditContext(existingUser.username);
+        await handleEditContext(getStoredUsername());
       }
     } else {
       // User needs to select a username
@@ -903,8 +903,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Close modal, show user menu, and load sites
       $("#usernameModal").modal("hide");
-      showUserMenu(user.username);
-      await loadSitesForUser(user.username);
+      showUserMenu(getDisplayUsername());
+      await loadSitesForUser(getStoredUsername());
     } catch (error) {
       console.error("Error creating user:", error);
       usernameError.textContent = error.message || "Failed to create username. Please try again.";
@@ -2298,6 +2298,7 @@ document.addEventListener("DOMContentLoaded", function() {
       sessionStorage.removeItem("agorapages.com.github.oauth_token");
       sessionStorage.removeItem("agorapages.com.google.oauth_token");
       sessionStorage.removeItem("agorapages.com.username");
+      sessionStorage.removeItem("DISPLAY_USERNAME");
 
       console.log("Signed out - tokens cleared");
 

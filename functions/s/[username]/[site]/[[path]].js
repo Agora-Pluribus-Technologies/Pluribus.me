@@ -41,7 +41,7 @@ export async function onRequest(context) {
     return cached;
   }
 
-  const username = params && params.username ? String(params.username) : null;
+  const username = params && params.username ? String(params.username).toLowerCase() : null;
   const site = params && params.site ? String(params.site) : null;
   const siteId = username && site ? `${username}/${site}` : null;
   if (!siteId) {

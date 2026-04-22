@@ -89,7 +89,7 @@ export async function onRequestGet(context) {
     let sites;
     if (ownerParam) {
       const result = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE owner = ?"
+        "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE LOWER(owner) = LOWER(?)"
       ).bind(ownerParam).all();
       sites = result.results || [];
     } else {
