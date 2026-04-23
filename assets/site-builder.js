@@ -702,21 +702,22 @@ function showPanelEditModal(block, callback) {
     ]
   });
 
+  function insertImageIntoPanelEditor({ filename, caption }) {
+    const url = `/s/${currentSitePathFull}/${filename}`;
+    const alt = caption || filename;
+    const wasWysiwyg = panelEditor.isWysiwygMode();
+    if (wasWysiwyg) panelEditor.changeMode('markdown');
+    panelEditor.insertText(`![${alt}](${url})`);
+    if (wasWysiwyg) panelEditor.changeMode('wysiwyg');
+  }
+
   panelEditor.addCommand('wysiwyg', 'insertImage', () => {
-    showImageUploadPopup(({ filename, caption }) => {
-      const url = `/s/${currentSitePathFull}/${filename}`;
-      const alt = caption || filename;
-      panelEditor.insertText(`![${alt}](${url})`);
-    });
+    showImageUploadPopup(insertImageIntoPanelEditor);
     return true;
   });
 
   panelEditor.addCommand('markdown', 'insertImage', () => {
-    showImageUploadPopup(({ filename, caption }) => {
-      const url = `/s/${currentSitePathFull}/${filename}`;
-      const alt = caption || filename;
-      panelEditor.insertText(`![${alt}](${url})`);
-    });
+    showImageUploadPopup(insertImageIntoPanelEditor);
     return true;
   });
 
@@ -1262,21 +1263,22 @@ function showBlogPostEditModal(content, displayName, callback) {
     ]
   });
 
+  function insertImageIntoBlogEditor({ filename, caption }) {
+    const url = `/s/${currentSitePathFull}/${filename}`;
+    const alt = caption || filename;
+    const wasWysiwyg = blogPostEditor.isWysiwygMode();
+    if (wasWysiwyg) blogPostEditor.changeMode('markdown');
+    blogPostEditor.insertText(`![${alt}](${url})`);
+    if (wasWysiwyg) blogPostEditor.changeMode('wysiwyg');
+  }
+
   blogPostEditor.addCommand('wysiwyg', 'insertImage', () => {
-    showImageUploadPopup(({ filename, caption }) => {
-      const url = `/s/${currentSitePathFull}/${filename}`;
-      const alt = caption || filename;
-      blogPostEditor.insertText(`![${alt}](${url})`);
-    });
+    showImageUploadPopup(insertImageIntoBlogEditor);
     return true;
   });
 
   blogPostEditor.addCommand('markdown', 'insertImage', () => {
-    showImageUploadPopup(({ filename, caption }) => {
-      const url = `/s/${currentSitePathFull}/${filename}`;
-      const alt = caption || filename;
-      blogPostEditor.insertText(`![${alt}](${url})`);
-    });
+    showImageUploadPopup(insertImageIntoBlogEditor);
     return true;
   });
 
