@@ -593,17 +593,24 @@ async function openSiteInEditor(site, initialPage = "index") {
     console.error("Error checking/creating index.html:", error);
   }
 
-  // For blog sites, hide the page menubar since posts are managed differently
+  // For blog sites, hide the page menubar and edit history button
   const pageMenubar = document.getElementById("pageMenubar");
+  const historyButton = document.getElementById("historyButton");
   if (currentSiteType === "blog") {
     if (pageMenubar) {
       pageMenubar.style.display = "none";
+    }
+    if (historyButton) {
+      historyButton.style.display = "none";
     }
     // Load the blog editor
     initBlogEditor();
   } else {
     if (pageMenubar) {
       pageMenubar.style.display = "flex";
+    }
+    if (historyButton) {
+      historyButton.style.display = "";
     }
     // Populate menubar from cache
     await populateMenubar(site.siteId);
@@ -713,19 +720,15 @@ async function handleEditContext(username) {
   await openSiteInEditor(site, pagePath);
 }
 
-// Load sites for a specific user
+// Load sites for the current user (server returns owned + shared)
 async function loadSitesForUser(username) {
   console.log("Loading sites for user:", username);
 
-  // Fetch sites owned by user and sites shared with user in parallel
-  const [ownedSites, sharedSites] = await Promise.all([
-    getSites(username),
-    getSharedSites(username)
-  ]);
+  const allSites = await getSites();
 
-  // Cache the sites lists
-  sitesCache = ownedSites || [];
-  sharedSitesCache = sharedSites || [];
+  // Split into owned and shared for the UI
+  sitesCache = allSites.filter(s => s.owner.toLowerCase() === username.toLowerCase());
+  sharedSitesCache = allSites.filter(s => s.owner.toLowerCase() !== username.toLowerCase());
 
   console.log("Owned sites:", sitesCache.length, "Shared sites:", sharedSitesCache.length);
 
@@ -779,42 +782,24 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   }
 
-  if (getOauthTokenGithub() === null && getOauthTokenGitlab() === null && getOauthTokenGoogle() === null) {
-    console.log("Access tokens missing or expired");
+  const me = await getCurrentUser();
+
+  if (!me.authenticated) {
+    console.log("Not authenticated");
     displayLoginButtons();
-  } else {
-    console.log("Access token present and valid");
-
-    // Check if user has a username
-    const providerInfo = await getCurrentProviderInfo();
-    if (!providerInfo || !providerInfo.provider || !providerInfo.providerId) {
-      console.error("Could not get provider info");
-      displayLoginButtons();
-      return;
-    }
-
+  } else if (me.status === "pending_username") {
+    console.log("New user, showing username selection modal");
     document.body.style.height = "auto";
+    $("#usernameModal").modal("show");
+  } else {
+    console.log("User found:", me.username);
+    document.body.style.height = "auto";
+    setStoredUsername(me.displayUsername || me.username);
+    showUserMenu(getDisplayUsername());
+    await loadSitesForUser(getStoredUsername());
 
-    console.log("Provider info:", providerInfo);
-
-    // Check if user already has a username
-    const existingUser = await getUserByProvider(providerInfo.provider, providerInfo.providerId);
-
-    if (existingUser && existingUser.username) {
-      // User has a username, proceed to load sites
-      console.log("User found:", existingUser.username);
-      setStoredUsername(existingUser.username);
-      showUserMenu(getDisplayUsername());
-      await loadSitesForUser(getStoredUsername());
-
-      // Check if we have an edit context (from /edit route)
-      if (window.PLURIBUS_EDIT_CONTEXT) {
-        await handleEditContext(getStoredUsername());
-      }
-    } else {
-      // User needs to select a username
-      console.log("New user, showing username selection modal");
-      $("#usernameModal").modal("show");
+    if (window.PLURIBUS_EDIT_CONTEXT) {
+      await handleEditContext(getStoredUsername());
     }
   }
 
@@ -885,20 +870,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     event.preventDefault();
 
     const username = usernameInput.value.trim();
-    const providerInfo = await getCurrentProviderInfo();
-
-    if (!providerInfo) {
-      usernameError.textContent = "Could not get provider info. Please try again.";
-      usernameError.style.display = "block";
-      return;
-    }
 
     // Disable button during submission
     submitUsernameButton.disabled = true;
     submitUsernameButton.textContent = "Creating...";
 
     try {
-      const user = await createUser(username, providerInfo.provider, providerInfo.providerId);
+      const user = await createUser(username);
       console.log("User created:", user);
 
       // Close modal, show user menu, and load sites
@@ -967,36 +945,20 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         console.log("Creating new site:", siteName);
 
-        // Get stored username (set during login)
         const owner = getStoredUsername();
         if (!owner) {
           alert("No username found. Please log in again.");
           return;
         }
 
-        // Get provider info
-        const providerInfo = await getCurrentProviderInfo();
-        const provider = providerInfo ? providerInfo.provider : "unknown";
-
-        // Site name is already validated and sanitized
         const repo = siteName;
-
         const siteId = `${owner}/${repo}`;
 
-        // Store site config in KV
-        const createSiteHeaders = await getHeadersWithTurnstile({
-          "Content-Type": "application/json",
-        });
         const createResponse = await fetch("/api/sites", {
           method: "POST",
-          headers: createSiteHeaders,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            siteId: siteId,
-            provider: provider,
-            owner: owner,
             repo: repo,
-            branch: "main",
-            basePath: "/public",
             displayName: rawSiteName,
             siteType: siteType,
           }),
@@ -1218,6 +1180,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.error("Error loading site.json:", error);
         document.getElementById("showHistoryCheckbox").checked = false;
         document.getElementById("blogEmailUrl").value = "";
+      }
+
+      // Show/hide edit history option based on site type
+      const showHistoryGroup = document.getElementById("showHistoryCheckbox").closest(".form-group");
+      if (currentSiteType === "blog") {
+        showHistoryGroup.style.display = "none";
+      } else {
+        showHistoryGroup.style.display = "";
       }
 
       // Show/hide subscribers section for blog sites
@@ -1465,10 +1435,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       downloadButton.innerHTML = '<span class="glyphicon glyphicon-refresh"></span> Downloading...';
 
       try {
-        const headers = await getHeadersWithTurnstile();
         const response = await fetch(`/api/sites/download?siteId=${encodeURIComponent(currentSiteId)}`, {
           method: "GET",
-          headers,
         });
 
         if (!response.ok) {
@@ -1932,12 +1900,8 @@ function populateSitesList(ownedSites, sharedSites = []) {
           siteDiv.style.pointerEvents = "none";
           siteDiv.style.opacity = "0.5";
 
-          const deleteSiteHeaders = await getHeadersWithTurnstile({
-            "Content-Type": "application/json",
-          });
           const deleteResponse = await fetch(`/api/sites?siteId=${encodeURIComponent(site.siteId)}`, {
             method: "DELETE",
-            headers: deleteSiteHeaders,
           });
 
           if (deleteResponse.ok) {
@@ -2290,20 +2254,9 @@ function showUserMenu(username) {
 document.addEventListener("DOMContentLoaded", function() {
   const signOutLink = document.getElementById("signOutLink");
   if (signOutLink) {
-    signOutLink.addEventListener("click", function(event) {
+    signOutLink.addEventListener("click", async function(event) {
       event.preventDefault();
-
-      // Clear all OAuth tokens from session storage
-      sessionStorage.removeItem("agorapages.com.gitlab.oauth_token");
-      sessionStorage.removeItem("agorapages.com.github.oauth_token");
-      sessionStorage.removeItem("agorapages.com.google.oauth_token");
-      sessionStorage.removeItem("agorapages.com.username");
-      sessionStorage.removeItem("DISPLAY_USERNAME");
-
-      console.log("Signed out - tokens cleared");
-
-      // Reload the page
-      window.location.reload();
+      await logout();
     });
   }
 
@@ -2321,10 +2274,8 @@ document.addEventListener("DOMContentLoaded", function() {
       downloadDataButton.textContent = "Downloading...";
 
       try {
-        const headers = await getHeadersWithTurnstile();
-        const response = await fetch(`/api/users/download?username=${encodeURIComponent(username)}`, {
+        const response = await fetch("/api/users/download", {
           method: "GET",
-          headers,
         });
 
         if (!response.ok) {
@@ -2473,10 +2424,8 @@ document.addEventListener("DOMContentLoaded", function() {
       confirmDeleteAccountButton.textContent = "Deleting...";
 
       try {
-        const headers = await getHeadersWithTurnstile();
-        const response = await fetch(`/api/users?username=${encodeURIComponent(username)}`, {
+        const response = await fetch("/api/users", {
           method: "DELETE",
-          headers,
         });
 
         if (!response.ok) {

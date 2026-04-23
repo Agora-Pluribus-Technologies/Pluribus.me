@@ -1,5 +1,4 @@
-// functions/api/subscribers.js
-// Handles mailing list subscriber operations with double opt-in
+import { isOwner, forbidden } from "./auth/_authorize.js";
 
 // POST /api/subscribers - Subscribe an email (sends confirmation) or batch import emails
 export async function onRequestPost(context) {
@@ -54,6 +53,10 @@ export async function onRequestPost(context) {
 
   // Batch import (from dashboard — skips double opt-in, imports as confirmed)
   if (emails && Array.isArray(emails)) {
+    if (!context.data.session || !(await isOwner(env, siteId, context.data.username))) {
+      return forbidden();
+    }
+
     const site = await env.USERS_DB.prepare(
       "SELECT owner FROM Sites WHERE siteId = ?"
     ).bind(siteId).first();
@@ -236,6 +239,10 @@ export async function onRequestGet(context) {
     return new Response("Missing required parameter: siteId", { status: 400 });
   }
 
+  if (!(await isOwner(env, siteId, context.data.username))) {
+    return forbidden();
+  }
+
   try {
     const result = await env.USERS_DB.prepare(
       "SELECT id, email, subscribedAt, confirmed FROM Subscribers WHERE siteId = ? ORDER BY subscribedAt DESC"
@@ -295,6 +302,10 @@ export async function onRequestDelete(context) {
   }
 
   if (subscriberId && siteId) {
+    if (!(await isOwner(env, siteId, context.data.username))) {
+      return forbidden();
+    }
+
     try {
       await env.USERS_DB.prepare(
         "DELETE FROM Subscribers WHERE id = ? AND siteId = ?"

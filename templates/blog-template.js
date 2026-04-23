@@ -22,13 +22,12 @@ document.addEventListener("DOMContentLoaded", async function () {
   const pagesJson = await fetchPagesJson(origin, basePath);
   const siteJson = await fetchSiteJson(origin, basePath);
   const siteName = siteJson ? (siteJson.displayName || siteJson.siteName) : "Blog";
-  const showHistory = siteJson ? siteJson.showHistory : false;
 
   document.title = siteName + " \u2022 AgoraPages";
 
   createBlogHeader(siteName);
   await loadBlogPosts(origin, basePath, pagesJson);
-  createFooter(origin, basePath, showHistory, siteName);
+  createFooter(origin, basePath, siteName);
 });
 
 async function fetchSiteJson(origin, basePath) {
@@ -661,7 +660,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function createFooter(origin, basePath, showHistory, siteName) {
+function createFooter(origin, basePath, siteName) {
   // Derive siteId for subscribe widget
   let siteId = "";
   if (basePath) {
@@ -697,16 +696,6 @@ function createFooter(origin, basePath, showHistory, siteName) {
   poweredBy.innerHTML =
     'Powered by <a href="https://agorapages.com" target="_blank">AgoraPages.com</a>';
   footerRight.appendChild(poweredBy);
-
-  if (showHistory) {
-    const historyLink = document.createElement("span");
-    historyLink.classList.add("history-link");
-    historyLink.textContent = "View History";
-    historyLink.addEventListener("click", function () {
-      showHistoryModal(origin, basePath);
-    });
-    footerRight.appendChild(historyLink);
-  }
 
   const themeToggle = document.createElement("button");
   themeToggle.classList.add("theme-toggle");
@@ -819,103 +808,6 @@ function createFooter(origin, basePath, showHistory, siteName) {
     });
   }
 
-  // Create history modal overlay
-  const overlay = document.createElement("div");
-  overlay.classList.add("history-overlay");
-  overlay.id = "historyOverlay";
-  overlay.innerHTML = `
-    <div class="history-modal">
-      <div class="history-modal-header">
-        <h3>Site History</h3>
-        <button class="history-close" onclick="closeHistoryModal()">&times;</button>
-      </div>
-      <div id="historyContent">
-        <p style="color: #888;">Loading history...</p>
-      </div>
-    </div>
-  `;
-  overlay.addEventListener("click", function (e) {
-    if (e.target === overlay) {
-      closeHistoryModal();
-    }
-  });
-  document.body.appendChild(overlay);
-}
-
-async function showHistoryModal(origin, basePath) {
-  const overlay = document.getElementById("historyOverlay");
-  const content = document.getElementById("historyContent");
-  overlay.style.display = "flex";
-
-  try {
-    const response = await fetch(`${origin}${basePath}/history.json`, {
-      method: "GET",
-      headers: {
-        "Cache-Control": "no-cache, must-revalidate",
-      },
-    });
-
-    if (response.ok) {
-      const history = await response.json();
-      if (history.length === 0) {
-        content.innerHTML = '<p style="color: #888;">No history available.</p>';
-      } else {
-        let html = "";
-        for (const commit of history) {
-          html += `<div class="history-item">`;
-          html += `<div class="history-item-header">`;
-          html += `<span class="history-sha">${commit.shortSha}</span>`;
-          html += `<span class="history-date">${commit.date}</span>`;
-          html += `</div>`;
-          html += `<div class="history-message">${escapeHtml(commit.message)}</div>`;
-          html += `<div class="history-author">by ${escapeHtml(commit.author)}</div>`;
-
-          if (commit.changes && commit.changes.length > 0) {
-            html += `<div class="history-changes">`;
-            for (const change of commit.changes) {
-              const statusClass = `change-${change.status}`;
-              const statusIcon =
-                change.status === "added" ? "+" : change.status === "deleted" ? "−" : "~";
-              html += `<div class="history-change-item ${statusClass}">`;
-              html += `<span class="change-icon">${statusIcon}</span>`;
-              html += `<span class="change-file">${escapeHtml(change.file)}</span>`;
-              html += `</div>`;
-
-              if (change.diff && change.diff.length > 0) {
-                html += `<div class="history-diff">`;
-                for (const line of change.diff) {
-                  const lineClass = line.type === "add" ? "diff-add" : "diff-del";
-                  const linePrefix = line.type === "add" ? "+" : "-";
-                  html += `<div class="diff-line ${lineClass}">`;
-                  html += `<span class="diff-prefix">${linePrefix}</span>`;
-                  html += `<span class="diff-content">${escapeHtml(line.content)}</span>`;
-                  html += `</div>`;
-                }
-                if (change.truncated) {
-                  html += `<div class="diff-truncated">... more lines not shown</div>`;
-                }
-                html += `</div>`;
-              }
-            }
-            html += `</div>`;
-          }
-
-          html += `</div>`;
-        }
-        content.innerHTML = html;
-      }
-    } else {
-      content.innerHTML = '<p style="color: #888;">History not available.</p>';
-    }
-  } catch (error) {
-    console.error("Error fetching history:", error);
-    content.innerHTML = '<p style="color: #ff4444;">Failed to load history.</p>';
-  }
-}
-
-function closeHistoryModal() {
-  const overlay = document.getElementById("historyOverlay");
-  overlay.style.display = "none";
 }
 
 // Theme toggle functionality

@@ -1,6 +1,9 @@
+import { isOwner, forbidden } from "../auth/_authorize.js";
+
 // GET /api/sites/download - Download a single site as JSON (ZIP created client-side)
 export async function onRequestGet(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
   const url = new URL(request.url);
 
   const siteIdEncoded = url.searchParams.get("siteId");
@@ -11,7 +14,10 @@ export async function onRequestGet(context) {
 
   const siteId = decodeURIComponent(siteIdEncoded);
 
-  // Get site info from D1 database
+  if (!(await isOwner(env, siteId, sessionUsername))) {
+    return forbidden();
+  }
+
   const siteConfig = await env.USERS_DB.prepare(
     "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
   ).bind(siteId).first();
@@ -29,7 +35,6 @@ export async function onRequestGet(context) {
       files: [],
     };
 
-    // Get all R2 files for this site
     try {
       const r2Prefix = `${siteId}/`;
       const r2List = await env.PLURIBUS_BUCKET.list({ prefix: r2Prefix });
@@ -41,7 +46,6 @@ export async function onRequestGet(context) {
             const contentType = fileObj.httpMetadata?.contentType || "application/octet-stream";
             const arrayBuffer = await fileObj.arrayBuffer();
 
-            // Convert to base64 for transport
             const bytes = new Uint8Array(arrayBuffer);
             let binary = "";
             for (let i = 0; i < bytes.length; i++) {

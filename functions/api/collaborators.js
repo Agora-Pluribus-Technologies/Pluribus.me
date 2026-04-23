@@ -1,60 +1,22 @@
-// GET /api/collaborators - Get collaborators for a site OR get sites shared with a user
+import { isOwner, canAccess, forbidden } from "./auth/_authorize.js";
+
+// GET /api/collaborators - Get collaborators for a site
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
+  const sessionUsername = context.data.username;
 
   const siteId = url.searchParams.get("siteId");
-  const username = url.searchParams.get("username");
 
-  // If username is provided, get all sites shared with this user
-  if (username) {
-    try {
-      // First get the user's ID
-      const user = await env.USERS_DB.prepare(
-        "SELECT id FROM Users WHERE LOWER(username) = LOWER(?)"
-      ).bind(username).first();
-
-      if (!user) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // Get all sites where this user is a collaborator
-      const result = await env.USERS_DB.prepare(`
-        SELECT siteId FROM Collaborators WHERE userId = ?
-      `).bind(user.id).all();
-
-      // Fetch full site configs for each site from D1
-      const sharedSites = [];
-      for (const row of result.results || []) {
-        const site = await env.USERS_DB.prepare(
-          "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
-        ).bind(row.siteId).first();
-        if (site) {
-          site.displayName = site.repo;
-          sharedSites.push(site);
-        }
-      }
-
-      return new Response(JSON.stringify(sharedSites), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Error fetching shared sites:", error);
-      return new Response("Failed to fetch shared sites", { status: 500 });
-    }
+  if (!siteId) {
+    return new Response("Missing required parameter: siteId", { status: 400 });
   }
 
-  // If siteId is provided, get collaborators for that site
-  if (!siteId) {
-    return new Response("Missing required parameter: siteId or username", { status: 400 });
+  if (!(await canAccess(env, siteId, sessionUsername))) {
+    return forbidden();
   }
 
   try {
-    // Get all collaborators for this site with their usernames
     const result = await env.USERS_DB.prepare(`
       SELECT c.siteId, c.userId, u.username
       FROM Collaborators c
@@ -75,6 +37,7 @@ export async function onRequestGet(context) {
 // POST /api/collaborators - Add a collaborator to a site
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
 
   let data;
   try {
@@ -89,8 +52,11 @@ export async function onRequestPost(context) {
     return new Response("Missing required fields: siteId, username", { status: 400 });
   }
 
+  if (!(await isOwner(env, siteId, sessionUsername))) {
+    return forbidden();
+  }
+
   try {
-    // Look up the user by username
     const user = await env.USERS_DB.prepare(
       "SELECT id, username FROM Users WHERE LOWER(username) = LOWER(?)"
     ).bind(username).first();
@@ -99,7 +65,6 @@ export async function onRequestPost(context) {
       return new Response("User not found", { status: 404 });
     }
 
-    // Check if site exists
     const site = await env.USERS_DB.prepare(
       "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
     ).bind(siteId).first();
@@ -107,12 +72,10 @@ export async function onRequestPost(context) {
       return new Response("Site not found", { status: 404 });
     }
 
-    // Check if user is the site owner (can't add owner as collaborator)
     if (site.owner.toLowerCase() === username.toLowerCase()) {
       return new Response("Cannot add site owner as collaborator", { status: 400 });
     }
 
-    // Check if already a collaborator
     const existing = await env.USERS_DB.prepare(
       "SELECT * FROM Collaborators WHERE siteId = ? AND userId = ?"
     ).bind(siteId, user.id).first();
@@ -121,7 +84,6 @@ export async function onRequestPost(context) {
       return new Response("User is already a collaborator", { status: 409 });
     }
 
-    // Add the collaborator
     await env.USERS_DB.prepare(
       "INSERT INTO Collaborators (siteId, userId) VALUES (?, ?)"
     ).bind(siteId, user.id).run();
@@ -142,6 +104,7 @@ export async function onRequestPost(context) {
 // DELETE /api/collaborators - Remove a collaborator from a site
 export async function onRequestDelete(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
   const url = new URL(request.url);
 
   const siteId = url.searchParams.get("siteId");
@@ -151,8 +114,11 @@ export async function onRequestDelete(context) {
     return new Response("Missing required parameters: siteId, userId", { status: 400 });
   }
 
+  if (!(await isOwner(env, siteId, sessionUsername))) {
+    return forbidden();
+  }
+
   try {
-    // Check if collaborator exists
     const existing = await env.USERS_DB.prepare(
       "SELECT * FROM Collaborators WHERE siteId = ? AND userId = ?"
     ).bind(siteId, userId).first();
@@ -161,7 +127,6 @@ export async function onRequestDelete(context) {
       return new Response("Collaborator not found", { status: 404 });
     }
 
-    // Remove the collaborator
     await env.USERS_DB.prepare(
       "DELETE FROM Collaborators WHERE siteId = ? AND userId = ?"
     ).bind(siteId, userId).run();

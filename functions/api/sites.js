@@ -1,20 +1,24 @@
+import { isOwner, forbidden } from "./auth/_authorize.js";
+
 // POST /api/sites - Create a new site
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
 
   let data;
-
   try {
     data = await request.json();
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  // Validate required fields
-  const { siteId, owner, repo, siteType } = data;
+  const { repo, siteType } = data;
+  // Use session username as owner, ignore client-provided owner
+  const owner = sessionUsername;
+  const siteId = `${owner}/${repo}`;
 
-  if (!siteId || !owner || !repo) {
-    return new Response("Missing required fields", { status: 400 });
+  if (!repo) {
+    return new Response("Missing required field: repo", { status: 400 });
   }
 
   // Validate siteId format
@@ -22,11 +26,9 @@ export async function onRequestPost(context) {
     return new Response("Invalid site ID", { status: 400 });
   }
 
-  // Validate siteType if provided
   const validSiteType = siteType === "blog" ? "blog" : "pages";
 
   try {
-    // Check if site already exists
     const existing = await env.USERS_DB.prepare(
       "SELECT siteId FROM Sites WHERE siteId = ?"
     ).bind(siteId).first();
@@ -35,13 +37,11 @@ export async function onRequestPost(context) {
       return new Response("Site ID already exists", { status: 409 });
     }
 
-    // Insert the new site (siteType column may not exist in older schemas, so use try/catch)
     try {
       await env.USERS_DB.prepare(
         "INSERT INTO Sites (siteId, owner, repo, siteType) VALUES (?, ?, ?, ?)"
       ).bind(siteId, owner, repo, validSiteType).run();
     } catch (dbError) {
-      // Fallback if siteType column doesn't exist
       console.log("siteType column may not exist, falling back to basic insert");
       await env.USERS_DB.prepare(
         "INSERT INTO Sites (siteId, owner, repo) VALUES (?, ?, ?)"
@@ -55,16 +55,15 @@ export async function onRequestPost(context) {
   }
 }
 
-// GET /api/sites - Get a site or list sites
+// GET /api/sites - Get a site or list user's sites (own + collaborations)
 export async function onRequestGet(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
 
   const url = new URL(request.url);
   const siteIdEncoded = url.searchParams.get("siteId");
-  const ownerParam = url.searchParams.get("owner");
 
   try {
-    // If siteId is provided, return that specific site
     if (siteIdEncoded) {
       const siteId = decodeURIComponent(siteIdEncoded);
       const site = await env.USERS_DB.prepare(
@@ -72,9 +71,7 @@ export async function onRequestGet(context) {
       ).bind(siteId).first();
 
       if (site) {
-        // Use stored displayName, fall back to repo
         site.displayName = site.displayName || site.repo;
-        // Default siteType to "pages" if not set
         site.siteType = site.siteType || "pages";
         return new Response(JSON.stringify(site), {
           status: 200,
@@ -85,25 +82,33 @@ export async function onRequestGet(context) {
       }
     }
 
-    // Otherwise, list all sites (optionally filtered by owner)
-    let sites;
-    if (ownerParam) {
-      const result = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE LOWER(owner) = LOWER(?)"
-      ).bind(ownerParam).all();
-      sites = result.results || [];
-    } else {
-      const result = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo, siteType, displayName FROM Sites"
-      ).all();
-      sites = result.results || [];
+    // List user's own sites
+    const ownResult = await env.USERS_DB.prepare(
+      "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE LOWER(owner) = LOWER(?)"
+    ).bind(sessionUsername).all();
+    let sites = ownResult.results || [];
+
+    // Also include sites where user is a collaborator
+    const collabResult = await env.USERS_DB.prepare(
+      "SELECT siteId FROM Collaborators WHERE LOWER(username) = LOWER(?)"
+    ).bind(sessionUsername).all();
+    const collabSiteIds = (collabResult.results || []).map(c => c.siteId);
+
+    for (const collabSiteId of collabSiteIds) {
+      if (!sites.some(s => s.siteId === collabSiteId)) {
+        const collabSite = await env.USERS_DB.prepare(
+          "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE siteId = ?"
+        ).bind(collabSiteId).first();
+        if (collabSite) {
+          sites.push(collabSite);
+        }
+      }
     }
 
-    // Use stored displayName with repo as fallback, and default siteType
     sites = sites.map(site => ({
       ...site,
       displayName: site.displayName || site.repo,
-      siteType: site.siteType || "pages"
+      siteType: site.siteType || "pages",
     }));
 
     return new Response(JSON.stringify(sites), {
@@ -119,6 +124,7 @@ export async function onRequestGet(context) {
 // PATCH /api/sites - Update site display name
 export async function onRequestPatch(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
 
   let data;
   try {
@@ -133,8 +139,11 @@ export async function onRequestPatch(context) {
     return new Response("Missing required fields", { status: 400 });
   }
 
+  if (!(await isOwner(env, siteId, sessionUsername))) {
+    return forbidden();
+  }
+
   try {
-    // Ensure displayName column exists
     try {
       await env.USERS_DB.prepare(
         "ALTER TABLE Sites ADD COLUMN displayName TEXT"
@@ -160,6 +169,7 @@ export async function onRequestPatch(context) {
 // DELETE /api/sites - Delete a site
 export async function onRequestDelete(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
 
   const url = new URL(request.url);
   const siteIdEncoded = url.searchParams.get("siteId");
@@ -170,16 +180,11 @@ export async function onRequestDelete(context) {
 
   const siteId = decodeURIComponent(siteIdEncoded);
 
+  if (!(await isOwner(env, siteId, sessionUsername))) {
+    return forbidden();
+  }
+
   try {
-    // Check if site exists
-    const existing = await env.USERS_DB.prepare(
-      "SELECT siteId FROM Sites WHERE siteId = ?"
-    ).bind(siteId).first();
-
-    if (!existing) {
-      return new Response("Not Found", { status: 404 });
-    }
-
     // Delete all R2 files for this site
     try {
       const prefix = `${siteId}/`;
@@ -193,7 +198,6 @@ export async function onRequestDelete(context) {
       }
     } catch (error) {
       console.error("Error deleting R2 files:", error);
-      // Continue with D1 deletion even if R2 cleanup fails
     }
 
     // Delete collaborators for this site

@@ -1,54 +1,90 @@
+import { createSession, makeSessionCookie } from "../../api/auth/_session.js";
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
 
-  console.log("url:", url);
-  console.log("search params:", url.searchParams);
-
-  // If Google didn't send a code, show an error message
   if (!code) {
     return new Response("Missing OAuth code.", { status: 400 });
   }
 
-  // Same OAuth client is used for both dev and prod
   const clientId = env.GOOGLE_CLIENT_ID;
   const clientSecret = env.GOOGLE_CLIENT_SECRET;
 
-  // Prepare the token exchange request
+  // Exchange code for access token
   const tokenParams = new URLSearchParams({
     client_id: clientId,
     client_secret: clientSecret,
     code,
     grant_type: "authorization_code",
-    redirect_uri: `${url.origin}/google/oauth/callback`
+    redirect_uri: `${url.origin}/google/oauth/callback`,
   });
 
-  // Exchange the code for an access token with Google
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       "Cache-Control": "no-cache",
-      "Accept": "application/json"
+      Accept: "application/json",
     },
-    body: tokenParams
+    body: tokenParams,
   });
 
   const tokenData = await tokenResponse.json();
 
-  // If something went wrong, return the error JSON
   if (!tokenData.access_token) {
     return new Response(JSON.stringify(tokenData), {
       status: 500,
-      headers: { "Content-Type": "application/json" }
+      headers: { "Content-Type": "application/json" },
     });
   }
 
-  // Pass token info via fragment (#token=...) so it doesn't get logged in server logs
+  // Get Google user identity
+  const userResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: {
+      Authorization: `Bearer ${tokenData.access_token}`,
+    },
+  });
+
+  if (!userResponse.ok) {
+    return new Response("Failed to get Google user info", { status: 500 });
+  }
+
+  const googleUser = await userResponse.json();
+  const providerId = googleUser.id;
+
+  // Look up user in database
+  const existingUser = await env.USERS_DB.prepare(
+    "SELECT id, provider, providerId, username, createdAt FROM Users WHERE provider = ? AND providerId = ?"
+  ).bind("google", providerId).first();
+
+  let sessionData;
+  if (existingUser) {
+    sessionData = {
+      userId: existingUser.id,
+      username: existingUser.username.toLowerCase(),
+      displayUsername: existingUser.username,
+      provider: "google",
+      providerId,
+      status: "active",
+    };
+  } else {
+    sessionData = {
+      provider: "google",
+      providerId,
+      status: "pending_username",
+    };
+  }
+
+  const sessionToken = await createSession(env, sessionData);
   const redirectUrl = new URL("/builder.html", url.origin);
-  redirectUrl.hash = `google_access_token=${tokenData.access_token}`;
 
-  return Response.redirect(redirectUrl.toString(), 302);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: redirectUrl.toString(),
+      "Set-Cookie": makeSessionCookie(sessionToken),
+    },
+  });
 }
-

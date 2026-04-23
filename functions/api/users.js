@@ -1,54 +1,40 @@
-// GET /api/users - Check if username exists or get user by provider ID
+import { updateSession, deleteSession, clearSessionCookie } from "./auth/_session.js";
+
+// GET /api/users - Check if username is available
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
 
   const username = url.searchParams.get("username");
-  const providerId = url.searchParams.get("providerId");
-  const provider = url.searchParams.get("provider");
 
-  // Check if username is taken
-  if (username) {
-    const result = await env.USERS_DB.prepare(
-      "SELECT id, provider, providerId, username, createdAt FROM Users WHERE LOWER(username) = LOWER(?)"
-    ).bind(username).first();
+  if (!username) {
+    return new Response("Missing required parameter: username", { status: 400 });
+  }
 
-    if (result) {
-      return new Response(JSON.stringify({ exists: true, user: result }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    return new Response(JSON.stringify({ exists: false }), {
+  const result = await env.USERS_DB.prepare(
+    "SELECT id, provider, providerId, username, createdAt FROM Users WHERE LOWER(username) = LOWER(?)"
+  ).bind(username).first();
+
+  if (result) {
+    return new Response(JSON.stringify({ exists: true, user: result }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  // Get user by provider ID
-  if (providerId && provider) {
-    const result = await env.USERS_DB.prepare(
-      "SELECT id, provider, providerId, username, createdAt FROM Users WHERE provider = ? AND providerId = ?"
-    ).bind(provider, providerId).first();
-
-    if (result) {
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    return new Response(JSON.stringify({ exists: false }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  return new Response("Missing required parameters", { status: 400 });
+  return new Response(JSON.stringify({ exists: false }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
-// POST /api/users - Create a new user with username
+// POST /api/users - Create a new user with username (provider info from session)
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const session = context.data.session;
+
+  if (!session || session.status !== "pending_username") {
+    return new Response("Invalid session state", { status: 400 });
+  }
 
   let data;
   try {
@@ -57,11 +43,11 @@ export async function onRequestPost(context) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { username, provider, providerId } = data;
+  const { username } = data;
+  const { provider, providerId } = session;
 
-  // Validate required fields
-  if (!username || !provider || !providerId) {
-    return new Response("Missing required fields: username, provider, providerId", { status: 400 });
+  if (!username) {
+    return new Response("Missing required field: username", { status: 400 });
   }
 
   // Validate username format (alphanumeric and hyphens, 3-30 chars)
@@ -99,11 +85,20 @@ export async function onRequestPost(context) {
     "INSERT INTO Users (id, provider, providerId, username, createdAt) VALUES (?, ?, ?, ?, ?)"
   ).bind(id, provider, providerId, username, createdAt).run();
 
+  // Update the session to active with user info
+  const sessionToken = context.data.sessionToken;
+  await updateSession(env, sessionToken, {
+    userId: id,
+    username: usernameLower,
+    displayUsername: username,
+    status: "active",
+  });
+
   const user = {
     id,
     provider,
     providerId,
-    username: username,
+    username,
     createdAt,
   };
 
@@ -113,18 +108,11 @@ export async function onRequestPost(context) {
   });
 }
 
-// DELETE /api/users - Delete user account and all associated data
+// DELETE /api/users - Delete own account and all associated data
 export async function onRequestDelete(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-
-  const username = url.searchParams.get("username");
-
-  if (!username) {
-    return new Response("Missing required parameter: username", { status: 400 });
-  }
-
-  const usernameLower = username.toLowerCase();
+  const { env } = context;
+  const session = context.data.session;
+  const usernameLower = session.username;
 
   // Get user info from database
   const user = await env.USERS_DB.prepare(
@@ -183,11 +171,18 @@ export async function onRequestDelete(context) {
       "DELETE FROM Users WHERE id = ?"
     ).bind(user.id).run();
 
+    // 3. Delete session
+    const sessionToken = context.data.sessionToken;
+    await deleteSession(env, sessionToken);
+
     console.log(`User ${usernameLower} deleted successfully`);
 
     return new Response(JSON.stringify({ success: true, message: "Account deleted successfully" }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Set-Cookie": clearSessionCookie(),
+      },
     });
   } catch (error) {
     console.error("Error deleting user:", error);

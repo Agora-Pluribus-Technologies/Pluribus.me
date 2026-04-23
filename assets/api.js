@@ -1,94 +1,26 @@
-// ==================== Turnstile Configuration ====================
+// ==================== Session Authentication ====================
 
-const TURNSTILE_SITE_KEY = "0x4AAAAAACJNWjSEPW9SeZxb";
+var CURRENT_USERNAME = null;
+var DISPLAY_USERNAME_CACHE = null;
 
-let turnstileToken = null;
-let turnstileWidgetId = null;
-
-// Initialize Turnstile widget when the script loads
-function initTurnstile() {
-  if (typeof turnstile === "undefined") {
-    setTimeout(initTurnstile, 100);
-    return;
+async function getCurrentUser() {
+  try {
+    const response = await fetch("/api/auth/me");
+    if (!response.ok) return { authenticated: false };
+    return await response.json();
+  } catch {
+    return { authenticated: false };
   }
-
-  const container = document.getElementById("turnstile-container");
-  if (!container) {
-    console.error("Turnstile container not found");
-    return;
-  }
-
-  turnstileWidgetId = turnstile.render(container, {
-    sitekey: TURNSTILE_SITE_KEY,
-    callback: function(token) {
-      turnstileToken = token;
-      console.log("Turnstile token obtained");
-    },
-    "error-callback": function() {
-      console.error("Turnstile error");
-      turnstileToken = null;
-    },
-    "expired-callback": function() {
-      console.log("Turnstile token expired, refreshing...");
-      turnstileToken = null;
-      turnstile.reset(turnstileWidgetId);
-    },
-    size: "invisible",
-  });
 }
 
-// Get current Turnstile token, refreshing if necessary
-async function getTurnstileToken() {
-  if (turnstileToken) {
-    return turnstileToken;
+async function logout() {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+  } catch {
+    // Best-effort
   }
-
-  if (typeof turnstile === "undefined") {
-    console.warn("Turnstile not available");
-    return null;
-  }
-
-  if (turnstileWidgetId !== null) {
-    turnstile.reset(turnstileWidgetId);
-  }
-
-  return new Promise((resolve) => {
-    let attempts = 0;
-
-    const maxAttempts = 150;
-    const checkToken = setInterval(() => {
-      attempts++;
-      if (turnstileToken) {
-        console.log("Got turnstile token");
-        clearInterval(checkToken);
-        resolve(turnstileToken);
-      } else if (attempts >= maxAttempts) {
-        clearInterval(checkToken);
-        console.warn("Turnstile token timeout");
-        resolve(null);
-      }
-    }, 100);
-  });
-}
-
-// Helper to add Turnstile token to headers (for PUT, POST, DELETE requests)
-async function getHeadersWithTurnstile(additionalHeaders = {}) {
-  const token = await getTurnstileToken();
-  const headers = { ...additionalHeaders };
-  if (token) {
-    headers["X-Turnstile-Token"] = token;
-  }
-  // Reset token after use (tokens are single-use)
-  turnstileToken = null;
-  
-  return headers;
-}
-
-// Initialize Turnstile when DOM is ready
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initTurnstile);
-} else {
-  initTurnstile();
+  sessionStorage.clear();
+  window.location.reload();
 }
 
 // ==================== Helper Functions ====================
@@ -120,13 +52,9 @@ function decodeBase64(base64) {
 async function saveFileToR2(siteId, filePath, content, options = {}) {
   const { contentType, encoding } = options;
 
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/files", {
     method: "PUT",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       siteId,
       filePath,
@@ -146,13 +74,9 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
 
 // Save multiple files to R2 in a batch
 async function saveFilesToR2(siteId, files) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/files", {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       siteId,
       files,
@@ -193,11 +117,8 @@ async function deleteFileFromR2(siteId, filePath) {
     filePath,
   });
 
-  const headers = await getHeadersWithTurnstile();
-
   const response = await fetch(`/api/files?${params.toString()}`, {
     method: "DELETE",
-    headers,
   });
 
   return response.ok;
@@ -210,11 +131,8 @@ async function deleteAllFilesFromR2(siteId) {
     deleteAll: "true",
   });
 
-  const headers = await getHeadersWithTurnstile();
-
   const response = await fetch(`/api/files?${params.toString()}`, {
     method: "DELETE",
-    headers,
   });
 
   return response.ok;
@@ -296,263 +214,37 @@ async function uploadFilesToR2(siteId, fileItems) {
   }
 }
 
-const GITLAB_AUTH_URL = "https://gitlab.com/oauth/authorize";
-const GITLAB_CLIENT_ID = "12328ed7f6e7e0ffae8d10d8531df71aeffd7db927c966ffc763bf07e8800656";
-const GITLAB_REDIRECT_URI = "https://agorapages.com/gitlab/oauth/callback";
-const GITLAB_DEV_CLIENT_ID = "31f7d88be4728aeffa2afa1ec6075b959aadf4e4015cd4afa725815a083ece66";
-const GITLAB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/gitlab/oauth/callback";
-const GITLAB_CLIENT_SCOPE = "read_user";
-
-const GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize";
-const GITHUB_CLIENT_ID = "Ov23liqELtwrv29MS9Wc";
-const GITHUB_REDIRECT_URI = "https://agorapages.com/github/oauth/callback";
-const GITHUB_DEV_CLIENT_ID = "Ov23liwXpCsvFNlZJ0x8";
-const GITHUB_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/github/oauth/callback";
-const GITHUB_CLIENT_SCOPE = "read:user";
-
-const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_CLIENT_ID = "8624161102-4guo9djint6glfkl2e6detjhlgoe3iv2.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = "https://agorapages.com/google/oauth/callback";
-const GOOGLE_DEV_REDIRECT_URI = "https://develop.pluribus-me.pages.dev/google/oauth/callback";
-const GOOGLE_CLIENT_SCOPE = "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
-
-var GITLAB_USER_ID = null;
-var GITHUB_USERNAME = null;
-var GOOGLE_USER_ID = null;
-var CURRENT_USERNAME = null;
-
-const STORAGE_KEY_GITLAB_OAUTH_TOKEN = "agorapages.com.gitlab.oauth_token";
-const STORAGE_KEY_GITHUB_OAUTH_TOKEN = "agorapages.com.github.oauth_token";
-const STORAGE_KEY_GOOGLE_OAUTH_TOKEN = "agorapages.com.google.oauth_token";
 const STORAGE_KEY_USERNAME = "agorapages.com.username";
 
-// Check if we have a token in the URL hash (from OAuth callback redirect)
-if (window.location.hash) {
-  const params = new URLSearchParams(window.location.hash.substring(1));
-  let accessToken;
-  if (window.location.hash.startsWith("#gitlab")) {
-    accessToken = params.get("gitlab_access_token");
-    sessionStorage.setItem(STORAGE_KEY_GITLAB_OAUTH_TOKEN, accessToken);
-  } else if (window.location.hash.startsWith("#github")) {
-    accessToken = params.get("github_access_token");
-    sessionStorage.setItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN, accessToken);
-  } else if (window.location.hash.startsWith("#google")) {
-    accessToken = params.get("google_access_token");
-    sessionStorage.setItem(STORAGE_KEY_GOOGLE_OAUTH_TOKEN, accessToken);
-  }
-
-  if (accessToken) {
-    // Clear the hash from URL
-    window.history.replaceState(null, null, window.location.pathname);
-  }
-}
-
-function getOauthTokenGitlab() {
-  return sessionStorage.getItem(STORAGE_KEY_GITLAB_OAUTH_TOKEN);
-}
-
-function getOauthTokenGithub() {
-  return sessionStorage.getItem(STORAGE_KEY_GITHUB_OAUTH_TOKEN);
-}
-
-function getOauthTokenGoogle() {
-  return sessionStorage.getItem(STORAGE_KEY_GOOGLE_OAUTH_TOKEN);
-}
-
 function displayLoginButtons() {
-  // Create container for both buttons
   const buttonContainer = document.createElement("div");
   buttonContainer.style.display = "flex";
   buttonContainer.style.gap = "10px";
   buttonContainer.style.justifyContent = "center";
   buttonContainer.style.flexWrap = "wrap";
 
-  // GitHub login button
-  var githubLoginButton = document.createElement("button");
-  githubLoginButton.classList.add("btn");
-  githubLoginButton.innerHTML = '<img src="/assets/Octicons-mark-github.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px; filter: invert(1);"> Sign in with GitHub';
-  githubLoginButton.style.padding = "10px 18px";
-  githubLoginButton.style.cursor = "pointer";
-  githubLoginButton.style.display = "inline-flex";
-  githubLoginButton.style.alignItems = "center";
+  const providers = [
+    { name: "Google", icon: "/assets/Google_G_logo.svg", path: "/api/auth/google/start", style: "" },
+    { name: "GitHub", icon: "/assets/Octicons-mark-github.svg", path: "/api/auth/github/start", style: "filter: invert(1);" },
+    { name: "GitLab", icon: "/assets/GitLab_icon.svg", path: "/api/auth/gitlab/start", style: "" },
+  ];
 
-  githubLoginButton.addEventListener("click", () => {
-    // Build the authorization URL
-    let clientId;
-    let redirectUri;
-    if (document.location.origin.includes("develop")) {
-      clientId = GITHUB_DEV_CLIENT_ID;
-      redirectUri = GITHUB_DEV_REDIRECT_URI;
-    } else {
-      clientId = GITHUB_CLIENT_ID;
-      redirectUri = GITHUB_REDIRECT_URI;
-    }
-
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      scope: GITHUB_CLIENT_SCOPE,
+  for (const p of providers) {
+    const btn = document.createElement("button");
+    btn.classList.add("btn");
+    btn.innerHTML = `<img src="${p.icon}" alt="" style="width: 18px; height: 18px; margin-right: 8px; ${p.style}"> Sign in with ${p.name}`;
+    btn.style.padding = "10px 18px";
+    btn.style.cursor = "pointer";
+    btn.style.display = "inline-flex";
+    btn.style.alignItems = "center";
+    btn.addEventListener("click", () => {
+      window.location.href = p.path;
     });
-
-    // Redirect user to login page
-    window.location.href = `${GITHUB_AUTH_URL}?${params.toString()}`;
-  });
-
-  // GitLab login button
-  var gitlabLoginButton = document.createElement("button");
-  gitlabLoginButton.classList.add("btn");
-  gitlabLoginButton.innerHTML = '<img src="/assets/GitLab_icon.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px;"> Sign in with GitLab';
-  gitlabLoginButton.style.padding = "10px 18px";
-  gitlabLoginButton.style.cursor = "pointer";
-  gitlabLoginButton.style.display = "inline-flex";
-  gitlabLoginButton.style.alignItems = "center";
-
-  gitlabLoginButton.addEventListener("click", () => {
-    // Build the authorization URL
-    
-    // Build the authorization URL
-    let clientId;
-    let redirectUri;
-    if (document.location.origin.includes("develop")) {
-      clientId = GITLAB_DEV_CLIENT_ID;
-      redirectUri = GITLAB_DEV_REDIRECT_URI;
-    } else {
-      clientId = GITLAB_CLIENT_ID;
-      redirectUri = GITLAB_REDIRECT_URI;
-    }
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      scope: GITLAB_CLIENT_SCOPE,
-      response_type: "code",
-    });
-
-    // Redirect user to login page
-    window.location.href = `${GITLAB_AUTH_URL}?${params.toString()}`;
-  });
-
-  // Google login button
-  var googleLoginButton = document.createElement("button");
-  googleLoginButton.classList.add("btn");
-  googleLoginButton.innerHTML = '<img src="/assets/Google_G_logo.svg" alt="" style="width: 18px; height: 18px; margin-right: 8px;"> Sign in with Google';
-  googleLoginButton.style.padding = "10px 18px";
-  googleLoginButton.style.cursor = "pointer";
-  googleLoginButton.style.display = "inline-flex";
-  googleLoginButton.style.alignItems = "center";
-
-  googleLoginButton.addEventListener("click", () => {
-    // Build the authorization URL
-    // Same client ID for dev and prod, only redirect URI differs
-    let redirectUri;
-    if (document.location.origin.includes("develop")) {
-      redirectUri = GOOGLE_DEV_REDIRECT_URI;
-    } else {
-      redirectUri = GOOGLE_REDIRECT_URI;
-    }
-
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirectUri,
-      scope: GOOGLE_CLIENT_SCOPE,
-      response_type: "code",
-      access_type: "offline",
-    });
-
-    // Redirect user to login page
-    window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`;
-  });
-
-  buttonContainer.appendChild(googleLoginButton);
-  buttonContainer.appendChild(githubLoginButton);
-  buttonContainer.appendChild(gitlabLoginButton);
+    buttonContainer.appendChild(btn);
+  }
 
   const sitesListPanel = document.getElementById("sites-list-panel");
   sitesListPanel.appendChild(buttonContainer);
-}
-
-async function getGitlabUserId() {
-  if (GITLAB_USER_ID) {
-    return GITLAB_USER_ID;
-  }
-
-  const response = await fetch("https://gitlab.com/api/v4/user", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGitlab()}`,
-    },
-  });
-
-  if (!response.ok) return null;
-
-  const data = await response.json();
-
-  GITLAB_USER_ID = data.id;
-
-  console.log("GitLab User ID:", data.id);
-
-  return data.id;
-}
-
-async function getGithubUsername() {
-  if (GITHUB_USERNAME) {
-    return GITHUB_USERNAME;
-  }
-
-  const response = await fetch("https://api.github.com/user", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGithub()}`,
-      Accept: "application/vnd.github+json",
-    },
-  });
-
-  if (!response.ok) return null;
-
-  const data = await response.json();
-
-  GITHUB_USERNAME = data.login;
-
-  console.log("GitHub User ID:", data.login);
-
-  return data.login;
-}
-
-async function getGoogleUserId() {
-  if (GOOGLE_USER_ID) {
-    return GOOGLE_USER_ID;
-  }
-
-  const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGoogle()}`,
-    },
-  });
-
-  if (!response.ok) return null;
-
-  const data = await response.json();
-
-  GOOGLE_USER_ID = data.id;
-
-  console.log("Google User ID:", data.id);
-
-  return data.id;
-}
-
-// Get current provider and provider ID
-async function getCurrentProviderInfo() {
-  if (getOauthTokenGitlab() !== null) {
-    const providerId = await getGitlabUserId();
-    return { provider: "gitlab", providerId: String(providerId) };
-  } else if (getOauthTokenGithub() !== null) {
-    const providerId = await getGithubUsername();
-    return { provider: "github", providerId: providerId };
-  } else if (getOauthTokenGoogle() !== null) {
-    const providerId = await getGoogleUserId();
-    return { provider: "google", providerId: providerId };
-  }
-  return null;
 }
 
 // Check if username is available
@@ -563,25 +255,12 @@ async function checkUsernameAvailable(username) {
   return !data.exists;
 }
 
-// Get user by provider ID (check if user already has a username)
-async function getUserByProvider(provider, providerId) {
-  const response = await fetch(`/api/users?provider=${provider}&providerId=${encodeURIComponent(providerId)}`);
-  if (!response.ok) return null;
-  const data = await response.json();
-  if (data.exists === false) return null;
-  return data;
-}
-
-// Create a new user with username
-async function createUser(username, provider, providerId) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
+// Create a new user with username (provider info comes from server session)
+async function createUser(username) {
   const response = await fetch("/api/users", {
     method: "POST",
-    headers,
-    body: JSON.stringify({ username, provider, providerId }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username }),
   });
 
   if (!response.ok) {
@@ -594,7 +273,6 @@ async function createUser(username, provider, providerId) {
   return user;
 }
 
-// Get stored username from session
 function getStoredUsername() {
   if (CURRENT_USERNAME) return CURRENT_USERNAME;
   const stored = sessionStorage.getItem(STORAGE_KEY_USERNAME);
@@ -604,26 +282,20 @@ function getStoredUsername() {
   return stored;
 }
 
-// Get the display username (original casing) for UI purposes
 function getDisplayUsername() {
-  return sessionStorage.getItem('DISPLAY_USERNAME') || getStoredUsername();
+  return DISPLAY_USERNAME_CACHE || sessionStorage.getItem('DISPLAY_USERNAME') || getStoredUsername();
 }
 
-// Set stored username (lowercase for functional use, original for display)
 function setStoredUsername(username) {
+  DISPLAY_USERNAME_CACHE = username;
   sessionStorage.setItem('DISPLAY_USERNAME', username);
   const lower = username.toLowerCase();
   CURRENT_USERNAME = lower;
   sessionStorage.setItem(STORAGE_KEY_USERNAME, lower);
 }
 
-async function getSites(owner) {
-  const params = new URLSearchParams();
-  if (owner) {
-    params.set("owner", owner);
-  }
-
-  const response = await fetch(`/api/sites?${params.toString()}`, {
+async function getSites() {
+  const response = await fetch("/api/sites", {
     method: "GET",
     headers: {
       "Cache-Control": "no-cache",
@@ -640,49 +312,7 @@ async function getSites(owner) {
   return sites;
 }
 
-async function deleteSiteGitlab(siteId) {
-  const gitlabDeleteSiteUrl = `https://gitlab.com/api/v4/projects/${siteId}`;
-  const payload = {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGitlab()}`,
-    },
-  };
-
-  const response = await fetch(gitlabDeleteSiteUrl, payload);
-
-  if (!response.ok) {
-    console.error("Failed to delete GitLab site:", response.status);
-    return false;
-  }
-
-  console.log("GitLab site deleted successfully:", siteId);
-  return true;
-}
-
-async function deleteSiteGithub(siteId) {
-  const githubDeleteSiteUrl = `https://api.github.com/repos/${siteId}`;
-  const payload = {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${getOauthTokenGithub()}`,
-      Accept: "application/vnd.github+json",
-    },
-  };
-
-  const response = await fetch(githubDeleteSiteUrl, payload);
-
-  if (!response.ok) {
-    console.error("Failed to delete GitHub site:", response.status);
-    return false;
-  }
-
-  console.log("GitHub site deleted successfully:", siteId);
-  return true;
-}
-
-// ==================== Unified R2 Site Operations ====================
-// These functions work the same regardless of provider (GitHub/GitLab)
+// ==================== R2 Site Operations ====================
 
 // Helper function to guess content type from filename
 function guessContentType(filename) {
@@ -710,6 +340,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     owner: owner || siteId.split("/")[0] || "",
     siteType: siteType || "pages",
     createdAt: new Date().toISOString(),
+    ...(isBlog ? {} : { showHistory: true }),
   };
 
   // Create default home page content for pages sites
@@ -1246,13 +877,9 @@ async function getCollaborators(siteId) {
 }
 
 async function renameSite(siteId, displayName) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/sites", {
     method: "PATCH",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ siteId, displayName }),
   });
 
@@ -1309,17 +936,6 @@ async function checkUserCanEditSite(siteId, username) {
   return { canEdit: isCollaborator, isOwner: false };
 }
 
-async function getSharedSites(username) {
-  const params = new URLSearchParams({ username });
-  const response = await fetch(`/api/collaborators?${params.toString()}`);
-
-  if (!response.ok) {
-    console.error("Failed to fetch shared sites:", response.status);
-    return [];
-  }
-
-  return await response.json();
-}
 
 // ==================== Subscriber / Mailing List Functions ====================
 
@@ -1337,24 +953,18 @@ async function getSubscribers(siteId) {
 
 async function removeSubscriber(siteId, subscriberId) {
   const params = new URLSearchParams({ siteId, id: subscriberId });
-  const headers = await getHeadersWithTurnstile();
 
   const response = await fetch(`/api/subscribers?${params.toString()}`, {
     method: "DELETE",
-    headers,
   });
 
   return response.ok;
 }
 
 async function importSubscribers(siteId, emails) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/subscribers", {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ siteId, emails }),
   });
 
@@ -1366,13 +976,9 @@ async function importSubscribers(siteId, emails) {
 }
 
 async function notifySubscribers(siteId, postTitle, postExcerpt, postUrl) {
-  const headers = await getHeadersWithTurnstile({
-    "Content-Type": "application/json",
-  });
-
   const response = await fetch("/api/notify", {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ siteId, postTitle, postExcerpt, postUrl }),
   });
 

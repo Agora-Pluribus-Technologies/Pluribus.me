@@ -1,17 +1,8 @@
-// GET /api/users/download - Download all user data as JSON (ZIP created client-side)
+// GET /api/users/download - Download own user data as JSON (ZIP created client-side)
 export async function onRequestGet(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
+  const { env } = context;
+  const usernameLower = context.data.username;
 
-  const username = url.searchParams.get("username");
-
-  if (!username) {
-    return new Response("Missing required parameter: username", { status: 400 });
-  }
-
-  const usernameLower = username.toLowerCase();
-
-  // Get user info from D1 database
   const user = await env.USERS_DB.prepare(
     "SELECT username FROM Users WHERE LOWER(username) = LOWER(?)"
   ).bind(usernameLower).first();
@@ -29,7 +20,6 @@ export async function onRequestGet(context) {
       sites: [],
     };
 
-    // Get all user's sites from D1
     const sitesResult = await env.USERS_DB.prepare(
       "SELECT siteId, owner, repo FROM Sites WHERE LOWER(owner) = LOWER(?)"
     ).bind(usernameLower).all();
@@ -42,7 +32,6 @@ export async function onRequestGet(context) {
         files: [],
       };
 
-      // Get all R2 files for this site
       try {
         const r2Prefix = `${siteId}/`;
         const r2List = await env.PLURIBUS_BUCKET.list({ prefix: r2Prefix });
@@ -54,7 +43,6 @@ export async function onRequestGet(context) {
               const contentType = fileObj.httpMetadata?.contentType || "application/octet-stream";
               const arrayBuffer = await fileObj.arrayBuffer();
 
-              // Convert to base64 for transport
               const bytes = new Uint8Array(arrayBuffer);
               let binary = "";
               for (let i = 0; i < bytes.length; i++) {

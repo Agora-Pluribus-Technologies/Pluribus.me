@@ -1,8 +1,8 @@
-// functions/api/notify.js
-// Sends email notification to all subscribers of a site when a new post is published
+import { isOwner, forbidden } from "./auth/_authorize.js";
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const sessionUsername = context.data.username;
 
   let data;
   try {
@@ -17,13 +17,16 @@ export async function onRequestPost(context) {
     return new Response("Missing required fields: siteId, postTitle, postUrl", { status: 400 });
   }
 
-  // Verify the site exists and get display name
   const site = await env.USERS_DB.prepare(
     "SELECT siteId, owner, displayName, repo FROM Sites WHERE siteId = ?"
   ).bind(siteId).first();
 
   if (!site) {
     return new Response("Site not found", { status: 404 });
+  }
+
+  if (!(await isOwner(env, siteId, sessionUsername))) {
+    return forbidden();
   }
 
   const siteName = site.displayName || site.repo || siteId;
