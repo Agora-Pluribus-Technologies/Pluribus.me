@@ -2,6 +2,17 @@ import { canAccess, forbidden } from "./auth/_authorize.js";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
+async function purgeCache(request, siteId, filePaths) {
+  const cache = caches.default;
+  const origin = new URL(request.url).origin;
+  for (const fp of filePaths) {
+    if (!fp.startsWith("public/")) continue;
+    const servingPath = fp.slice("public/".length);
+    const url = `${origin}/s/${siteId}/${servingPath}`;
+    await cache.delete(new Request(url));
+  }
+}
+
 // PUT /api/files - Save a file to R2
 export async function onRequestPut(context) {
   const { request, env } = context;
@@ -65,6 +76,8 @@ export async function onRequestPut(context) {
         contentType: contentType || guessContentType(normalizedPath),
       },
     });
+
+    context.waitUntil(purgeCache(request, siteId, [normalizedPath]));
 
     return new Response(JSON.stringify({ success: true, key: r2Key }), {
       status: 200,
@@ -167,6 +180,11 @@ export async function onRequestPost(context) {
       console.error(`R2 operation error for ${r2Key}:`, error);
       errors.push({ filePath: normalizedPath, error: error.message });
     }
+  }
+
+  const changedPaths = results.map(r => r.filePath);
+  if (changedPaths.length > 0) {
+    context.waitUntil(purgeCache(request, siteId, changedPaths));
   }
 
   return new Response(JSON.stringify({ success: errors.length === 0, results, errors }), {
@@ -281,10 +299,11 @@ export async function onRequestDelete(context) {
 
       if (listed.objects.length > 0) {
         const keysToDelete = listed.objects.map(obj => obj.key);
-        // R2 delete accepts an array of keys
         for (const key of keysToDelete) {
           await env.PLURIBUS_BUCKET.delete(key);
         }
+        const deletedPaths = keysToDelete.map(k => k.replace(`${siteId}/`, ""));
+        context.waitUntil(purgeCache(request, siteId, deletedPaths));
       }
 
       return new Response(JSON.stringify({ success: true, deleted: listed.objects.length }), {
@@ -301,6 +320,8 @@ export async function onRequestDelete(context) {
       const r2Key = `${siteId}/${normalizedPath}`;
 
       await env.PLURIBUS_BUCKET.delete(r2Key);
+
+      context.waitUntil(purgeCache(request, siteId, [normalizedPath]));
 
       return new Response(JSON.stringify({ success: true, key: r2Key }), {
         status: 200,
