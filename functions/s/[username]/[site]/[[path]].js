@@ -106,10 +106,8 @@ export async function onRequest(context) {
     const object = await env.PLURIBUS_BUCKET.get(r2Key);
 
     // Build response headers
-    // Text files are not cached by default, so this header is ignored for markdown and HTML (which is what we want)
-    // However, images like uploaded WEBPs will be cached for an hour at the CDN, which is good for performance
     const headers = new Headers(corsHeaders);
-    headers.set("Cache-Control", "public, max-age=0, s-maxage=3600");
+    headers.set("Cache-Control", "public, max-age=0, s-maxage=31536000");
 
     let response;
 
