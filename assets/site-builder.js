@@ -692,8 +692,32 @@ function showPanelEditModal(block, callback) {
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
-      ['table', 'link']
+      ['table', 'link'],
+      [{
+        name: 'image',
+        tooltip: 'Insert image',
+        className: 'toastui-editor-toolbar-icons image',
+        command: 'insertImage'
+      }]
     ]
+  });
+
+  panelEditor.addCommand('wysiwyg', 'insertImage', () => {
+    showImageUploadPopup(({ filename, caption }) => {
+      const url = `/s/${currentSitePathFull}/${filename}`;
+      const alt = caption || filename;
+      panelEditor.insertText(`![${alt}](${url})`);
+    });
+    return true;
+  });
+
+  panelEditor.addCommand('markdown', 'insertImage', () => {
+    showImageUploadPopup(({ filename, caption }) => {
+      const url = `/s/${currentSitePathFull}/${filename}`;
+      const alt = caption || filename;
+      panelEditor.insertText(`![${alt}](${url})`);
+    });
+    return true;
   });
 
   // Event handlers
@@ -1228,8 +1252,32 @@ function showBlogPostEditModal(content, displayName, callback) {
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
-      ['table', 'link']
+      ['table', 'link'],
+      [{
+        name: 'image',
+        tooltip: 'Insert image',
+        className: 'toastui-editor-toolbar-icons image',
+        command: 'insertImage'
+      }]
     ]
+  });
+
+  blogPostEditor.addCommand('wysiwyg', 'insertImage', () => {
+    showImageUploadPopup(({ filename, caption }) => {
+      const url = `/s/${currentSitePathFull}/${filename}`;
+      const alt = caption || filename;
+      blogPostEditor.insertText(`![${alt}](${url})`);
+    });
+    return true;
+  });
+
+  blogPostEditor.addCommand('markdown', 'insertImage', () => {
+    showImageUploadPopup(({ filename, caption }) => {
+      const url = `/s/${currentSitePathFull}/${filename}`;
+      const alt = caption || filename;
+      blogPostEditor.insertText(`![${alt}](${url})`);
+    });
+    return true;
   });
 
   // Image select button
