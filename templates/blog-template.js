@@ -204,7 +204,7 @@ function parsePostMarkdown(markdown, pageInfo, basePath) {
   // title: Post Title
   // date: 2024-01-15
   // tags: tag1, tag2, tag3
-  // image: filename.avif
+  // image: filename.webp
   // embed: https://youtube.com/watch?v=xxx
   // ---
   // Body content here...

@@ -64,11 +64,11 @@ async function processImage(file) {
           if (blob) {
             resolve(blob);
           } else {
-            reject(new Error('Failed to convert image to AVIF'));
+            reject(new Error('Failed to convert image to WebP'));
           }
         },
-        'image/avif',
-        0 // minimum quality
+        'image/webp',
+        0.75
       );
     };
 
@@ -102,7 +102,7 @@ async function processAndUploadImage(file) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .replace(/-+/g, '-');
-    const filename = `${sanitizedName}.avif`;
+    const filename = `${sanitizedName}.webp`;
 
     const base64Content = await blobToBase64(processedBlob);
     const success = await uploadImage(currentSiteId, filename, base64Content);
@@ -1404,7 +1404,7 @@ function showBlogPostEditModal(content, displayName, callback) {
         <div class="blog-post-field">
           <label for="blogPostImage">Featured Image</label>
           <div class="blog-post-media-input">
-            <input type="text" id="blogPostImage" placeholder="image-filename.avif" value="${escapeHtml(postData.image)}" readonly>
+            <input type="text" id="blogPostImage" placeholder="image-filename.webp" value="${escapeHtml(postData.image)}" readonly>
             <button type="button" id="blogPostImageSelect" class="blog-post-media-btn">Select</button>
             <button type="button" id="blogPostImageClear" class="blog-post-media-clear">&times;</button>
           </div>
