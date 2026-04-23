@@ -1591,6 +1591,7 @@ nav {
   height: 100%;
   overflow-y: auto;
   background-color: var(--bg-primary);
+  padding-bottom: 300px; /* Extra space for adding new blocks at the end */
 }
 
 .block-item {
