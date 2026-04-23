@@ -1097,7 +1097,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         // Show success or failure message
         if (deploySuccess) {
-          showAlertBar("Deployed successfully!", true);
+          showAlertBar("Deployed successfully! Changes can take up to 5 minutes to appear.", true);
           // Enable Visit Site button after successful deploy
           setSiteAvailable(true);
         } else {
@@ -1324,7 +1324,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         // For blog sites, auto-deploy; for pages sites, mark as modified
         if (currentSiteType === "blog") {
           await autoPublishBlogSettings();
-          showAlertBar("Settings saved and published.", true);
+          showAlertBar("Settings saved and published. Changes can take up to 5 minutes to appear.", true);
         } else {
           modified = true;
           updateDeployButtonState();
@@ -1666,7 +1666,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         hideDeployOverlay();
 
         if (deploySuccess) {
-          showAlertBar("Successfully reverted to commit " + shortSha, true);
+          showAlertBar("Successfully reverted to commit " + shortSha + ". Changes can take up to 5 minutes to appear.", true);
           // Enable Visit Site button after successful deploy
           setSiteAvailable(true);
         } else {
