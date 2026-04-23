@@ -979,11 +979,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Add new site to cache
         const newSite = {
           siteId: siteId,
-          provider: provider,
           owner: owner,
           repo: repo,
-          branch: "main",
-          basePath: "/public",
           displayName: rawSiteName,
           siteType: siteType,
         };
