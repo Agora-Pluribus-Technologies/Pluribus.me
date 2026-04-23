@@ -2393,7 +2393,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
   if (deleteConfirmInput && confirmDeleteAccountButton) {
     deleteConfirmInput.addEventListener("input", function() {
-      const username = getStoredUsername();
+      const username = getDisplayUsername();
       if (deleteConfirmInput.value === username) {
         confirmDeleteAccountButton.disabled = false;
       } else {
@@ -2412,7 +2412,7 @@ document.addEventListener("DOMContentLoaded", function() {
       }
 
       // Double-check username matches
-      if (deleteConfirmInput.value !== username) {
+      if (deleteConfirmInput.value !== getDisplayUsername()) {
         alert("Username does not match.");
         return;
       }
