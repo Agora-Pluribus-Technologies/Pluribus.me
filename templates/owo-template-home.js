@@ -30,7 +30,6 @@ function decodeImages() {
       Array.from(p.querySelectorAll("br")).forEach(br => br.remove());
 
       p.style.textAlign = "center";
-      p.parentElement.parentElement.classList.remove("h-entry");
       p.parentElement.parentElement.classList.add("image-container");
       p.parentElement.classList.remove("e-content");
       const caption = img.getAttribute("title");
@@ -261,7 +260,6 @@ async function fetchPagesJson(origin, basePath) {
 
 async function createMenubar(origin, basePath, pagesJson) {
   const menubar = document.createElement("nav");
-  menubar.style.width = "100%";
 
   if (pagesJson) {
     for (const page of pagesJson) {
