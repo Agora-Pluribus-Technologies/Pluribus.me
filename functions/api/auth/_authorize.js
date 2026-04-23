@@ -10,7 +10,7 @@ export async function isOwner(env, siteId, username) {
 // Checks if the session user is a collaborator on the given site
 export async function isCollaborator(env, siteId, username) {
   const collab = await env.USERS_DB.prepare(
-    "SELECT username FROM Collaborators WHERE siteId = ? AND LOWER(username) = LOWER(?)"
+    "SELECT c.userId FROM Collaborators c JOIN Users u ON c.userId = u.id WHERE c.siteId = ? AND LOWER(u.username) = LOWER(?)"
   ).bind(siteId, username).first();
   return !!collab;
 }

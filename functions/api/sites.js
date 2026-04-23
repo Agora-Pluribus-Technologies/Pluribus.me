@@ -90,7 +90,7 @@ export async function onRequestGet(context) {
 
     // Also include sites where user is a collaborator
     const collabResult = await env.USERS_DB.prepare(
-      "SELECT siteId FROM Collaborators WHERE LOWER(username) = LOWER(?)"
+      "SELECT c.siteId FROM Collaborators c JOIN Users u ON c.userId = u.id WHERE LOWER(u.username) = LOWER(?)"
     ).bind(sessionUsername).all();
     const collabSiteIds = (collabResult.results || []).map(c => c.siteId);
 
