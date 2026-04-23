@@ -151,17 +151,6 @@ function parseMarkdownToBlocks(markdown) {
       continue;
     }
 
-    // Check for document attachment block
-    const docMatch = trimmed.match(/^```doc-attachment\n([\s\S]*?)\n```$/);
-    if (docMatch) {
-      blocks.push({
-        id: generateBlockId(),
-        type: 'document',
-        content: docMatch[1].trim()
-      });
-      continue;
-    }
-
     // Check for link-button block
     const linkButtonMatch = trimmed.match(/^```link-button\n([\s\S]*?)\n```$/);
     if (linkButtonMatch) {
@@ -202,9 +191,6 @@ function blocksToMarkdown(blocks) {
     switch (block.type) {
       case 'embed':
         parts.push(`\`\`\`embed\n${block.content}\n\`\`\``);
-        break;
-      case 'document':
-        parts.push(`\`\`\`doc-attachment\n${block.content}\n\`\`\``);
         break;
       case 'link-button':
         parts.push(`\`\`\`link-button\n${block.content}\n\`\`\``);
@@ -380,8 +366,6 @@ function renderBlockPreview(block) {
       return renderImagePreview(block.content);
     case 'embed':
       return renderEmbedPreview(block.content);
-    case 'document':
-      return renderDocumentPreview(block.content);
     case 'link-button':
       return renderLinkButtonPreview(block.content);
     default:
@@ -435,13 +419,6 @@ function renderEmbedPreview(content) {
     ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'src', 'width', 'height']
   });
   return `<div class="embed-container">${sanitized}</div>`;
-}
-
-function renderDocumentPreview(filename) {
-  const isDocx = filename.toLowerCase().endsWith('.docx');
-  const icon = isDocx ? '&#x1F4DD;' : '&#x1F4C4;';
-  const url = `/s/${currentSitePathFull}/${filename}`;
-  return `<div class="pdf-download-container"><a href="${escapeHtml(url)}" class="pdf-download-button" target="_blank" download="${escapeHtml(filename)}"><span class="pdf-icon">${icon}</span> Download ${escapeHtml(filename)}</a></div>`;
 }
 
 function renderLinkButtonPreview(content) {
@@ -508,7 +485,6 @@ function showAddBlockMenu(wrapper, afterIndex) {
     { type: 'link-button', icon: '&#x1F517;', label: 'Link Button' },
     { type: 'image', icon: '🖼️', label: 'Image' },
     { type: 'embed', icon: '&#x1F3AC;', label: 'Embed' },
-    { type: 'document', icon: '&#x1F4C4;', label: 'Document' }
   ];
 
   options.forEach(opt => {
@@ -600,13 +576,6 @@ function editBlock(index) {
     case 'embed':
       showEmbedPopup(block.content, (newContent) => {
         block.content = newContent;
-        saveBlocksToCache();
-        renderAllBlocks();
-      });
-      break;
-    case 'document':
-      showDocumentUploadPopup((filename) => {
-        block.content = filename;
         saveBlocksToCache();
         renderAllBlocks();
       });
@@ -1113,186 +1082,6 @@ function showLinkButtonPopup(currentUrl, currentLabel, callback) {
     popup.remove();
     if (callback) callback(url, label);
   });
-}
-
-// ============================================
-// Document Upload Popup (for blocks)
-// ============================================
-
-function showDocumentUploadPopup(callback) {
-  pendingBlockCallback = callback;
-
-  const existingPopup = document.querySelector('.document-upload-popup');
-  if (existingPopup) existingPopup.remove();
-
-  const popup = document.createElement('div');
-  popup.className = 'block-popup document-upload-popup';
-
-  popup.innerHTML = `
-    <div class="popup-content">
-      <div class="popup-header">
-        <h3>Upload Document</h3>
-        <button class="popup-close">&times;</button>
-      </div>
-      <div class="document-upload-dropzone" id="docDropzone">
-        <input type="file" id="docFileInput" accept=".pdf,.docx" style="display: none;" />
-        <div class="dropzone-content">
-          <p class="dropzone-icon">&#x1F4C4;</p>
-          <p>Click to select a PDF or DOCX file</p>
-          <p style="font-size: 12px; color: #888;">PDF or DOCX only. Max file size: 5 MB</p>
-        </div>
-      </div>
-      <div class="document-upload-progress" style="display: none;">
-        <div class="progress-bar"><div class="progress-fill"></div></div>
-        <p class="progress-text">Uploading...</p>
-      </div>
-      <div class="document-list-section">
-        <h4>Uploaded Documents</h4>
-        <div class="document-list" id="documentList"></div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(popup);
-
-  const dropzone = popup.querySelector('#docDropzone');
-  const fileInput = popup.querySelector('#docFileInput');
-  const closeButton = popup.querySelector('.popup-close');
-  const progressContainer = popup.querySelector('.document-upload-progress');
-  const documentList = popup.querySelector('#documentList');
-
-  populateDocumentListForBlock(documentList, popup);
-
-  closeButton.addEventListener('click', () => {
-    popup.remove();
-    pendingBlockCallback = null;
-  });
-
-  dropzone.addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (file) await handleDocumentUploadForBlock(file, popup, progressContainer, documentList);
-  });
-
-  dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('dragover');
-  });
-
-  dropzone.addEventListener('dragleave', () => {
-    dropzone.classList.remove('dragover');
-  });
-
-  dropzone.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      await handleDocumentUploadForBlock(file, popup, progressContainer, documentList);
-    }
-  });
-}
-
-function populateDocumentListForBlock(listElement, popup) {
-  listElement.innerHTML = '';
-
-  if (documentCache.length === 0) {
-    listElement.innerHTML = '<p class="list-empty">No documents uploaded yet</p>';
-    return;
-  }
-
-  documentCache.forEach(filename => {
-    const isDocx = filename.toLowerCase().endsWith('.docx');
-    const icon = isDocx ? '&#x1F4DD;' : '&#x1F4C4;';
-
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'document-list-item';
-
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'document-icon';
-    iconSpan.innerHTML = icon;
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'document-name';
-    nameSpan.textContent = filename;
-
-    const selectBtn = document.createElement('button');
-    selectBtn.className = 'document-select-btn';
-    selectBtn.textContent = 'Select';
-    selectBtn.addEventListener('click', () => {
-      popup.remove();
-      if (pendingBlockCallback) {
-        pendingBlockCallback(filename);
-        pendingBlockCallback = null;
-      }
-    });
-
-    itemDiv.appendChild(iconSpan);
-    itemDiv.appendChild(nameSpan);
-    itemDiv.appendChild(selectBtn);
-    listElement.appendChild(itemDiv);
-  });
-}
-
-async function handleDocumentUploadForBlock(file, popup, progressContainer, documentList) {
-  // Validate file type
-  const fileName = file.name.toLowerCase();
-  if (!fileName.endsWith('.pdf') && !fileName.endsWith('.docx')) {
-    alert('Only PDF and DOCX files are accepted.');
-    return;
-  }
-
-  // Validate file size
-  const maxSize = 5 * 1024 * 1024;
-  if (file.size > maxSize) {
-    alert('File is too large. Maximum size is 5 MB.');
-    return;
-  }
-
-  try {
-    progressContainer.style.display = 'block';
-
-    const originalExtension = file.name.toLowerCase().endsWith('.docx') ? '.docx' : '.pdf';
-    const contentType = originalExtension === '.docx'
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      : 'application/pdf';
-
-    let originalName = file.name.replace(/\.(pdf|docx)$/i, '');
-    const sanitizedName = originalName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-+/g, '-');
-    const filename = `${sanitizedName}${originalExtension}`;
-
-    const base64Content = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    const success = await saveFileToR2(currentSiteId, `public/${filename}`, base64Content, {
-      encoding: 'base64',
-      contentType: contentType
-    });
-
-    if (!success) throw new Error('Upload failed');
-
-    addDocumentToCache(filename);
-    progressContainer.style.display = 'none';
-    populateDocumentListForBlock(documentList, popup);
-
-    popup.remove();
-    if (pendingBlockCallback) {
-      pendingBlockCallback(filename);
-      pendingBlockCallback = null;
-    }
-  } catch (error) {
-    progressContainer.style.display = 'none';
-    alert('Failed to upload: ' + error.message);
-  }
 }
 
 // ============================================
