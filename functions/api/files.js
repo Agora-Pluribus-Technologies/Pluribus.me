@@ -10,7 +10,9 @@ async function purgeCache(env, siteId, filePaths) {
     if (!fp.startsWith("public/")) continue;
     if (fp.endsWith(".json")) continue;
     const servingPath = fp.slice("public/".length);
-    urls.push(`https://agorapages.com/s/${siteId}/${servingPath}`);
+    if (!servingPath.endsWith(".html")) {
+      urls.push(`https://agorapages.com/s/${siteId}/${servingPath}`);
+    }
   }
   if (urls.length === 0) return;
   for (let i = 0; i < urls.length; i += PURGE_BATCH_SIZE) {
