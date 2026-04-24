@@ -458,6 +458,7 @@ nav {
 }
 
 .sidebar-toggle {
+  display: none;
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--border-light);
@@ -2893,8 +2894,29 @@ nav {
     max-width: 95%;
   }
 
+  .sidebar-toggle {
+    display: block;
+  }
+
+  .editor-sidebar {
+    width: 36px !important;
+  }
+
+  .editor-sidebar #editorSidebarContent {
+    display: none;
+  }
+
   .editor-sidebar:not(.collapsed) {
+    width: 220px !important;
     box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .editor-sidebar:not(.collapsed) #editorSidebarContent {
+    display: flex;
+  }
+
+  #editorBody {
+    margin-left: 36px !important;
   }
 
   .toastui-editor-tooltip {
