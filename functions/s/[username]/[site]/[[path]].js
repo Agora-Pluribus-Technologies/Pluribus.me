@@ -109,7 +109,7 @@ export async function onRequest(context) {
 
     // Build response headers
     const headers = new Headers(corsHeaders);
-    headers.set("Cache-Control", "public, max-age=0, s-maxage=300");
+    headers.set("Cache-Control", "public, max-age=0, s-maxage=60");
 
     let response;
 
