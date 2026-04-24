@@ -496,6 +496,9 @@ async function openSiteInEditor(site, initialPage = "index") {
         fileName = newFileName;
       }
       markdownCache[i].fileName = `public/${fileName}.md`
+      if (markdownCache[i].sortOrder == null) {
+        markdownCache[i].sortOrder = i;
+      }
     }
 
     // Load all markdown files, images.json, and documents.json in parallel
