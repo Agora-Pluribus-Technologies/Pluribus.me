@@ -28,6 +28,8 @@ async function purgeCache(env, siteId, filePaths) {
     );
     if (!resp.ok) {
       console.error("Cache purge failed:", await resp.text());
+    } else {
+      console.log(`Purged ${batch.length} URLs from cache:`, batch);
     }
   }
 }
