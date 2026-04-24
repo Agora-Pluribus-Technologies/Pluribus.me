@@ -116,6 +116,7 @@ export async function onRequestPost(context) {
 
   const results = [];
   const errors = [];
+  const operations = [];
 
   for (const file of files) {
     const { filePath, content, contentType, encoding, action } = file;
@@ -125,60 +126,68 @@ export async function onRequestPost(context) {
       continue;
     }
 
-    // Validate filePath (no path traversal)
     if (filePath.includes("..")) {
       errors.push({ filePath, error: "Invalid file path" });
       continue;
     }
 
-    // Normalize filePath
     const normalizedPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
     const r2Key = `${siteId}/${normalizedPath}`;
 
-    try {
-      if (action === "delete") {
-        // Delete the file
-        await env.PLURIBUS_BUCKET.delete(r2Key);
-        results.push({ filePath: normalizedPath, action: "deleted" });
-      } else {
-        // Create or update the file
-        if (content === undefined) {
-          errors.push({ filePath, error: "Missing content for create/update" });
+    if (action === "delete") {
+      operations.push({
+        normalizedPath,
+        r2Key,
+        promise: env.PLURIBUS_BUCKET.delete(r2Key),
+        action: "deleted",
+      });
+    } else {
+      if (content === undefined) {
+        errors.push({ filePath, error: "Missing content for create/update" });
+        continue;
+      }
+
+      let body;
+      if (encoding === "base64") {
+        const binaryString = atob(content);
+        if (binaryString.length > MAX_FILE_SIZE) {
+          errors.push({ filePath, error: "File exceeds maximum size of 10 MB" });
           continue;
         }
-
-        let body;
-        if (encoding === "base64") {
-          const binaryString = atob(content);
-          // Check file size
-          if (binaryString.length > MAX_FILE_SIZE) {
-            errors.push({ filePath, error: "File exceeds maximum size of 10 MB" });
-            continue;
-          }
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          body = bytes;
-        } else {
-          // Check file size for plain text
-          if (content.length > MAX_FILE_SIZE) {
-            errors.push({ filePath, error: "File exceeds maximum size of 10 MB" });
-            continue;
-          }
-          body = content;
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
         }
+        body = bytes;
+      } else {
+        if (content.length > MAX_FILE_SIZE) {
+          errors.push({ filePath, error: "File exceeds maximum size of 10 MB" });
+          continue;
+        }
+        body = content;
+      }
 
-        await env.PLURIBUS_BUCKET.put(r2Key, body, {
+      operations.push({
+        normalizedPath,
+        r2Key,
+        promise: env.PLURIBUS_BUCKET.put(r2Key, body, {
           httpMetadata: {
             contentType: contentType || guessContentType(normalizedPath),
           },
-        });
-        results.push({ filePath: normalizedPath, action: "saved" });
-      }
-    } catch (error) {
-      console.error(`R2 operation error for ${r2Key}:`, error);
-      errors.push({ filePath: normalizedPath, error: error.message });
+        }),
+        action: "saved",
+      });
+    }
+  }
+
+  const settled = await Promise.allSettled(operations.map(op => op.promise));
+  for (let i = 0; i < operations.length; i++) {
+    const op = operations[i];
+    if (settled[i].status === "fulfilled") {
+      results.push({ filePath: op.normalizedPath, action: op.action });
+    } else {
+      console.error(`R2 operation error for ${op.r2Key}:`, settled[i].reason);
+      errors.push({ filePath: op.normalizedPath, error: settled[i].reason?.message || "Unknown error" });
     }
   }
 
