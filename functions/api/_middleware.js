@@ -1,9 +1,6 @@
 import { parseSessionCookie, getSession, refreshSession } from "./auth/_session.js";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-const RATE_LIMIT_MAX = 100;
-const RATE_LIMIT_WINDOW = 60000; // 1 minute in ms
-const RATE_LIMIT_TTL = 120; // KV TTL in seconds
 
 async function validateTurnstileToken(token, secretKey, ip) {
   const formData = new FormData();
@@ -90,22 +87,6 @@ export async function onRequest(context) {
         headers: { "Content-Type": "application/json" },
       });
     }
-  }
-
-  // Rate limiting per user ID
-  if (session.userId) {
-    const minute = Math.floor(Date.now() / RATE_LIMIT_WINDOW);
-    const rateLimitKey = `ratelimit:${session.userId}:${minute}`;
-    const count = parseInt(await env.SESSIONS.get(rateLimitKey) || "0", 10);
-    if (count >= RATE_LIMIT_MAX) {
-      return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
-        status: 429,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    context.waitUntil(
-      env.SESSIONS.put(rateLimitKey, String(count + 1), { expirationTtl: RATE_LIMIT_TTL })
-    );
   }
 
   // Attach session to context for downstream handlers

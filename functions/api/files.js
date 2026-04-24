@@ -2,16 +2,6 @@ import { canAccess, forbidden } from "./auth/_authorize.js";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-async function purgeCache(request, siteId, filePaths) {
-  const cache = caches.default;
-  const origin = new URL(request.url).origin;
-  for (const fp of filePaths) {
-    if (!fp.startsWith("public/")) continue;
-    const servingPath = fp.slice("public/".length);
-    const url = `${origin}/s/${siteId}/${servingPath}`;
-    await cache.delete(new Request(url));
-  }
-}
 
 // PUT /api/files - Save a file to R2
 export async function onRequestPut(context) {
@@ -76,8 +66,6 @@ export async function onRequestPut(context) {
         contentType: contentType || guessContentType(normalizedPath),
       },
     });
-
-    await purgeCache(request, siteId, [normalizedPath]);
 
     return new Response(JSON.stringify({ success: true, key: r2Key }), {
       status: 200,
@@ -188,15 +176,6 @@ export async function onRequestPost(context) {
     } else {
       console.error(`R2 operation error for ${op.r2Key}:`, settled[i].reason);
       errors.push({ filePath: op.normalizedPath, error: settled[i].reason?.message || "Unknown error" });
-    }
-  }
-
-  const changedPaths = results.map(r => r.filePath);
-  if (changedPaths.length > 0) {
-    try {
-      await purgeCache(request, siteId, changedPaths);
-    } catch (e) {
-      console.error("Cache purge error:", e);
     }
   }
 
@@ -315,8 +294,6 @@ export async function onRequestDelete(context) {
         for (const key of keysToDelete) {
           await env.PLURIBUS_BUCKET.delete(key);
         }
-        const deletedPaths = keysToDelete.map(k => k.replace(`${siteId}/`, ""));
-        await purgeCache(request, siteId, deletedPaths);
       }
 
       return new Response(JSON.stringify({ success: true, deleted: listed.objects.length }), {
@@ -333,8 +310,6 @@ export async function onRequestDelete(context) {
       const r2Key = `${siteId}/${normalizedPath}`;
 
       await env.PLURIBUS_BUCKET.delete(r2Key);
-
-      await purgeCache(request, siteId, [normalizedPath]);
 
       return new Response(JSON.stringify({ success: true, key: r2Key }), {
         status: 200,

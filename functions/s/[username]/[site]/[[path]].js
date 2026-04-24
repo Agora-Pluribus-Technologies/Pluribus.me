@@ -102,12 +102,18 @@ export async function onRequest(context) {
 
   console.log("R2 key:", r2Key);
 
+  const isJson = filePath.endsWith(".json");
+
   try {
     let object = await env.PLURIBUS_BUCKET.get(r2Key);
 
     // Build response headers
     const headers = new Headers(corsHeaders);
-    headers.set("Cache-Control", "public, max-age=0, s-maxage=31536000");
+    if (isJson) {
+      headers.set("Cache-Control", "public, max-age=0, no-store");
+    } else {
+      headers.set("Cache-Control", "public, max-age=0, s-maxage=3600");
+    }
 
     let response;
 
@@ -126,8 +132,10 @@ export async function onRequest(context) {
       });
     }
 
-    // Store in cache (must clone since body can only be read once)
-    context.waitUntil(cache.put(cacheKey, response.clone()));
+    // Don't cache JSON files — they change on every deploy
+    if (!isJson) {
+      context.waitUntil(cache.put(cacheKey, response.clone()));
+    }
 
     return response;
   } catch (error) {
