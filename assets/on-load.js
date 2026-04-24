@@ -2138,11 +2138,16 @@ function renderFolderNode(container, node, depth, siteId) {
   deleteBtn.title = "Delete folder";
   deleteBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    const pagesInFolder = markdownCache.filter(c =>
+    const allInFolder = markdownCache.filter(c =>
       c.fileName.startsWith(`public/${node.folderPath}/`)
     );
-    if (confirm(`Delete folder "${node.name}" and ${pagesInFolder.length} page(s) inside it?`)) {
-      for (const page of pagesInFolder) {
+    const folderIndexPath = `public/${node.folderPath}/index.md`;
+    const userPages = allInFolder.filter(c => c.fileName !== folderIndexPath);
+    const msg = userPages.length > 0
+      ? `Delete folder "${node.name}" and ${userPages.length} page(s) inside it?`
+      : `Delete folder "${node.name}"?`;
+    if (confirm(msg)) {
+      for (const page of allInFolder) {
         removeCacheByFileName(page.fileName);
       }
       if (currentSitePath && currentSitePath.startsWith(`public/${node.folderPath}/`)) {
