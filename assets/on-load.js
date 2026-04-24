@@ -82,16 +82,16 @@ function restoreAutoSave(siteId) {
 
 const TOUR_STEPS = [
   {
-    target: '#pageMenubarContent .menubar-item',
+    target: '#editorSidebarToggle',
     title: 'Your Pages',
-    text: 'Each tab here is a page on your site. Click a tab to edit that page. You can drag tabs to reorder them.',
-    position: 'bottom',
+    text: 'Open the sidebar to see all your pages and folders. Click a page to edit it, or create new pages and folders to organize your site.',
+    position: 'right',
   },
   {
     target: '#addNewPageButton',
     title: 'Create New Pages',
-    text: 'Click the + button to add a new page to your site. Give it a name and it will appear as a new tab.',
-    position: 'bottom',
+    text: 'Click "+ Page" to add a new page, or "+ Folder" to create a folder for organizing pages.',
+    position: 'right',
   },
   {
     target: '.add-block-btn',
@@ -593,12 +593,12 @@ async function openSiteInEditor(site, initialPage = "index") {
     console.error("Error checking/creating index.html:", error);
   }
 
-  // For blog sites, hide the page menubar and edit history button
-  const pageMenubar = document.getElementById("pageMenubar");
+  // For blog sites, hide the sidebar and edit history button
+  const editorSidebar = document.getElementById("editorSidebar");
   const historyButton = document.getElementById("historyButton");
   if (currentSiteType === "blog") {
-    if (pageMenubar) {
-      pageMenubar.style.display = "none";
+    if (editorSidebar) {
+      editorSidebar.style.display = "none";
     }
     if (historyButton) {
       historyButton.style.display = "none";
@@ -606,14 +606,14 @@ async function openSiteInEditor(site, initialPage = "index") {
     // Load the blog editor
     initBlogEditor();
   } else {
-    if (pageMenubar) {
-      pageMenubar.style.display = "flex";
+    if (editorSidebar) {
+      editorSidebar.style.display = "";
     }
     if (historyButton) {
       historyButton.style.display = "";
     }
-    // Populate menubar from cache
-    await populateMenubar(site.siteId);
+    // Populate sidebar from cache
+    await populateSidebar(site.siteId);
     // Load the block editor
     initBlockEditor();
   }
@@ -621,46 +621,27 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Remember whether we restored from auto-save so we can preserve the modified flag
   const wasRestoredFromAutoSave = restoredFromAutoSave;
 
-  // Find and click the appropriate page tab
+  // Find and click the appropriate page in the sidebar
   setTimeout(() => {
-    // Position menubar after DOM is ready
-    positionPageMenubar();
-    const menubarItems = document.querySelectorAll(".menubar-item");
+    // Position the editor body below the topbar
+    positionEditorBody();
     const fileName = `public/${initialPage}.md`;
-    let pageFound = false;
+    const cacheItem = markdownCache.find(c =>
+      c.fileName === fileName ||
+      c.displayName.toLowerCase() === initialPage.toLowerCase()
+    );
 
-    for (const item of menubarItems) {
-      const text = item.querySelector("span");
-      if (text) {
-        // Check if this menubar item matches the requested page
-        const cacheItem = markdownCache.find(c =>
-          c.fileName === fileName ||
-          c.displayName.toLowerCase() === initialPage.toLowerCase()
-        );
-
-        if (cacheItem && text.textContent === cacheItem.displayName) {
-          console.log("Opening page:", cacheItem.displayName);
-          text.click();
-          pageFound = true;
-
-          // Keep modified=true if we restored auto-save (user has unpublished edits)
-          if (!wasRestoredFromAutoSave) {
-            modified = false;
-          }
-          break;
-        }
+    if (cacheItem) {
+      console.log("Opening page:", cacheItem.displayName);
+      selectSidebarPage(cacheItem.fileName);
+      if (!wasRestoredFromAutoSave) {
+        modified = false;
       }
-    }
-
-    // Fallback to first page if requested page not found
-    if (!pageFound) {
+    } else if (markdownCache.length > 0) {
       console.log("Page not found:", initialPage, "- opening first page");
-      const firstPageTab = document.querySelector(".menubar-item .menubar-item-text");
-      if (firstPageTab) {
-        firstPageTab.click();
-        if (!wasRestoredFromAutoSave) {
-          modified = false;
-        }
+      selectSidebarPage(markdownCache[0].fileName);
+      if (!wasRestoredFromAutoSave) {
+        modified = false;
       }
     }
 
@@ -748,18 +729,18 @@ function positionSitesListPanel() {
   }
 }
 
-// Position pageMenubar below editor-topbar
-function positionPageMenubar() {
+// Position editorBody below editor-topbar
+function positionEditorBody() {
   const editorTopbar = document.getElementById("editor-topbar");
-  const pageMenubar = document.getElementById("pageMenubar");
-  if (editorTopbar && pageMenubar) {
+  const editorBody = document.getElementById("editorBody");
+  if (editorTopbar && editorBody) {
     const topbarRect = editorTopbar.getBoundingClientRect();
-    pageMenubar.style.marginTop = topbarRect.bottom + "px";
+    editorBody.style.marginTop = topbarRect.bottom + "px";
   }
 }
 
 // Call on load and resize
-window.addEventListener("resize", positionPageMenubar);
+window.addEventListener("resize", positionEditorBody);
 
 document.addEventListener("DOMContentLoaded", async function () {
 
@@ -1649,13 +1630,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           console.log("Git history saved to R2");
         }
 
-        // Update the page menubar with the new pages
-        await populateMenubar(currentSiteId);
+        // Update the sidebar with the new pages
+        await populateSidebar(currentSiteId);
 
-        // Select the first page by clicking on it
-        const firstMenuItem = document.querySelector(".menubar-item .menubar-item-text");
-        if (firstMenuItem) {
-          firstMenuItem.click();
+        // Select the first page
+        if (markdownCache.length > 0) {
+          selectSidebarPage(markdownCache[0].fileName);
         }
 
         // Reset modified flag after successful deployment
@@ -1685,88 +1665,129 @@ document.addEventListener("DOMContentLoaded", async function () {
   document
     .getElementById("addNewPageButton")
     .addEventListener("click", function () {
-      console.log("Add new page button clicked");
+      if (!currentSiteId) return;
+      showSidebarInlineInput("page");
+    });
 
-      if (!currentSiteId) {
-        console.error("No site selected");
-        return;
-      }
+  // Handle add new folder button click
+  document
+    .getElementById("addNewFolderButton")
+    .addEventListener("click", function () {
+      if (!currentSiteId) return;
+      showSidebarInlineInput("folder");
+    });
 
-      const menubarContent = document.getElementById("pageMenubarContent");
-      const addButton = document.getElementById("addNewPageButton");
-
-      // Create input element for new page name
-      const inputContainer = document.createElement("div");
-      inputContainer.classList.add("menubar-item");
-      inputContainer.style.padding = "4px";
-
-      const input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = "Page name...";
-      input.style.border = "1px solid #1890ff";
-      input.style.padding = "4px";
-      input.style.fontSize = "14px";
-      input.style.backgroundColor = "#1e1e1e";
-      input.style.color = "#fff";
-
-      inputContainer.appendChild(input);
-      // Insert the input just before the add button (at the end of tabs)
-      menubarContent.insertBefore(inputContainer, addButton);
-
-      // Focus on the input
-      input.focus();
-
-      // Handle Enter key press
-      input.addEventListener("keypress", async function (event) {
-        if (event.key === "Enter") {
-          input.blur();
-        }
-      });
-
-      // Handle clicking outside or blur
-      input.addEventListener("blur", async function () {
-        inputContainer.remove();
-        const displayName = input.value.trim();
-
-        // Check if displayName already exists
-        if (displayName) {
-          const existingPage = getCacheByDisplayName(displayName);
-          if (existingPage) {
-            alert(`A page with the name "${displayName}" already exists. Please choose a different name.`);
-            return;
-          }
-        }
-
-        await triggerCreateNewSite(displayName);
-        await populateMenubar(currentSiteId);
-      });
+  // Handle sidebar toggle
+  document
+    .getElementById("editorSidebarToggle")
+    .addEventListener("click", function () {
+      const sidebar = document.getElementById("editorSidebar");
+      sidebar.classList.toggle("collapsed");
     });
 });
 
-async function triggerCreateNewSite(displayName) {
-  if (displayName) {
-    // Sanitize for file name: lowercase and replace spaces with hyphens
-    const sanitizedFileName = displayName.toLowerCase().replace(/\s+/g, "-");
-    console.log("Creating new page:", displayName, "->", sanitizedFileName);
+// Get the currently selected folder path in the sidebar (or root)
+let selectedSidebarFolder = "";
 
-    // Add to markdownCache with default content
-    const fileName = `public/${sanitizedFileName}.md`;
-    const content = `# ${displayName}\n\nClick **Edit** on this panel to start writing. Use the **+** buttons to add more panels.`;
-    addOrUpdateCache(fileName, displayName, content);
-    console.log("New page added to cache:", displayName);
+function getSelectedFolder() {
+  return selectedSidebarFolder;
+}
 
-    // Mark as modified
-    modified = true;
-    updateDeployButtonState();
+function showSidebarInlineInput(type) {
+  const sidebarTree = document.getElementById("sidebarTree");
+  if (!sidebarTree) return;
 
-    // Refresh the menubar
-    await populateMenubar(currentSiteId);
+  // Expand the sidebar if collapsed
+  const sidebar = document.getElementById("editorSidebar");
+  sidebar.classList.remove("collapsed");
 
-    // Open the new page in the editor
-    currentSitePath = fileName;
-    const cacheItem = getCacheByFileName(fileName);
-    loadPageIntoBlockEditor(cacheItem.content);
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "sidebar-inline-input";
+  input.placeholder = type === "folder" ? "Folder name..." : "Page name...";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.padding = "2px 8px";
+  const folder = getSelectedFolder();
+  wrapper.style.paddingLeft = (folder ? (folder.split("/").length + 1) * 16 : 8) + "px";
+  wrapper.appendChild(input);
+
+  // Insert at the right position based on selected folder
+  if (folder) {
+    const folderChildren = sidebarTree.querySelector(`[data-folder-path="${folder}"] + .sidebar-tree-children`);
+    if (folderChildren) {
+      folderChildren.prepend(wrapper);
+    } else {
+      sidebarTree.prepend(wrapper);
+    }
+  } else {
+    sidebarTree.prepend(wrapper);
   }
+
+  input.focus();
+
+  input.addEventListener("keypress", function (e) {
+    if (e.key === "Enter") input.blur();
+    if (e.key === "Escape") { wrapper.remove(); }
+  });
+
+  input.addEventListener("blur", async function () {
+    const name = input.value.trim();
+    wrapper.remove();
+    if (!name) return;
+
+    if (type === "folder") {
+      await createNewFolder(name);
+    } else {
+      await createNewPage(name);
+    }
+  });
+}
+
+async function createNewPage(displayName) {
+  const sanitizedFileName = displayName.toLowerCase().replace(/\s+/g, "-");
+  const folder = getSelectedFolder();
+  const folderPrefix = folder ? `${folder}/` : "";
+  const fileName = `public/${folderPrefix}${sanitizedFileName}.md`;
+
+  const existing = getCacheByFileName(fileName);
+  if (existing) {
+    alert(`A page with that name already exists in this location.`);
+    return;
+  }
+
+  const content = `# ${displayName}\n\nClick **Edit** on this panel to start writing. Use the **+** buttons to add more panels.`;
+  addOrUpdateCache(fileName, displayName, content);
+
+  modified = true;
+  updateDeployButtonState();
+
+  await populateSidebar(currentSiteId);
+  selectSidebarPage(fileName);
+}
+
+async function createNewFolder(folderName) {
+  const sanitizedName = folderName.toLowerCase().replace(/\s+/g, "-");
+  const parentFolder = getSelectedFolder();
+  const folderPath = parentFolder ? `${parentFolder}/${sanitizedName}` : sanitizedName;
+  const indexFileName = `public/${folderPath}/index.md`;
+
+  const existing = getCacheByFileName(indexFileName);
+  if (existing) {
+    alert(`A folder with that name already exists in this location.`);
+    return;
+  }
+
+  const content = `# ${folderName}`;
+  addOrUpdateCache(indexFileName, folderName, content);
+
+  modified = true;
+  updateDeployButtonState();
+
+  selectedSidebarFolder = folderPath;
+  await populateSidebar(currentSiteId);
+  selectSidebarPage(indexFileName);
+}
 }
 
 function updateDeployButtonState() {
@@ -1957,272 +1978,317 @@ function populateSitesList(ownedSites, sharedSites = []) {
   positionSitesListPanel();
 }
 
-async function populateMenubar(siteId) {
-  const menubarContent = document.getElementById("pageMenubarContent");
-  const addButton = document.getElementById("addNewPageButton");
-
-  // Clear existing content but preserve the add button
-  menubarContent.innerHTML = "";
+// Build a tree structure from flat markdownCache paths
+function buildTreeFromCache() {
+  const root = [];
+  const folderMap = {};
 
   for (const cacheItem of markdownCache) {
-    const fileItem = document.createElement("div");
-    fileItem.classList.add("menubar-item");
+    const relativePath = cacheItem.fileName.replace("public/", "").replace(".md", "");
+    const parts = relativePath.split("/");
 
-    // Create text span for file path
-    const fileText = document.createElement("span");
-    const displayName = cacheItem.displayName;
-    fileText.textContent = displayName;
-    fileText.classList.add("menubar-item-text");
-
-    // Create button container
-    const buttonContainer = document.createElement("div");
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.gap = "5px";
-
-    // Create rename button (available for all pages including Home)
-    const renameButton = document.createElement("button");
-    renameButton.textContent = "✎";
-    renameButton.style.background = "transparent";
-    renameButton.style.border = "none";
-    renameButton.style.color = "white";
-    renameButton.style.fontSize = "16px";
-    renameButton.style.cursor = "pointer";
-    renameButton.style.padding = "0 5px";
-    renameButton.title = "Rename page";
-
-    renameButton.addEventListener("click", async function (event) {
-      event.stopPropagation(); // Prevent triggering file click
-
-      // Hide the text and buttons
-      fileText.style.display = "none";
-      buttonContainer.style.display = "none";
-
-      // Create input element for new page name
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = displayName;
-      input.style.flex = "1";
-      input.style.border = "1px solid #1890ff";
-      input.style.padding = "4px";
-      input.style.fontSize = "14px";
-      input.style.backgroundColor = "#1e1e1e";
-      input.style.color = "#fff";
-
-      fileItem.insertBefore(input, fileItem.firstChild);
-      input.focus();
-      input.select();
-
-      // Handle Enter key press
-      input.addEventListener("keypress", async function (event) {
-        if (event.key === "Enter") {
-          input.blur();
-        }
+    if (parts.length === 1) {
+      root.push({
+        type: "file",
+        name: cacheItem.displayName,
+        path: cacheItem.fileName,
+        sortKey: cacheItem.displayName.toLowerCase(),
       });
-
-      // Handle blur
-      input.addEventListener("blur", async function () {
-        const newPageName = input.value.trim();
-
-        if (newPageName && newPageName !== displayName) {
-          const oldFilePath = cacheItem.fileName;
-          const existing = getCacheByFileName(oldFilePath);
-
-          // Sanitize page name: lowercase and replace spaces with hyphens
-          const sanitizedNewPageName = newPageName
-            .toLowerCase()
-            .replace(/\s+/g, "-");
-          const oldPageName = oldFilePath
-            .replace("public/", "")
-            .replace(".md", "");
-
-          console.log(
-            "Renaming page from:",
-            oldPageName,
-            "to:",
-            sanitizedNewPageName
-          );
-
-          // Update cache - rename the file in cache
-          const newFilePath = `public/${sanitizedNewPageName}.md`;
-          if (existing) {
-            existing.displayName = newPageName;
-            existing.fileName = newFilePath;
-            existing.modifiedAt = new Date().toISOString();
-          } else {
-            // If not in cache yet, fetch it first then rename
-            const content = await getFileContent(siteId, oldFilePath);
-            addOrUpdateCache(newFilePath, newPageName, content);
-          }
-
-          // Update current file path if it was the renamed file
-          if (currentSitePath === oldFilePath) {
-            currentSitePath = newFilePath;
-            const updatedItem = getCacheByFileName(newFilePath);
-            loadPageIntoBlockEditor(updatedItem.content);
-          }
-
-          // Mark as modified
-          modified = true;
-          updateDeployButtonState();
-
-          // Refresh the menubar
-          await populateMenubar(siteId);
-
-          console.log("Page renamed in cache:", newPageName);
-
-          // Click the renamed item in the menubar to load it
-          setTimeout(() => {
-            const menubarItems = document.querySelectorAll(".menubar-item");
-            for (const item of menubarItems) {
-              const text = item.querySelector("span");
-              if (text && text.textContent === newPageName) {
-                text.click();
-                break;
-              }
-            }
-          }, 100);
-        } else {
-          // Restore display
-          input.remove();
-          fileText.style.display = "block";
-          buttonContainer.style.display = "flex";
+    } else {
+      let currentChildren = root;
+      let currentPath = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+        if (!folderMap[currentPath]) {
+          const folderNode = {
+            type: "folder",
+            name: parts[i],
+            folderPath: currentPath,
+            sortKey: parts[i].toLowerCase(),
+            children: [],
+          };
+          folderMap[currentPath] = folderNode;
+          currentChildren.push(folderNode);
         }
-      });
-    });
-
-    buttonContainer.appendChild(renameButton);
-
-    // Only add delete button if there is more than one page
-    if (markdownCache.length > 1) {
-      // Create delete button
-      const deleteButton = document.createElement("button");
-      deleteButton.textContent = "×";
-      deleteButton.style.background = "transparent";
-      deleteButton.style.border = "none";
-      deleteButton.style.color = "#ff4444";
-      deleteButton.style.fontSize = "20px";
-      deleteButton.style.cursor = "pointer";
-      deleteButton.style.padding = "0 5px";
-      deleteButton.style.fontWeight = "bold";
-      deleteButton.title = "Delete page";
-
-      deleteButton.addEventListener("click", async function (event) {
-        event.stopPropagation(); // Prevent triggering file click
-
-        if (confirm(`Are you sure you want to delete "${displayName}"?`)) {
-          console.log("Deleting page:", displayName);
-
-          // Check if deleted file was the currently selected one
-          const wasSelected = currentSitePath === cacheItem.fileName;
-
-          // Remove from cache
-          removeCacheByFileName(cacheItem.fileName);
-
-          // Mark as modified
-          modified = true;
-          updateDeployButtonState();
-
-          // Refresh the menubar
-          await populateMenubar(siteId);
-
-          // If the deleted page was selected, click on the leftmost page tab
-          if (wasSelected) {
-            const firstPageTab = document.querySelector(".menubar-item .menubar-item-text");
-            if (firstPageTab) {
-              firstPageTab.click();
-            }
-          }
-
-          console.log("Page deleted from cache:", displayName);
-        }
-      });
-
-      buttonContainer.appendChild(deleteButton);
+        currentChildren = folderMap[currentPath].children;
+      }
+      const fileName = parts[parts.length - 1];
+      if (fileName === "index") {
+        // Folder index page — attach to the folder node
+        folderMap[currentPath]._indexItem = cacheItem;
+      } else {
+        currentChildren.push({
+          type: "file",
+          name: cacheItem.displayName,
+          path: cacheItem.fileName,
+          sortKey: cacheItem.displayName.toLowerCase(),
+        });
+      }
     }
-
-    fileItem.appendChild(fileText);
-    fileItem.appendChild(buttonContainer);
-
-    // Add drag-and-drop functionality for reordering
-    fileItem.draggable = true;
-    fileItem.dataset.index = markdownCache.indexOf(cacheItem);
-
-    fileItem.addEventListener("dragstart", function (e) {
-      e.dataTransfer.setData("text/plain", fileItem.dataset.index);
-      fileItem.classList.add("dragging");
-    });
-
-    fileItem.addEventListener("dragend", function () {
-      fileItem.classList.remove("dragging");
-    });
-
-    fileItem.addEventListener("dragover", function (e) {
-      e.preventDefault();
-      const draggingItem = document.querySelector(".menubar-item.dragging");
-      if (draggingItem && draggingItem !== fileItem) {
-        fileItem.classList.add("drag-over");
-      }
-    });
-
-    fileItem.addEventListener("dragleave", function () {
-      fileItem.classList.remove("drag-over");
-    });
-
-    fileItem.addEventListener("drop", async function (e) {
-      e.preventDefault();
-      fileItem.classList.remove("drag-over");
-
-      const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
-      const toIndex = parseInt(fileItem.dataset.index, 10);
-
-      if (fromIndex !== toIndex) {
-        // Reorder markdownCache
-        const [movedItem] = markdownCache.splice(fromIndex, 1);
-        markdownCache.splice(toIndex, 0, movedItem);
-
-        console.log("Reordered pages:", markdownCache.map(c => c.displayName));
-
-        // Mark as modified
-        modified = true;
-        updateDeployButtonState();
-
-        // Refresh the menubar
-        await populateMenubar(siteId);
-      }
-    });
-
-    fileItem.addEventListener("click", async function (e) {
-      // Don't trigger if clicking on buttons (rename/delete)
-      if (e.target.tagName === "BUTTON") return;
-
-      console.log(`Loading file: ${cacheItem.fileName}`);
-
-      // Remove active class from all items
-      document.querySelectorAll(".menubar-item").forEach((item) => {
-        item.classList.remove("active");
-      });
-
-      // Add active class to clicked item
-      fileItem.classList.add("active");
-
-      // Load file content - always from cache since we use cache as source of truth
-      let fileContent = cacheItem.content;
-      console.log(`Using cached content for ${cacheItem.fileName}`);
-
-      // Update deploy button state
-      updateDeployButtonState();
-
-      // Update current file path
-      currentSitePath = cacheItem.fileName;
-
-      // Load content into block editor
-      loadPageIntoBlockEditor(fileContent);
-    });
-    menubarContent.appendChild(fileItem);
   }
 
-  // Add the "+" button back at the end
-  menubarContent.appendChild(addButton);
+  // Sort: folders first, then files, alphabetically
+  function sortTree(nodes) {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return a.sortKey.localeCompare(b.sortKey);
+    });
+    for (const node of nodes) {
+      if (node.type === "folder" && node.children) {
+        sortTree(node.children);
+      }
+    }
+  }
+  sortTree(root);
+  return root;
+}
+
+// Track which folders are expanded in the sidebar
+const expandedFolders = new Set();
+
+async function populateSidebar(siteId) {
+  const sidebarTree = document.getElementById("sidebarTree");
+  if (!sidebarTree) return;
+  sidebarTree.innerHTML = "";
+
+  const tree = buildTreeFromCache();
+  renderTreeNodes(sidebarTree, tree, 0, siteId);
+}
+
+function renderTreeNodes(container, nodes, depth, siteId) {
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      renderFolderNode(container, node, depth, siteId);
+    } else {
+      renderFileNode(container, node, depth, siteId);
+    }
+  }
+}
+
+function renderFolderNode(container, node, depth, siteId) {
+  const isExpanded = expandedFolders.has(node.folderPath);
+
+  const folderEl = document.createElement("div");
+  folderEl.classList.add("sidebar-tree-node", "folder");
+  folderEl.style.paddingLeft = (depth * 16 + 8) + "px";
+  folderEl.dataset.folderPath = node.folderPath;
+
+  const arrow = document.createElement("span");
+  arrow.classList.add("sidebar-tree-arrow");
+  if (isExpanded) arrow.classList.add("expanded");
+  arrow.textContent = "▶";
+
+  const icon = document.createElement("span");
+  icon.classList.add("sidebar-tree-icon");
+  icon.textContent = isExpanded ? "📂" : "📁";
+
+  const label = document.createElement("span");
+  label.classList.add("sidebar-tree-label");
+  label.textContent = node.name;
+
+  const actions = document.createElement("span");
+  actions.classList.add("sidebar-tree-actions");
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.classList.add("sidebar-tree-action-btn", "delete");
+  deleteBtn.textContent = "×";
+  deleteBtn.title = "Delete folder";
+  deleteBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const pagesInFolder = markdownCache.filter(c =>
+      c.fileName.startsWith(`public/${node.folderPath}/`)
+    );
+    if (confirm(`Delete folder "${node.name}" and ${pagesInFolder.length} page(s) inside it?`)) {
+      for (const page of pagesInFolder) {
+        removeCacheByFileName(page.fileName);
+      }
+      if (currentSitePath && currentSitePath.startsWith(`public/${node.folderPath}/`)) {
+        if (markdownCache.length > 0) {
+          selectSidebarPage(markdownCache[0].fileName);
+        }
+      }
+      modified = true;
+      updateDeployButtonState();
+      await populateSidebar(siteId);
+    }
+  });
+  actions.appendChild(deleteBtn);
+
+  folderEl.appendChild(arrow);
+  folderEl.appendChild(icon);
+  folderEl.appendChild(label);
+  folderEl.appendChild(actions);
+
+  // Click folder to toggle expand/collapse and select it
+  folderEl.addEventListener("click", async (e) => {
+    if (e.target.tagName === "BUTTON") return;
+    if (isExpanded) {
+      expandedFolders.delete(node.folderPath);
+    } else {
+      expandedFolders.add(node.folderPath);
+    }
+    selectedSidebarFolder = node.folderPath;
+
+    // If folder has an index page, load it
+    if (node._indexItem) {
+      selectSidebarPage(node._indexItem.fileName);
+    }
+    await populateSidebar(siteId);
+  });
+
+  container.appendChild(folderEl);
+
+  // Children container
+  const childrenEl = document.createElement("div");
+  childrenEl.classList.add("sidebar-tree-children");
+  if (!isExpanded) childrenEl.classList.add("collapsed");
+  renderTreeNodes(childrenEl, node.children, depth + 1, siteId);
+  container.appendChild(childrenEl);
+}
+
+function renderFileNode(container, node, depth, siteId) {
+  const fileEl = document.createElement("div");
+  fileEl.classList.add("sidebar-tree-node");
+  if (currentSitePath === node.path) {
+    fileEl.classList.add("active");
+  }
+  fileEl.style.paddingLeft = (depth * 16 + 8) + "px";
+  fileEl.dataset.filePath = node.path;
+
+  const icon = document.createElement("span");
+  icon.classList.add("sidebar-tree-icon");
+  icon.textContent = "📄";
+
+  const label = document.createElement("span");
+  label.classList.add("sidebar-tree-label");
+  label.textContent = node.name;
+
+  const actions = document.createElement("span");
+  actions.classList.add("sidebar-tree-actions");
+
+  const renameBtn = document.createElement("button");
+  renameBtn.classList.add("sidebar-tree-action-btn");
+  renameBtn.textContent = "✎";
+  renameBtn.title = "Rename";
+  renameBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    startRenameInSidebar(fileEl, node, siteId);
+  });
+  actions.appendChild(renameBtn);
+
+  if (markdownCache.length > 1) {
+    const deleteBtn = document.createElement("button");
+    deleteBtn.classList.add("sidebar-tree-action-btn", "delete");
+    deleteBtn.textContent = "×";
+    deleteBtn.title = "Delete";
+    deleteBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete "${node.name}"?`)) {
+        const wasSelected = currentSitePath === node.path;
+        removeCacheByFileName(node.path);
+        modified = true;
+        updateDeployButtonState();
+        await populateSidebar(siteId);
+        if (wasSelected && markdownCache.length > 0) {
+          selectSidebarPage(markdownCache[0].fileName);
+        }
+      }
+    });
+    actions.appendChild(deleteBtn);
+  }
+
+  fileEl.appendChild(icon);
+  fileEl.appendChild(label);
+  fileEl.appendChild(actions);
+
+  // Click to open page
+  fileEl.addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON") return;
+    selectSidebarPage(node.path);
+  });
+
+  container.appendChild(fileEl);
+}
+
+function selectSidebarPage(fileName) {
+  const cacheItem = getCacheByFileName(fileName);
+  if (!cacheItem) return;
+
+  currentSitePath = fileName;
+
+  // Update active state in sidebar
+  document.querySelectorAll(".sidebar-tree-node").forEach(el => {
+    el.classList.remove("active");
+  });
+  const activeNode = document.querySelector(`[data-file-path="${fileName}"]`);
+  if (activeNode) activeNode.classList.add("active");
+
+  // Set selected folder based on file's parent
+  const relativePath = fileName.replace("public/", "");
+  const parts = relativePath.split("/");
+  if (parts.length > 1) {
+    selectedSidebarFolder = parts.slice(0, -1).join("/");
+  } else {
+    selectedSidebarFolder = "";
+  }
+
+  // Load content into block editor
+  loadPageIntoBlockEditor(cacheItem.content);
+  updateDeployButtonState();
+}
+
+function startRenameInSidebar(fileEl, node, siteId) {
+  const cacheItem = getCacheByFileName(node.path);
+  if (!cacheItem) return;
+
+  const label = fileEl.querySelector(".sidebar-tree-label");
+  const oldName = label.textContent;
+  label.style.display = "none";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "sidebar-inline-input";
+  input.value = oldName;
+  label.parentNode.insertBefore(input, label.nextSibling);
+  input.focus();
+  input.select();
+
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") input.blur();
+    if (e.key === "Escape") {
+      input.remove();
+      label.style.display = "";
+    }
+  });
+
+  input.addEventListener("blur", async () => {
+    const newName = input.value.trim();
+    input.remove();
+    label.style.display = "";
+
+    if (!newName || newName === oldName) return;
+
+    const oldFilePath = cacheItem.fileName;
+    const sanitized = newName.toLowerCase().replace(/\s+/g, "-");
+
+    // Preserve the folder prefix
+    const pathParts = oldFilePath.replace("public/", "").split("/");
+    pathParts[pathParts.length - 1] = `${sanitized}.md`;
+    const newFilePath = `public/${pathParts.join("/")}`;
+
+    cacheItem.displayName = newName;
+    cacheItem.fileName = newFilePath;
+    cacheItem.modifiedAt = new Date().toISOString();
+
+    if (currentSitePath === oldFilePath) {
+      currentSitePath = newFilePath;
+    }
+
+    modified = true;
+    updateDeployButtonState();
+    await populateSidebar(siteId);
+    selectSidebarPage(newFilePath);
+  });
 }
 
 // ==================== User Menu Functions ====================

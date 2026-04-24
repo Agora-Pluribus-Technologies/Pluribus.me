@@ -103,7 +103,17 @@ export async function onRequest(context) {
   console.log("R2 key:", r2Key);
 
   try {
-    const object = await env.PLURIBUS_BUCKET.get(r2Key);
+    let object = await env.PLURIBUS_BUCKET.get(r2Key);
+
+    // Folder URL fallback: if path.html not found, try path/index.html
+    if (!object && filePath.endsWith(".html") && !filePath.endsWith("/index.html")) {
+      const folderIndexPath = filePath.replace(/\.html$/, "/index.html");
+      const folderR2Key = `${siteId}/${basePath}/${folderIndexPath}`;
+      object = await env.PLURIBUS_BUCKET.get(folderR2Key);
+      if (object) {
+        filePath = folderIndexPath;
+      }
+    }
 
     // Build response headers
     const headers = new Headers(corsHeaders);

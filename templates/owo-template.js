@@ -17,8 +17,37 @@ document.addEventListener("DOMContentLoaded", async function () {
   const siteJson = await fetchSiteJson(origin, basePath);
   const siteName = siteJson ? siteJson.siteName : null;
   const showHistory = siteJson ? siteJson.showHistory : false;
-  await createMenubar(origin, basePath, pagesJson);
-  await fetchPageContent(origin, basePath, siteName, pagesJson);
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "site-layout";
+
+  const sidebar = createSidebar(origin, basePath, pagesJson);
+  wrapper.appendChild(sidebar);
+
+  const mainContent = document.createElement("div");
+  mainContent.className = "site-main";
+  wrapper.appendChild(mainContent);
+
+  document.body.appendChild(wrapper);
+
+  const hamburger = document.createElement("button");
+  hamburger.className = "sidebar-hamburger";
+  hamburger.innerHTML = "&#9776;";
+  hamburger.addEventListener("click", function () {
+    sidebar.classList.toggle("open");
+    backdrop.classList.toggle("visible");
+  });
+  document.body.appendChild(hamburger);
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "sidebar-backdrop";
+  backdrop.addEventListener("click", function () {
+    sidebar.classList.remove("open");
+    backdrop.classList.remove("visible");
+  });
+  document.body.appendChild(backdrop);
+
+  await fetchPageContent(origin, basePath, siteName, pagesJson, mainContent);
   decodeEmbeds(basePath);
   decodeImages(basePath);
   createFooter(origin, basePath, showHistory);
@@ -277,26 +306,132 @@ async function fetchPagesJson(origin, basePath) {
   return pagesJson;
 }
 
-async function createMenubar(origin, basePath, pagesJson) {
-  const menubar = document.createElement("nav");
+function buildTreeFromPages(pagesJson) {
+  if (!pagesJson) return [];
+  const root = [];
+  const folderMap = {};
 
-  if (pagesJson) {
-    for (const page of pagesJson) {
-      const displayName = page.displayName;
-      const fileName = page.fileName;
+  for (const page of pagesJson) {
+    const parts = page.fileName.split("/");
+    let currentLevel = root;
+    let currentPath = "";
 
-      const relPage = `${fileName}.html`;
-      const pageLink = document.createElement("a");
-      pageLink.classList.add("menu-link");
-      pageLink.href = `${origin}${basePath}/${relPage}`;
-      pageLink.textContent = displayName;
-      menubar.appendChild(pageLink);
+    for (let i = 0; i < parts.length - 1; i++) {
+      currentPath = currentPath ? currentPath + "/" + parts[i] : parts[i];
+      if (!folderMap[currentPath]) {
+        const folder = { name: parts[i], type: "folder", path: currentPath, children: [] };
+        folderMap[currentPath] = folder;
+        currentLevel.push(folder);
+      }
+      currentLevel = folderMap[currentPath].children;
     }
-    document.body.appendChild(menubar);
+
+    const fileName = parts[parts.length - 1];
+    if (fileName === "index") {
+      if (currentPath && folderMap[currentPath]) {
+        folderMap[currentPath]._indexItem = page;
+      }
+    } else {
+      currentLevel.push({
+        name: page.displayName,
+        type: "file",
+        path: page.fileName,
+        displayName: page.displayName,
+      });
+    }
   }
+
+  function sortTree(nodes) {
+    nodes.sort(function (a, b) {
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const node of nodes) {
+      if (node.children) sortTree(node.children);
+    }
+  }
+  sortTree(root);
+  return root;
 }
 
-async function fetchPageContent(origin, basePath, siteName, pagesJson) {
+function createSidebar(origin, basePath, pagesJson) {
+  const sidebar = document.createElement("aside");
+  sidebar.className = "site-sidebar";
+
+  const tree = buildTreeFromPages(pagesJson);
+
+  let currentPage = "";
+  if (
+    document.location.href.includes("agorapages.com/s") ||
+    document.location.href.includes("pluribus-me.pages.dev/s")
+  ) {
+    currentPage = window.location.pathname.split("/").slice(4).join("/").replace(".html", "");
+  } else {
+    currentPage = window.location.pathname.substring(1).replace(".html", "");
+  }
+  if (!currentPage || currentPage === "index") {
+    if (pagesJson && pagesJson.length > 0) currentPage = pagesJson[0].fileName;
+  }
+
+  function renderNodes(container, nodes, depth) {
+    const ul = document.createElement("ul");
+    ul.className = "sidebar-tree-list";
+    if (depth > 0) ul.style.paddingLeft = "16px";
+
+    for (const node of nodes) {
+      const li = document.createElement("li");
+      li.className = "sidebar-tree-item";
+
+      if (node.type === "folder") {
+        const isAncestor = currentPage.startsWith(node.path + "/");
+        const folderRow = document.createElement("div");
+        folderRow.className = "sidebar-folder-row" + (isAncestor ? " expanded" : "");
+
+        const arrow = document.createElement("span");
+        arrow.className = "sidebar-arrow";
+        arrow.textContent = isAncestor ? "▾" : "▸";
+
+        const label = document.createElement("span");
+        label.className = "sidebar-folder-label";
+        label.textContent = node.name;
+
+        folderRow.appendChild(arrow);
+        folderRow.appendChild(label);
+        li.appendChild(folderRow);
+
+        const childContainer = document.createElement("div");
+        childContainer.className = "sidebar-children";
+        childContainer.style.display = isAncestor ? "block" : "none";
+        renderNodes(childContainer, node.children, depth + 1);
+        li.appendChild(childContainer);
+
+        folderRow.addEventListener("click", function () {
+          const isExpanded = childContainer.style.display !== "none";
+          childContainer.style.display = isExpanded ? "none" : "block";
+          arrow.textContent = isExpanded ? "▸" : "▾";
+          folderRow.classList.toggle("expanded");
+        });
+      } else {
+        const link = document.createElement("a");
+        link.className = "sidebar-page-link";
+        link.href = origin + basePath + "/" + node.path + ".html";
+        link.textContent = node.displayName;
+        if (node.path === currentPage) {
+          link.classList.add("active");
+        }
+        li.appendChild(link);
+      }
+
+      ul.appendChild(li);
+    }
+    container.appendChild(ul);
+  }
+
+  renderNodes(sidebar, tree, 0);
+  return sidebar;
+}
+
+async function fetchPageContent(origin, basePath, siteName, pagesJson, mainContent) {
   marked.setOptions({
     gfm: true,
     breaks: true,
@@ -382,7 +517,6 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson) {
           sectionArticle.classList.add("h-entry");
 
           if (section.startsWith("<h")) {
-            // Extract title text from header tag
             const hNum = section.charAt(2);
             const tempDiv = document.createElement("div");
             tempDiv.innerHTML = section;
@@ -414,7 +548,7 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson) {
     panel.innerHTML = errorMessage;
   }
 
-  document.body.appendChild(panel);
+  mainContent.appendChild(panel);
 }
 
 function createFooter(origin, basePath, showHistory) {

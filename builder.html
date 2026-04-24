@@ -91,12 +91,19 @@
               <span id="publishStatus" class="publish-status pending-changes">Changes Not Yet Published</span>
             </div>
           </div>
-          <div id="pageMenubar">
-            <div id="pageMenubarContent">
-              <button id="addNewPageButton" class="menubar-item">+</button>
+          <div id="editorBody">
+            <div id="editorSidebar" class="editor-sidebar collapsed">
+              <button id="editorSidebarToggle" class="sidebar-toggle" title="Toggle sidebar">&#9776;</button>
+              <div id="editorSidebarContent">
+                <div id="sidebarActions">
+                  <button id="addNewPageButton" class="sidebar-action-btn" title="New page">+ Page</button>
+                  <button id="addNewFolderButton" class="sidebar-action-btn" title="New folder">+ Folder</button>
+                </div>
+                <div id="sidebarTree"></div>
+              </div>
             </div>
-          </div>
-          <div id="editor">
+            <div id="editor">
+            </div>
           </div>
         </div>
       </div>

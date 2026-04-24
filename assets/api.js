@@ -558,6 +558,50 @@ async function deployChanges(siteId) {
     });
   }
 
+  // Auto-generate folder index pages for folders without explicit index.md
+  if (!isBlogSite) {
+    const folders = new Set();
+    const explicitIndexes = new Set();
+    for (const item of markdownCache) {
+      const rel = item.fileName.replace("public/", "");
+      const parts = rel.split("/");
+      if (parts.length > 1) {
+        let folderPath = "";
+        for (let i = 0; i < parts.length - 1; i++) {
+          folderPath = folderPath ? folderPath + "/" + parts[i] : parts[i];
+          folders.add(folderPath);
+        }
+        if (parts[parts.length - 1] === "index.md") {
+          explicitIndexes.add(parts.slice(0, -1).join("/"));
+        }
+      }
+    }
+    for (const folder of folders) {
+      if (explicitIndexes.has(folder)) continue;
+      const folderName = folder.split("/").pop();
+      const displayName = folderName.charAt(0).toUpperCase() + folderName.slice(1);
+      const children = markdownCache.filter(item => {
+        const rel = item.fileName.replace("public/", "");
+        return rel.startsWith(folder + "/") && !rel.slice(folder.length + 1).includes("/");
+      });
+      let indexContent = `# ${displayName}\n\n`;
+      for (const child of children) {
+        const childRel = child.fileName.replace("public/", "").replace(".md", "");
+        indexContent += `- [${child.displayName}](/${childRel})\n`;
+      }
+      files.push({
+        filePath: `public/${folder}/index.html`,
+        content: template,
+        contentType: "text/html",
+      });
+      files.push({
+        filePath: `public/${folder}/index.md`,
+        content: indexContent,
+        contentType: "text/markdown",
+      });
+    }
+  }
+
   // Update pages.json (exclude latest.md)
   const pages = markdownCache
     .filter(item => item.fileName !== "public/latest.md")
