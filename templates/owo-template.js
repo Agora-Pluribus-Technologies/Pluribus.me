@@ -328,21 +328,13 @@ function buildTreeFromPages(pagesJson) {
       currentLevel = folderMap[currentPath].children;
     }
 
-    const fileName = parts[parts.length - 1];
-    if (fileName === "index") {
-      if (currentPath && folderMap[currentPath]) {
-        folderMap[currentPath]._indexItem = page;
-        folderMap[currentPath].sortOrder = page.sortOrder != null ? page.sortOrder : null;
-      }
-    } else {
-      currentLevel.push({
-        name: page.displayName,
-        type: "file",
-        path: page.fileName,
-        displayName: page.displayName,
-        sortOrder: page.sortOrder != null ? page.sortOrder : null,
-      });
-    }
+    currentLevel.push({
+      name: page.displayName,
+      type: "file",
+      path: page.fileName,
+      displayName: page.displayName,
+      sortOrder: page.sortOrder != null ? page.sortOrder : null,
+    });
   }
 
   function sortTree(nodes) {

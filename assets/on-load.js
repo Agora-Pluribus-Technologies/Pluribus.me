@@ -1783,24 +1783,25 @@ async function createNewFolder(folderName) {
   const sanitizedName = folderName.toLowerCase().replace(/\s+/g, "-");
   const parentFolder = getSelectedFolder();
   const folderPath = parentFolder ? `${parentFolder}/${sanitizedName}` : sanitizedName;
-  const indexFileName = `public/${folderPath}/index.md`;
 
-  const existing = getCacheByFileName(indexFileName);
-  if (existing) {
+  const existingFolder = markdownCache.some(c =>
+    c.fileName.startsWith(`public/${folderPath}/`)
+  );
+  if (existingFolder) {
     alert(`A folder with that name already exists in this location.`);
     return;
   }
 
   const sortOrder = getNextSortOrder(parentFolder);
-  const content = `# ${folderName}`;
-  addOrUpdateCache(indexFileName, folderName, content, { sortOrder });
+  const pageFileName = `public/${folderPath}/untitled.md`;
+  addOrUpdateCache(pageFileName, "Untitled", "# Untitled", { sortOrder });
 
   modified = true;
   updateDeployButtonState();
 
   selectedSidebarFolder = folderPath;
   await populateSidebar(currentSiteId);
-  selectSidebarPage(indexFileName);
+  selectSidebarPage(pageFileName);
 }
 
 function updateDeployButtonState() {
@@ -2037,18 +2038,12 @@ function buildTreeFromCache() {
         }
         currentChildren = folderMap[currentPath].children;
       }
-      const fileName = parts[parts.length - 1];
-      if (fileName === "index") {
-        folderMap[currentPath]._indexItem = cacheItem;
-        folderMap[currentPath].sortOrder = cacheItem.sortOrder;
-      } else {
-        currentChildren.push({
-          type: "file",
-          name: cacheItem.displayName,
-          path: cacheItem.fileName,
-          sortOrder: cacheItem.sortOrder,
-        });
-      }
+      currentChildren.push({
+        type: "file",
+        name: cacheItem.displayName,
+        path: cacheItem.fileName,
+        sortOrder: cacheItem.sortOrder,
+      });
     }
   }
 
@@ -2143,10 +2138,8 @@ function renderFolderNode(container, node, depth, siteId) {
     const allInFolder = markdownCache.filter(c =>
       c.fileName.startsWith(`public/${node.folderPath}/`)
     );
-    const folderIndexPath = `public/${node.folderPath}/index.md`;
-    const userPages = allInFolder.filter(c => c.fileName !== folderIndexPath);
-    const msg = userPages.length > 0
-      ? `Delete folder "${node.name}" and ${userPages.length} page(s) inside it?`
+    const msg = allInFolder.length > 0
+      ? `Delete folder "${node.name}" and ${allInFolder.length} page(s) inside it?`
       : `Delete folder "${node.name}"?`;
     if (confirm(msg)) {
       for (const page of allInFolder) {
@@ -2197,10 +2190,6 @@ function renderFolderNode(container, node, depth, siteId) {
     }
     selectedSidebarFolder = node.folderPath;
 
-    // If folder has an index page, load it
-    if (node._indexItem) {
-      selectSidebarPage(node._indexItem.fileName);
-    }
     await populateSidebar(siteId);
   });
 
