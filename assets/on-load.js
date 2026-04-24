@@ -1788,7 +1788,6 @@ async function createNewFolder(folderName) {
   await populateSidebar(currentSiteId);
   selectSidebarPage(indexFileName);
 }
-}
 
 function updateDeployButtonState() {
   const deployButton = document.getElementById("deployButton");
