@@ -319,7 +319,7 @@ function buildTreeFromPages(pagesJson) {
     for (let i = 0; i < parts.length - 1; i++) {
       currentPath = currentPath ? currentPath + "/" + parts[i] : parts[i];
       if (!folderMap[currentPath]) {
-        const folder = { name: parts[i], type: "folder", path: currentPath, children: [] };
+        const folder = { name: parts[i], type: "folder", path: currentPath, sortOrder: null, children: [] };
         folderMap[currentPath] = folder;
         currentLevel.push(folder);
       }
@@ -330,6 +330,7 @@ function buildTreeFromPages(pagesJson) {
     if (fileName === "index") {
       if (currentPath && folderMap[currentPath]) {
         folderMap[currentPath]._indexItem = page;
+        folderMap[currentPath].sortOrder = page.sortOrder != null ? page.sortOrder : null;
       }
     } else {
       currentLevel.push({
@@ -337,17 +338,24 @@ function buildTreeFromPages(pagesJson) {
         type: "file",
         path: page.fileName,
         displayName: page.displayName,
+        sortOrder: page.sortOrder != null ? page.sortOrder : null,
       });
     }
   }
 
   function sortTree(nodes) {
+    var hasAnyOrder = nodes.some(function (n) { return n.sortOrder != null; });
     nodes.sort(function (a, b) {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      if (hasAnyOrder) {
+        var aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
+        var bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
+        if (aOrd !== bOrd) return aOrd - bOrd;
+      }
       return a.name.localeCompare(b.name);
     });
-    for (const node of nodes) {
-      if (node.children) sortTree(node.children);
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].children) sortTree(nodes[i].children);
     }
   }
   sortTree(root);

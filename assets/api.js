@@ -607,12 +607,14 @@ async function deployChanges(siteId) {
     .filter(item => item.fileName !== "public/latest.md")
     .map(item => {
       const fileName = item.fileName.replace("public/", "").replace(".md", "");
-      return {
+      const entry = {
         displayName: item.displayName,
         fileName: fileName,
         createdAt: item.createdAt || new Date().toISOString(),
         modifiedAt: item.modifiedAt || new Date().toISOString(),
       };
+      if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
+      return entry;
     });
   files.push({
     filePath: "public/pages.json",
@@ -735,12 +737,14 @@ async function deployBlogPost(siteId, changedPost) {
     .filter(item => item.fileName !== "public/latest.md")
     .map(item => {
       const fileName = item.fileName.replace("public/", "").replace(".md", "");
-      return {
+      const entry = {
         displayName: item.displayName,
         fileName: fileName,
         createdAt: item.createdAt || new Date().toISOString(),
         modifiedAt: item.modifiedAt || new Date().toISOString(),
       };
+      if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
+      return entry;
     });
   files.push({
     filePath: "public/pages.json",

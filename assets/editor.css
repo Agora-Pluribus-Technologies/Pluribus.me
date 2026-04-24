@@ -617,6 +617,23 @@ nav {
   outline: none;
 }
 
+.sidebar-tree-node.dragging {
+  opacity: 0.4;
+}
+
+.sidebar-tree-node.drop-above {
+  border-top: 2px solid var(--link-color);
+}
+
+.sidebar-tree-node.drop-below {
+  border-bottom: 2px solid var(--link-color);
+}
+
+.sidebar-tree-node.drop-into {
+  background-color: var(--link-color);
+  opacity: 0.6;
+}
+
 #editorSection.blog-mode .editor-sidebar {
   display: none;
 }

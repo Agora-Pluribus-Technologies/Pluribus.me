@@ -293,13 +293,13 @@ function addOrUpdateCache(fileName, displayName, content, options = {}) {
       existing.modifiedAt = now;
     }
   } else {
-    // For new entries, use provided timestamps or current time
     markdownCache.push({
       displayName,
       fileName,
       content,
       createdAt: options.createdAt || now,
       modifiedAt: options.modifiedAt || now,
+      sortOrder: options.sortOrder != null ? options.sortOrder : null,
     });
   }
 }
@@ -1763,8 +1763,9 @@ async function createNewPage(displayName) {
     return;
   }
 
+  const sortOrder = getNextSortOrder(folder);
   const content = `# ${displayName}\n\nClick **Edit** on this panel to start writing. Use the **+** buttons to add more panels.`;
-  addOrUpdateCache(fileName, displayName, content);
+  addOrUpdateCache(fileName, displayName, content, { sortOrder });
 
   modified = true;
   updateDeployButtonState();
@@ -1785,8 +1786,9 @@ async function createNewFolder(folderName) {
     return;
   }
 
+  const sortOrder = getNextSortOrder(parentFolder);
   const content = `# ${folderName}`;
-  addOrUpdateCache(indexFileName, folderName, content);
+  addOrUpdateCache(indexFileName, folderName, content, { sortOrder });
 
   modified = true;
   updateDeployButtonState();
@@ -1985,6 +1987,18 @@ function populateSitesList(ownedSites, sharedSites = []) {
 }
 
 // Build a tree structure from flat markdownCache paths
+function getNextSortOrder(folder) {
+  const prefix = folder ? `public/${folder}/` : "public/";
+  let max = -1;
+  for (const item of markdownCache) {
+    if (!item.fileName.startsWith(prefix)) continue;
+    const rest = item.fileName.slice(prefix.length);
+    if (rest.includes("/")) continue;
+    if (item.sortOrder != null && item.sortOrder > max) max = item.sortOrder;
+  }
+  return max + 1;
+}
+
 function buildTreeFromCache() {
   const root = [];
   const folderMap = {};
@@ -1998,6 +2012,7 @@ function buildTreeFromCache() {
         type: "file",
         name: cacheItem.displayName,
         path: cacheItem.fileName,
+        sortOrder: cacheItem.sortOrder,
         sortKey: cacheItem.displayName.toLowerCase(),
       });
     } else {
@@ -2010,6 +2025,7 @@ function buildTreeFromCache() {
             type: "folder",
             name: parts[i],
             folderPath: currentPath,
+            sortOrder: null,
             sortKey: parts[i].toLowerCase(),
             children: [],
           };
@@ -2020,23 +2036,29 @@ function buildTreeFromCache() {
       }
       const fileName = parts[parts.length - 1];
       if (fileName === "index") {
-        // Folder index page — attach to the folder node
         folderMap[currentPath]._indexItem = cacheItem;
+        folderMap[currentPath].sortOrder = cacheItem.sortOrder;
       } else {
         currentChildren.push({
           type: "file",
           name: cacheItem.displayName,
           path: cacheItem.fileName,
+          sortOrder: cacheItem.sortOrder,
           sortKey: cacheItem.displayName.toLowerCase(),
         });
       }
     }
   }
 
-  // Sort: folders first, then files, alphabetically
   function sortTree(nodes) {
+    const hasAnyOrder = nodes.some(n => n.sortOrder != null);
     nodes.sort((a, b) => {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      if (hasAnyOrder) {
+        const aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
+        const bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
+        if (aOrd !== bOrd) return aOrd - bOrd;
+      }
       return a.sortKey.localeCompare(b.sortKey);
     });
     for (const node of nodes) {
@@ -2052,10 +2074,29 @@ function buildTreeFromCache() {
 // Track which folders are expanded in the sidebar
 const expandedFolders = new Set();
 
+let sidebarTreeDropInitialized = false;
+
 async function populateSidebar(siteId) {
   const sidebarTree = document.getElementById("sidebarTree");
   if (!sidebarTree) return;
   sidebarTree.innerHTML = "";
+
+  if (!sidebarTreeDropInitialized) {
+    sidebarTreeDropInitialized = true;
+    sidebarTree.addEventListener("dragover", (e) => {
+      if (e.target === sidebarTree) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      }
+    });
+    sidebarTree.addEventListener("drop", async (e) => {
+      if (e.target !== sidebarTree) return;
+      e.preventDefault();
+      const draggedPath = e.dataTransfer.getData("text/plain");
+      if (!draggedPath) return;
+      await handleFileDropIntoFolder(draggedPath, "", currentSiteId);
+    });
+  }
 
   const tree = buildTreeFromCache();
   renderTreeNodes(sidebarTree, tree, 0, siteId);
@@ -2120,6 +2161,23 @@ function renderFolderNode(container, node, depth, siteId) {
   });
   actions.appendChild(deleteBtn);
 
+  // Drop target: drop file into folder
+  folderEl.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    folderEl.classList.add("drop-into");
+  });
+  folderEl.addEventListener("dragleave", () => {
+    folderEl.classList.remove("drop-into");
+  });
+  folderEl.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    folderEl.classList.remove("drop-into");
+    const draggedPath = e.dataTransfer.getData("text/plain");
+    if (!draggedPath) return;
+    await handleFileDropIntoFolder(draggedPath, node.folderPath, siteId);
+  });
+
   folderEl.appendChild(arrow);
   folderEl.appendChild(icon);
   folderEl.appendChild(label);
@@ -2160,6 +2218,44 @@ function renderFileNode(container, node, depth, siteId) {
   }
   fileEl.style.paddingLeft = (depth * 16 + 8) + "px";
   fileEl.dataset.filePath = node.path;
+
+  // Drag source
+  fileEl.draggable = true;
+  fileEl.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", node.path);
+    e.dataTransfer.effectAllowed = "move";
+    fileEl.classList.add("dragging");
+  });
+  fileEl.addEventListener("dragend", () => {
+    fileEl.classList.remove("dragging");
+    clearDropIndicators();
+  });
+
+  // Drop target for reordering
+  fileEl.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = fileEl.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    clearDropIndicators();
+    if (e.clientY < midY) {
+      fileEl.classList.add("drop-above");
+    } else {
+      fileEl.classList.add("drop-below");
+    }
+  });
+  fileEl.addEventListener("dragleave", () => {
+    fileEl.classList.remove("drop-above", "drop-below");
+  });
+  fileEl.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    clearDropIndicators();
+    const draggedPath = e.dataTransfer.getData("text/plain");
+    if (draggedPath === node.path) return;
+    const rect = fileEl.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    await handleFileDrop(draggedPath, node, before, siteId);
+  });
 
   const icon = document.createElement("span");
   icon.classList.add("sidebar-tree-icon");
@@ -2295,6 +2391,105 @@ function startRenameInSidebar(fileEl, node, siteId) {
     await populateSidebar(siteId);
     selectSidebarPage(newFilePath);
   });
+}
+
+// ==================== Drag and Drop Helpers ====================
+
+function clearDropIndicators() {
+  document.querySelectorAll(".drop-above, .drop-below, .drop-into").forEach(el => {
+    el.classList.remove("drop-above", "drop-below", "drop-into");
+  });
+}
+
+function getFolderFromPath(filePath) {
+  const rel = filePath.replace("public/", "");
+  const parts = rel.split("/");
+  return parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+}
+
+function getSiblingsInFolder(folder) {
+  const prefix = folder ? `public/${folder}/` : "public/";
+  return markdownCache.filter(item => {
+    if (!item.fileName.startsWith(prefix)) return false;
+    const rest = item.fileName.slice(prefix.length);
+    return !rest.includes("/");
+  });
+}
+
+async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
+  const draggedItem = getCacheByFileName(draggedPath);
+  if (!draggedItem) return;
+
+  const targetItem = getCacheByFileName(targetNode.path);
+  if (!targetItem) return;
+
+  const draggedFolder = getFolderFromPath(draggedPath);
+  const targetFolder = getFolderFromPath(targetNode.path);
+
+  if (draggedFolder !== targetFolder) {
+    // Moving to a different folder — update the file path
+    const baseName = draggedPath.split("/").pop();
+    const newPrefix = targetFolder ? `public/${targetFolder}/` : "public/";
+    const newPath = newPrefix + baseName;
+
+    if (getCacheByFileName(newPath)) {
+      alert("A file with that name already exists in the target folder.");
+      return;
+    }
+
+    if (currentSitePath === draggedPath) currentSitePath = newPath;
+    draggedItem.fileName = newPath;
+  }
+
+  // Determine insertion point via sortOrder
+  const newFolder = getFolderFromPath(draggedItem.fileName);
+  const siblings = getSiblingsInFolder(newFolder);
+
+  // Build ordered list excluding dragged item
+  const ordered = siblings.filter(s => s.fileName !== draggedItem.fileName);
+  const targetIdx = ordered.indexOf(targetItem);
+  const insertIdx = insertBefore ? targetIdx : targetIdx + 1;
+  ordered.splice(insertIdx >= 0 ? insertIdx : ordered.length, 0, draggedItem);
+
+  // Reassign sort orders
+  for (let i = 0; i < ordered.length; i++) {
+    ordered[i].sortOrder = i;
+  }
+
+  modified = true;
+  updateDeployButtonState();
+  await populateSidebar(siteId);
+}
+
+async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
+  const draggedItem = getCacheByFileName(draggedPath);
+  if (!draggedItem) return;
+
+  const currentFolder = getFolderFromPath(draggedPath);
+  if (currentFolder === targetFolderPath) return;
+
+  const baseName = draggedPath.split("/").pop();
+  const newPath = targetFolderPath ? `public/${targetFolderPath}/${baseName}` : `public/${baseName}`;
+
+  if (getCacheByFileName(newPath)) {
+    alert("A file with that name already exists in the target folder.");
+    return;
+  }
+
+  if (currentSitePath === draggedPath) currentSitePath = newPath;
+  draggedItem.fileName = newPath;
+  draggedItem.sortOrder = getNextSortOrder(targetFolderPath);
+
+  // Reassign sort orders in the old folder
+  const oldSiblings = getSiblingsInFolder(currentFolder);
+  for (let i = 0; i < oldSiblings.length; i++) {
+    oldSiblings[i].sortOrder = i;
+  }
+
+  modified = true;
+  updateDeployButtonState();
+  expandedFolders.add(targetFolderPath);
+  await populateSidebar(siteId);
 }
 
 // ==================== User Menu Functions ====================
