@@ -2185,10 +2185,20 @@ function renderFolderNode(container, node, depth, siteId) {
     if (e.target.tagName === "BUTTON") return;
     if (isExpanded) {
       expandedFolders.delete(node.folderPath);
+      // Deselect file if it's inside the folder being collapsed
+      if (currentSitePath && currentSitePath.startsWith(`public/${node.folderPath}/`)) {
+        const rootPage = markdownCache.find(c => !c.fileName.replace("public/", "").slice(0, -3).includes("/"));
+        if (rootPage) {
+          selectSidebarPage(rootPage.fileName);
+        } else {
+          currentSitePath = null;
+          selectedSidebarFolder = "";
+        }
+      }
     } else {
       expandedFolders.add(node.folderPath);
+      selectedSidebarFolder = node.folderPath;
     }
-    selectedSidebarFolder = node.folderPath;
 
     await populateSidebar(siteId);
   });
