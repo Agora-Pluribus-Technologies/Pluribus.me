@@ -612,6 +612,7 @@ body {
         position: fixed;
         left: 0;
         top: 0;
+        padding-top: 60px;
         height: 100vh;
         z-index: 1050;
         transform: translateX(-100%);
