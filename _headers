@@ -1,5 +1,5 @@
 /assets/*
-  Cache-Control: no-cache
+  Cache-Control: public, max-age=0, must-revalidate
 
 /templates/*
-  Cache-Control: no-cache
+  Cache-Control: public, max-age=0, must-revalidate
