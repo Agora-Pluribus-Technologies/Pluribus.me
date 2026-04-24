@@ -804,6 +804,17 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
   const dir = getRepoDir(siteId);
 
   try {
+    // Find existing markdown files in git and delete ones no longer in cache
+    const statusMatrix = await git.statusMatrix({ fs, dir });
+    const cacheFileNames = new Set(markdownCache.map(item => item.fileName));
+    for (const [filepath, head] of statusMatrix) {
+      if (filepath.startsWith("public/") && filepath.endsWith(".md") && head === 1) {
+        if (!cacheFileNames.has(filepath)) {
+          await gitDeleteFile(siteId, filepath);
+        }
+      }
+    }
+
     // Write all markdown files
     for (const item of markdownCache) {
       await gitWriteFile(siteId, item.fileName, item.content);
