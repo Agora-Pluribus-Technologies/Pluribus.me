@@ -29,19 +29,6 @@ export async function onRequest(context) {
 
   const url = new URL(request.url);
 
-  for (const k of url.searchParams.keys()) {
-    url.searchParams.delete(k);
-  }
-
-  // Check cache first
-  const cache = caches.default;
-  const cacheKey = new Request(url.toString());
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    console.log("Cached from key:", cacheKey.url);
-    return cached;
-  }
-
   const username = params && params.username ? String(params.username).toLowerCase() : null;
   const site = params && params.site ? String(params.site) : null;
   const siteId = username && site ? `${username}/${site}` : null;
@@ -103,38 +90,18 @@ export async function onRequest(context) {
 
   console.log("R2 key:", r2Key);
 
-  const isJson = filePath.endsWith(".json");
-
   try {
-    let object = await env.PLURIBUS_BUCKET.get(r2Key);
+    const object = await env.PLURIBUS_BUCKET.get(r2Key);
 
-    // Build response headers
     const headers = new Headers(corsHeaders);
-    headers.set("Cache-Control", "public, max-age=0, s-maxage=300");
-
-    let response;
 
     if (!object) {
-      response = new Response("File not found", {
-        status: 404,
-        headers,
-      });
-    }
-    else {
-      headers.set("Content-Type", object.httpMetadata?.contentType || guessContentType(filePath));
-
-      response = new Response(object.body, {
-        status: 200,
-        headers,
-      });
+      return new Response("File not found", { status: 404, headers });
     }
 
-    // Don't cache JSON files — they change on every deploy
-    if (!isJson) {
-      context.waitUntil(cache.put(cacheKey, response.clone()));
-    }
+    headers.set("Content-Type", object.httpMetadata?.contentType || guessContentType(filePath));
 
-    return response;
+    return new Response(object.body, { status: 200, headers });
   } catch (error) {
     console.error("R2 get error:", error);
     return corsResponse("Failed to retrieve file", 500);
