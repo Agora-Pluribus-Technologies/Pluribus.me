@@ -2016,7 +2016,6 @@ function buildTreeFromCache() {
         name: cacheItem.displayName,
         path: cacheItem.fileName,
         sortOrder: cacheItem.sortOrder,
-        sortKey: cacheItem.displayName.toLowerCase(),
       });
     } else {
       let currentChildren = root;
@@ -2029,7 +2028,6 @@ function buildTreeFromCache() {
             name: parts[i],
             folderPath: currentPath,
             sortOrder: null,
-            sortKey: parts[i].toLowerCase(),
             children: [],
           };
           folderMap[currentPath] = folderNode;
@@ -2047,22 +2045,17 @@ function buildTreeFromCache() {
           name: cacheItem.displayName,
           path: cacheItem.fileName,
           sortOrder: cacheItem.sortOrder,
-          sortKey: cacheItem.displayName.toLowerCase(),
         });
       }
     }
   }
 
   function sortTree(nodes) {
-    const hasAnyOrder = nodes.some(n => n.sortOrder != null);
     nodes.sort((a, b) => {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
-      if (hasAnyOrder) {
-        const aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
-        const bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
-        if (aOrd !== bOrd) return aOrd - bOrd;
-      }
-      return a.sortKey.localeCompare(b.sortKey);
+      const aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
+      const bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
+      return aOrd - bOrd;
     });
     for (const node of nodes) {
       if (node.type === "folder" && node.children) {

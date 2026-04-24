@@ -311,7 +311,9 @@ function buildTreeFromPages(pagesJson) {
   const root = [];
   const folderMap = {};
 
-  for (const page of pagesJson) {
+  for (var idx = 0; idx < pagesJson.length; idx++) {
+    var page = pagesJson[idx];
+    if (page.sortOrder == null) page.sortOrder = idx;
     const parts = page.fileName.split("/");
     let currentLevel = root;
     let currentPath = "";
@@ -344,15 +346,11 @@ function buildTreeFromPages(pagesJson) {
   }
 
   function sortTree(nodes) {
-    var hasAnyOrder = nodes.some(function (n) { return n.sortOrder != null; });
     nodes.sort(function (a, b) {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
-      if (hasAnyOrder) {
-        var aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
-        var bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
-        if (aOrd !== bOrd) return aOrd - bOrd;
-      }
-      return a.name.localeCompare(b.name);
+      var aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
+      var bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
+      return aOrd - bOrd;
     });
     for (var i = 0; i < nodes.length; i++) {
       if (nodes[i].children) sortTree(nodes[i].children);
