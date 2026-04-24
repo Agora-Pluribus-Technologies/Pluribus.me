@@ -401,7 +401,12 @@ function createSidebar(origin, basePath, pagesJson) {
         label.className = "sidebar-folder-label";
         label.textContent = node.name;
 
+        const folderIcon = document.createElement("span");
+        folderIcon.className = "sidebar-folder-icon";
+        folderIcon.textContent = isAncestor ? "📂" : "📁";
+
         folderRow.appendChild(arrow);
+        folderRow.appendChild(folderIcon);
         folderRow.appendChild(label);
         li.appendChild(folderRow);
 
@@ -415,6 +420,7 @@ function createSidebar(origin, basePath, pagesJson) {
           const isExpanded = childContainer.style.display !== "none";
           childContainer.style.display = isExpanded ? "none" : "block";
           arrow.textContent = isExpanded ? "▸" : "▾";
+          folderIcon.textContent = isExpanded ? "📁" : "📂";
           folderRow.classList.toggle("expanded");
         });
       } else {

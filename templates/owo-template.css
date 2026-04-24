@@ -104,10 +104,10 @@ a:hover {
 .sidebar-folder-row {
     display: flex;
     align-items: center;
-    padding: 6px 12px;
+    padding: 8px 12px;
     cursor: pointer;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 15px;
     user-select: none;
     transition: background-color 0.15s ease;
 }
@@ -117,10 +117,15 @@ a:hover {
 }
 
 .sidebar-arrow {
-    width: 16px;
-    font-size: 11px;
+    width: 18px;
+    font-size: 12px;
     flex-shrink: 0;
     color: var(--text-muted);
+}
+
+.sidebar-folder-icon {
+    margin-right: 6px;
+    font-size: 16px;
 }
 
 .sidebar-folder-label {
@@ -130,10 +135,10 @@ a:hover {
 
 .sidebar-page-link {
     display: block;
-    padding: 5px 12px 5px 28px;
+    padding: 7px 12px 7px 28px;
     color: var(--text-secondary);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 15px;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
