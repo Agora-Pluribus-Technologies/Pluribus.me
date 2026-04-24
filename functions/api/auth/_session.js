@@ -1,5 +1,5 @@
 const SESSION_TTL = 604800; // 7 days
-const SESSION_REFRESH_THRESHOLD = 3600; // 1 hour
+const SESSION_REFRESH_THRESHOLD = 518400; // 6 days (refresh in last 24h of 7-day TTL)
 const COOKIE_NAME = "__session";
 
 function base64urlEncode(buffer) {
