@@ -1744,16 +1744,6 @@ nav {
   border-color: var(--link-color);
 }
 
-.block-item.dragging {
-  opacity: 0.5;
-  border-color: var(--link-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.block-item.drag-over {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px var(--accent-color);
-}
 
 .block-controls {
   display: flex;
@@ -1785,22 +1775,26 @@ nav {
   letter-spacing: 0.5px;
 }
 
-.block-drag-handle {
-  cursor: grab;
+.block-move-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
   color: var(--text-muted);
-  font-size: 16px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.block-drag-handle:hover {
+.block-move-btn:hover:not(:disabled) {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
+  border-color: var(--link-color);
 }
 
-.block-drag-handle:active {
-  cursor: grabbing;
+.block-move-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .block-edit-btn,

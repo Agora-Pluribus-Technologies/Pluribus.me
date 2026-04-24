@@ -300,25 +300,33 @@ function renderBlock(block, index) {
   wrapper.className = 'block-item';
   wrapper.dataset.index = index;
   wrapper.dataset.id = block.id;
-  wrapper.draggable = true;
 
-  // Drag handle and controls
   const controls = document.createElement('div');
   controls.className = 'block-controls';
 
   const controlsLeft = document.createElement('div');
   controlsLeft.className = 'block-controls-left';
 
-  const dragHandle = document.createElement('span');
-  dragHandle.className = 'block-drag-handle';
-  dragHandle.innerHTML = '&#x2630;';
-  dragHandle.title = 'Drag to reorder';
+  const moveUpBtn = document.createElement('button');
+  moveUpBtn.className = 'block-move-btn';
+  moveUpBtn.innerHTML = '&#x25B2;';
+  moveUpBtn.title = 'Move up';
+  moveUpBtn.disabled = index === 0;
+  moveUpBtn.addEventListener('click', () => moveBlockUp(index));
+
+  const moveDownBtn = document.createElement('button');
+  moveDownBtn.className = 'block-move-btn';
+  moveDownBtn.innerHTML = '&#x25BC;';
+  moveDownBtn.title = 'Move down';
+  moveDownBtn.disabled = index === currentBlocks.length - 1;
+  moveDownBtn.addEventListener('click', () => moveBlockDown(index));
 
   const typeLabel = document.createElement('span');
   typeLabel.className = 'block-type-label';
   typeLabel.textContent = block.type.charAt(0).toUpperCase() + block.type.slice(1);
 
-  controlsLeft.appendChild(dragHandle);
+  controlsLeft.appendChild(moveUpBtn);
+  controlsLeft.appendChild(moveDownBtn);
   controlsLeft.appendChild(typeLabel);
 
   const controlsRight = document.createElement('div');
@@ -341,19 +349,12 @@ function renderBlock(block, index) {
   controls.appendChild(controlsLeft);
   controls.appendChild(controlsRight);
 
-  // Preview content
   const preview = document.createElement('div');
   preview.className = 'block-preview';
   preview.innerHTML = renderBlockPreview(block);
 
   wrapper.appendChild(controls);
   wrapper.appendChild(preview);
-
-  // Drag and drop events
-  wrapper.addEventListener('dragstart', handleDragStart);
-  wrapper.addEventListener('dragend', handleDragEnd);
-  wrapper.addEventListener('dragover', handleDragOver);
-  wrapper.addEventListener('drop', handleDrop);
 
   return wrapper;
 }
@@ -606,43 +607,20 @@ function deleteBlock(index) {
 // Drag and Drop
 // ============================================
 
-let draggedIndex = null;
-
-function handleDragStart(e) {
-  draggedIndex = parseInt(e.currentTarget.dataset.index);
-  e.currentTarget.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
+function moveBlockUp(index) {
+  if (index <= 0) return;
+  const temp = currentBlocks[index];
+  currentBlocks[index] = currentBlocks[index - 1];
+  currentBlocks[index - 1] = temp;
+  saveBlocksToCache();
+  renderAllBlocks();
 }
 
-function handleDragEnd(e) {
-  e.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.block-item').forEach(el => {
-    el.classList.remove('drag-over');
-  });
-  draggedIndex = null;
-}
-
-function handleDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  const target = e.currentTarget;
-  if (target.classList.contains('block-item')) {
-    target.classList.add('drag-over');
-  }
-}
-
-function handleDrop(e) {
-  e.preventDefault();
-  const target = e.currentTarget;
-  target.classList.remove('drag-over');
-
-  const targetIndex = parseInt(target.dataset.index);
-  if (draggedIndex === null || draggedIndex === targetIndex) return;
-
-  // Reorder blocks
-  const [movedBlock] = currentBlocks.splice(draggedIndex, 1);
-  currentBlocks.splice(targetIndex, 0, movedBlock);
-
+function moveBlockDown(index) {
+  if (index >= currentBlocks.length - 1) return;
+  const temp = currentBlocks[index];
+  currentBlocks[index] = currentBlocks[index + 1];
+  currentBlocks[index + 1] = temp;
   saveBlocksToCache();
   renderAllBlocks();
 }

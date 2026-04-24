@@ -102,7 +102,7 @@ const TOUR_STEPS = [
   {
     target: '.block-item',
     title: 'Edit & Rearrange Blocks',
-    text: 'Each block has an Edit button to change its content, an X to delete it, and a drag handle to reorder. Try editing the welcome text!',
+    text: 'Each block has an Edit button to change its content, an X to delete it, and arrow buttons to move it up or down. Try editing the welcome text!',
     position: 'top',
   },
   {
