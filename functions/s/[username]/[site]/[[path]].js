@@ -38,6 +38,7 @@ export async function onRequest(context) {
   const cacheKey = new Request(url.toString());
   const cached = await cache.match(cacheKey);
   if (cached) {
+    console.log("Cached from key:", cacheKey.url);
     return cached;
   }
 
