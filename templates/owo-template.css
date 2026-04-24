@@ -89,7 +89,7 @@ a:hover {
     position: fixed;
     top: 0;
     left: 0;
-    height: 100vh;
+    height: calc(100vh - 40px);
     z-index: 1010;
     transition: background-color 0.3s ease, border-color 0.3s ease;
 }
