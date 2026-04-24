@@ -73,6 +73,7 @@ a:hover {
 
 .site-main {
     margin: 50px;
+    margin-left: 270px;
     flex: 1;
     min-width: 0;
 }
@@ -85,9 +86,11 @@ a:hover {
     border-right: 1px solid var(--border-color);
     padding: 16px 0;
     overflow-y: auto;
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
     height: 100vh;
+    z-index: 1010;
     transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
