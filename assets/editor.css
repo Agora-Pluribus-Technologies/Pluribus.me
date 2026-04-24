@@ -439,6 +439,7 @@ nav {
   left: 0;
   width: 220px;
   height: 100vh;
+  /* top and height are set dynamically by positionEditorBody() */
   background-color: var(--bg-tertiary);
   border-right: 1px solid var(--border-light);
   display: flex;

@@ -733,9 +733,14 @@ function positionSitesListPanel() {
 function positionEditorBody() {
   const editorTopbar = document.getElementById("editor-topbar");
   const editorBody = document.getElementById("editorBody");
+  const editorSidebar = document.getElementById("editorSidebar");
   if (editorTopbar && editorBody) {
-    const topbarRect = editorTopbar.getBoundingClientRect();
-    editorBody.style.marginTop = topbarRect.bottom + "px";
+    const topbarHeight = editorTopbar.getBoundingClientRect().height;
+    editorBody.style.marginTop = topbarHeight + "px";
+    if (editorSidebar) {
+      editorSidebar.style.top = topbarHeight + "px";
+      editorSidebar.style.height = "calc(100vh - " + topbarHeight + "px)";
+    }
   }
 }
 
