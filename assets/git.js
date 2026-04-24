@@ -377,13 +377,20 @@ async function getMarkdownFilesAtCommit(siteId, commitOid) {
       }
     }
 
+    const hasPagesJson = Object.keys(pagesLookup).length > 0;
+
     for (const [filepath, blobOid] of Object.entries(files)) {
       if (filepath.startsWith("public/") && filepath.endsWith(".md")) {
+        const relPath = filepath.replace("public/", "").replace(".md", "");
+
+        // Skip files not in pages.json — they are ghosts from a previous bug
+        // where deletions weren't recorded in git
+        if (hasPagesJson && !pagesLookup[relPath]) continue;
+
         try {
           const { blob } = await git.readBlob({ fs, dir, oid: blobOid });
           const content = new TextDecoder().decode(blob);
 
-          const relPath = filepath.replace("public/", "").replace(".md", "");
           const pageEntry = pagesLookup[relPath];
           const lastSegment = relPath.split("/").pop();
           const displayName = pageEntry ? pageEntry.displayName : lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);
