@@ -193,7 +193,11 @@ export async function onRequestPost(context) {
 
   const changedPaths = results.map(r => r.filePath);
   if (changedPaths.length > 0) {
-    await purgeCache(request, siteId, changedPaths);
+    try {
+      await purgeCache(request, siteId, changedPaths);
+    } catch (e) {
+      console.error("Cache purge error:", e);
+    }
   }
 
   return new Response(JSON.stringify({ success: errors.length === 0, results, errors }), {
