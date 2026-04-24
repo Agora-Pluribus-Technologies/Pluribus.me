@@ -35,7 +35,7 @@ export async function onRequest(context) {
 
   // Check cache first
   const cache = caches.default;
-  const cacheKey = new Request(url.toString(), request);
+  const cacheKey = new Request(url.toString());
   const cached = await cache.match(cacheKey);
   if (cached) {
     return cached;
