@@ -1,6 +1,36 @@
 import { canAccess, forbidden } from "./auth/_authorize.js";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const PURGE_BATCH_SIZE = 30;
+
+async function purgeCache(env, siteId, filePaths) {
+  if (!env.CF_ZONE_ID || !env.CF_API_TOKEN) return;
+  const urls = [];
+  for (const fp of filePaths) {
+    if (!fp.startsWith("public/")) continue;
+    if (fp.endsWith(".json")) continue;
+    const servingPath = fp.slice("public/".length);
+    urls.push(`https://agorapages.com/s/${siteId}/${servingPath}`);
+  }
+  if (urls.length === 0) return;
+  for (let i = 0; i < urls.length; i += PURGE_BATCH_SIZE) {
+    const batch = urls.slice(i, i + PURGE_BATCH_SIZE);
+    const resp = await fetch(
+      `https://api.cloudflare.com/client/v4/zones/${env.CF_ZONE_ID}/purge_cache`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.CF_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ files: batch }),
+      }
+    );
+    if (!resp.ok) {
+      console.error("Cache purge failed:", await resp.text());
+    }
+  }
+}
 
 
 // PUT /api/files - Save a file to R2
@@ -66,6 +96,8 @@ export async function onRequestPut(context) {
         contentType: contentType || guessContentType(normalizedPath),
       },
     });
+
+    context.waitUntil(purgeCache(env, siteId, [normalizedPath]));
 
     return new Response(JSON.stringify({ success: true, key: r2Key }), {
       status: 200,
@@ -177,6 +209,11 @@ export async function onRequestPost(context) {
       console.error(`R2 operation error for ${op.r2Key}:`, settled[i].reason);
       errors.push({ filePath: op.normalizedPath, error: settled[i].reason?.message || "Unknown error" });
     }
+  }
+
+  const changedPaths = results.map(r => r.filePath);
+  if (changedPaths.length > 0) {
+    context.waitUntil(purgeCache(env, siteId, changedPaths));
   }
 
   return new Response(JSON.stringify({ success: errors.length === 0, results, errors }), {
@@ -294,6 +331,8 @@ export async function onRequestDelete(context) {
         for (const key of keysToDelete) {
           await env.PLURIBUS_BUCKET.delete(key);
         }
+        const deletedPaths = keysToDelete.map(k => k.replace(`${siteId}/`, ""));
+        context.waitUntil(purgeCache(env, siteId, deletedPaths));
       }
 
       return new Response(JSON.stringify({ success: true, deleted: listed.objects.length }), {
@@ -310,6 +349,8 @@ export async function onRequestDelete(context) {
       const r2Key = `${siteId}/${normalizedPath}`;
 
       await env.PLURIBUS_BUCKET.delete(r2Key);
+
+      context.waitUntil(purgeCache(env, siteId, [normalizedPath]));
 
       return new Response(JSON.stringify({ success: true, key: r2Key }), {
         status: 200,
