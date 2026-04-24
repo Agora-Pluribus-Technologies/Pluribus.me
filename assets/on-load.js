@@ -1682,7 +1682,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     .getElementById("editorSidebarToggle")
     .addEventListener("click", function () {
       const sidebar = document.getElementById("editorSidebar");
+      const body = document.getElementById("editorBody");
       sidebar.classList.toggle("collapsed");
+      body.classList.toggle("sidebar-collapsed");
     });
 });
 
