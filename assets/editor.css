@@ -445,7 +445,7 @@ nav {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 100;
+  z-index: 101;
   transition: width 0.2s ease;
 }
 
