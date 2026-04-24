@@ -2150,10 +2150,11 @@ function renderFolderNode(container, node, depth, siteId) {
       for (const page of allInFolder) {
         removeCacheByFileName(page.fileName);
       }
+      if (markdownCache.length === 0) {
+        addOrUpdateCache("public/home.md", "Home", "# Home", { sortOrder: 0 });
+      }
       if (currentSitePath && currentSitePath.startsWith(`public/${node.folderPath}/`)) {
-        if (markdownCache.length > 0) {
-          selectSidebarPage(markdownCache[0].fileName);
-        }
+        selectSidebarPage(markdownCache[0].fileName);
       }
       modified = true;
       updateDeployButtonState();
