@@ -359,28 +359,41 @@ async function getMarkdownFilesAtCommit(siteId, commitOid) {
   const markdownFiles = [];
 
   try {
-    // Get the commit
     const commitObj = await git.readCommit({ fs, dir, oid: commitOid });
     const treeOid = commitObj.commit.tree;
-
-    // Get all files in the tree
     const files = await getTreeFiles(dir, treeOid, "");
 
-    // Filter for markdown files in public/ directory and read their content
+    // Read pages.json from the commit for display names and sort order
+    let pagesLookup = {};
+    if (files["public/pages.json"]) {
+      try {
+        const { blob } = await git.readBlob({ fs, dir, oid: files["public/pages.json"] });
+        const pagesJson = JSON.parse(new TextDecoder().decode(blob));
+        for (const page of pagesJson) {
+          pagesLookup[page.fileName] = page;
+        }
+      } catch (e) {
+        console.error("Error reading pages.json from commit:", e);
+      }
+    }
+
     for (const [filepath, blobOid] of Object.entries(files)) {
       if (filepath.startsWith("public/") && filepath.endsWith(".md")) {
         try {
           const { blob } = await git.readBlob({ fs, dir, oid: blobOid });
           const content = new TextDecoder().decode(blob);
 
-          // Extract display name from filename
-          const fileName = filepath.replace("public/", "").replace(".md", "");
-          const displayName = fileName;
+          const relPath = filepath.replace("public/", "").replace(".md", "");
+          const pageEntry = pagesLookup[relPath];
+          const lastSegment = relPath.split("/").pop();
+          const displayName = pageEntry ? pageEntry.displayName : lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);
+          const sortOrder = pageEntry && pageEntry.sortOrder != null ? pageEntry.sortOrder : null;
 
           markdownFiles.push({
             fileName: filepath,
             displayName: displayName,
-            content: content
+            content: content,
+            sortOrder: sortOrder,
           });
         } catch (blobError) {
           console.error("Error reading blob for", filepath, blobError);
@@ -801,10 +814,12 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       .filter(item => item.fileName !== "public/latest.md")
       .map((item) => {
         const fileName = item.fileName.replace("public/", "").replace(".md", "");
-        return {
+        const entry = {
           displayName: item.displayName,
           fileName: fileName,
         };
+        if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
+        return entry;
       });
     await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pages));
 

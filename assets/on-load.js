@@ -1612,7 +1612,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Clear the current cache and repopulate with files from the commit
         markdownCache.length = 0;
         for (const file of markdownFiles) {
-          addOrUpdateCache(file.fileName, file.displayName, file.content);
+          addOrUpdateCache(file.fileName, file.displayName, file.content, {
+            sortOrder: file.sortOrder,
+          });
         }
 
         // Close the history modal and show deploy overlay
