@@ -77,7 +77,7 @@ export async function onRequestPut(context) {
       },
     });
 
-    context.waitUntil(purgeCache(request, siteId, [normalizedPath]));
+    await purgeCache(request, siteId, [normalizedPath]);
 
     return new Response(JSON.stringify({ success: true, key: r2Key }), {
       status: 200,
@@ -193,7 +193,7 @@ export async function onRequestPost(context) {
 
   const changedPaths = results.map(r => r.filePath);
   if (changedPaths.length > 0) {
-    context.waitUntil(purgeCache(request, siteId, changedPaths));
+    await purgeCache(request, siteId, changedPaths);
   }
 
   return new Response(JSON.stringify({ success: errors.length === 0, results, errors }), {
@@ -312,7 +312,7 @@ export async function onRequestDelete(context) {
           await env.PLURIBUS_BUCKET.delete(key);
         }
         const deletedPaths = keysToDelete.map(k => k.replace(`${siteId}/`, ""));
-        context.waitUntil(purgeCache(request, siteId, deletedPaths));
+        await purgeCache(request, siteId, deletedPaths);
       }
 
       return new Response(JSON.stringify({ success: true, deleted: listed.objects.length }), {
@@ -330,7 +330,7 @@ export async function onRequestDelete(context) {
 
       await env.PLURIBUS_BUCKET.delete(r2Key);
 
-      context.waitUntil(purgeCache(request, siteId, [normalizedPath]));
+      await purgeCache(request, siteId, [normalizedPath]);
 
       return new Response(JSON.stringify({ success: true, key: r2Key }), {
         status: 200,
