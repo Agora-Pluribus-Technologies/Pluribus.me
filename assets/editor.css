@@ -2028,7 +2028,6 @@ nav {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   width: 90%;
-  max-width: 900px;
   max-height: 700px;
   display: flex;
   flex-direction: column;
@@ -2409,7 +2408,6 @@ nav {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   width: 90%;
-  max-width: 900px;
   max-height: 700px;
   display: flex;
   flex-direction: column;

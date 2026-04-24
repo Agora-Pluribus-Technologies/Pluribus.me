@@ -190,14 +190,12 @@ a:hover {
     margin-left: 5%;
     margin-right: 5%;
     margin-bottom: 20px;
-    max-width: 900px;
 }
 
 .h-entry {
     margin-left: 5%;
     margin-right: 5%;
     margin-bottom: 20px;
-    max-width: 900px;
     background-color: var(--bg-secondary);
     border-radius: 8px;
     border-color: var(--border-color);
