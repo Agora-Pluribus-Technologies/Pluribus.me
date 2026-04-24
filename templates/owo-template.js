@@ -1,5 +1,4 @@
 document.addEventListener("DOMContentLoaded", async function () {
-  console.log("TEST");
   // https://agorapages.com
   const origin = document.location.origin;
 
