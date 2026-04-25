@@ -1,3 +1,62 @@
+/* Backlinks ("Referenced by") */
+.backlinks-section {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color, #404040);
+    font-size: 0.9rem;
+}
+
+.backlinks-heading {
+    margin: 0 0 0.6rem 0;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted, #888);
+    font-weight: 600;
+}
+
+.backlinks-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.backlinks-item {
+    margin: 0;
+}
+
+.backlinks-link {
+    color: var(--text-secondary, #ccc);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border-color, #404040);
+}
+
+.backlinks-link:hover {
+    color: var(--accent-color, gold);
+    border-bottom-color: var(--accent-color, gold);
+}
+
+body.light-mode .backlinks-section {
+    border-top-color: var(--border-color-alt, #ccc);
+}
+
+body.light-mode .backlinks-heading {
+    color: var(--text-muted-alt, #666);
+}
+
+body.light-mode .backlinks-link {
+    color: var(--text-secondary-alt, #444);
+    border-bottom-color: var(--border-color-alt, #ccc);
+}
+
+body.light-mode .backlinks-link:hover {
+    color: var(--accent-color-alt, #b8860b);
+    border-bottom-color: var(--accent-color-alt, #b8860b);
+}
+
 /* Wikilinks */
 .wikilink {
     color: var(--accent-color, #7aa2f7);

@@ -306,6 +306,51 @@ async function fetchPagesJson(origin, basePath) {
   return pagesJson;
 }
 
+async function fetchWikilinksJson(origin, basePath) {
+  try {
+    const resp = await fetch(`${origin}${basePath}/wikilinks.json`, {
+      method: "GET",
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache, must-revalidate",
+      },
+    });
+    if (!resp.ok) return {};
+    return await resp.json();
+  } catch (e) {
+    return {};
+  }
+}
+
+function renderBacklinksSection(backlinksForPage, origin, basePath) {
+  if (!Array.isArray(backlinksForPage) || backlinksForPage.length === 0) return null;
+
+  const section = document.createElement("section");
+  section.className = "backlinks-section";
+
+  const heading = document.createElement("h3");
+  heading.className = "backlinks-heading";
+  heading.textContent = "Referenced by";
+  section.appendChild(heading);
+
+  const list = document.createElement("ul");
+  list.className = "backlinks-list";
+
+  for (const ref of backlinksForPage) {
+    const li = document.createElement("li");
+    li.className = "backlinks-item";
+    const a = document.createElement("a");
+    a.className = "backlinks-link";
+    a.href = `${basePath}/${ref.fileName}`;
+    a.textContent = ref.displayName || ref.fileName;
+    li.appendChild(a);
+    list.appendChild(li);
+  }
+  section.appendChild(list);
+
+  return section;
+}
+
 function buildTreeFromPages(pagesJson) {
   if (!pagesJson) return [];
   const root = [];
@@ -562,6 +607,18 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
   }
 
   mainContent.appendChild(panel);
+
+  // Append "Referenced by" section if there are any backlinks for this page
+  try {
+    const backlinks = await fetchWikilinksJson(origin, basePath);
+    const refs = backlinks && backlinks[pathName];
+    if (Array.isArray(refs) && refs.length > 0) {
+      const section = renderBacklinksSection(refs, origin, basePath);
+      if (section) panel.appendChild(section);
+    }
+  } catch (e) {
+    console.error("Failed to render backlinks:", e);
+  }
 }
 
 function createFooter(origin, basePath, showHistory) {

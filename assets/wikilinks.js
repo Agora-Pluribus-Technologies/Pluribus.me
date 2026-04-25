@@ -198,6 +198,87 @@
     return scored.slice(0, 8).map(s => s.page);
   }
 
+  // Walk markdown and yield each [[...]] body found outside fenced code blocks
+  // and inline code spans. The body is the raw target text (before any | alias).
+  function extractWikilinkBodies(markdown) {
+    const bodies = [];
+    if (!markdown) return bodies;
+
+    const fenceRegex = /^(```[\s\S]*?^```$|~~~[\s\S]*?^~~~$)/gm;
+    const segments = [];
+    let lastIdx = 0;
+    let m;
+    while ((m = fenceRegex.exec(markdown)) !== null) {
+      if (m.index > lastIdx) {
+        segments.push(markdown.slice(lastIdx, m.index));
+      }
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < markdown.length) segments.push(markdown.slice(lastIdx));
+
+    const codeSpanRegex = /(`+)([^`\n]+?)\1/g;
+    for (const seg of segments) {
+      let last = 0;
+      let cm;
+      const parts = [];
+      while ((cm = codeSpanRegex.exec(seg)) !== null) {
+        parts.push(seg.slice(last, cm.index));
+        last = cm.index + cm[0].length;
+      }
+      parts.push(seg.slice(last));
+
+      for (const part of parts) {
+        const re = new RegExp(WIKILINK_INLINE_REGEX.source, "g");
+        let wm;
+        while ((wm = re.exec(part)) !== null) {
+          bodies.push(wm[1]);
+        }
+      }
+    }
+    return bodies;
+  }
+
+  // Build a backlink index: for each page, list pages that link *to* it.
+  // pages: [{ fileName, displayName }, ...] — fileName without "public/" or ".md"
+  // getContent: (fileName) => markdown string (or null/undefined)
+  // returns: { [targetFileName]: [{ fileName, displayName }, ...] }
+  function buildBacklinkIndex(pages, getContent) {
+    const index = {};
+    if (!Array.isArray(pages) || typeof getContent !== "function") return index;
+
+    for (const source of pages) {
+      const content = getContent(source.fileName);
+      if (!content) continue;
+
+      const bodies = extractWikilinkBodies(content);
+      const seenTargets = new Set();
+
+      for (const body of bodies) {
+        const { target } = parseWikilinkBody(body);
+        const resolved = resolveWikilink(target, pages);
+        if (!resolved) continue;
+        if (resolved.fileName === source.fileName) continue; // skip self-links
+        if (seenTargets.has(resolved.fileName)) continue;
+        seenTargets.add(resolved.fileName);
+
+        if (!index[resolved.fileName]) index[resolved.fileName] = [];
+        index[resolved.fileName].push({
+          fileName: source.fileName,
+          displayName: source.displayName || source.fileName,
+        });
+      }
+    }
+
+    // Sort each list alphabetically by displayName for stable output.
+    for (const key of Object.keys(index)) {
+      index[key].sort((a, b) =>
+        (a.displayName || a.fileName).localeCompare(b.displayName || b.fileName)
+      );
+    }
+
+    return index;
+  }
+
   const api = {
     parseWikilinkBody,
     resolveWikilink,
@@ -208,6 +289,8 @@
     findActiveWikilinkTrigger,
     filterPagesByQuery,
     slugifyHeading,
+    extractWikilinkBodies,
+    buildBacklinkIndex,
     WIKILINK_INLINE_REGEX,
     WIKILINK_TOKENIZE_REGEX,
   };

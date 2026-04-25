@@ -644,6 +644,35 @@ async function deployChanges(siteId) {
     contentType: "application/json",
   });
 
+  // Generate wikilinks.json (backlink index) for pages sites
+  if (!isBlogSite && typeof AgoraWikilinks !== "undefined") {
+    try {
+      const indexablePages = markdownCache
+        .filter(c => c.fileName !== "public/latest.md")
+        .map(c => ({
+          fileName: c.fileName.replace(/^public\//, "").replace(/\.md$/, ""),
+          displayName: c.displayName || c.fileName,
+        }));
+      const contentByFileName = new Map(
+        markdownCache.map(c => [
+          c.fileName.replace(/^public\//, "").replace(/\.md$/, ""),
+          c.content,
+        ])
+      );
+      const backlinks = AgoraWikilinks.buildBacklinkIndex(
+        indexablePages,
+        (fileName) => contentByFileName.get(fileName)
+      );
+      files.push({
+        filePath: "public/wikilinks.json",
+        content: JSON.stringify(backlinks),
+        contentType: "application/json",
+      });
+    } catch (e) {
+      console.error("Failed to build wikilinks.json:", e);
+    }
+  }
+
   // Update site.json from git working directory
   try {
     const siteJsonContent = await gitReadFile(siteId, "public/site.json");
