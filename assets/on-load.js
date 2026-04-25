@@ -672,6 +672,13 @@ async function openSiteInEditor(site, initialPage = "index") {
     // After initial load, sync the deploy button state
     updateDeployButtonState();
 
+    // Start polling history.json for upstream commits
+    if (site.siteType !== "blog") {
+      initConflictPolling(currentSiteId).catch(err =>
+        console.error("Failed to start conflict polling:", err)
+      );
+    }
+
     // Start onboarding tour after editor is fully rendered
     setTimeout(() => startOnboardingTour(), 500);
   }, 100);
@@ -1099,6 +1106,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (deploySuccess) {
           await saveGitHistoryToR2(currentSiteId);
           console.log("Git history saved to R2");
+          if (typeof recordSelfDeploy === "function") {
+            await recordSelfDeploy(currentSiteId);
+          }
         }
 
         // Reset modified flag after successful deployment
@@ -1659,6 +1669,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (deploySuccess) {
           await saveGitHistoryToR2(currentSiteId);
           console.log("Git history saved to R2");
+          if (typeof recordSelfDeploy === "function") {
+            await recordSelfDeploy(currentSiteId);
+          }
         }
 
         // Update the sidebar with the new pages
@@ -1828,6 +1841,20 @@ async function createNewFolder(folderName) {
 function updateDeployButtonState() {
   const deployButton = document.getElementById("deployButton");
   const publishStatus = document.getElementById("publishStatus");
+
+  if (typeof hasUnresolvedConflicts !== "undefined" && hasUnresolvedConflicts) {
+    deployButton.disabled = true;
+    deployButton.style.opacity = "0.5";
+    deployButton.style.cursor = "not-allowed";
+    deployButton.title = "Resolve merge conflicts before publishing";
+    if (publishStatus) {
+      publishStatus.textContent = "Merge conflicts — cannot publish";
+      publishStatus.className = "publish-status pending-changes";
+    }
+    if (currentSiteId) scheduleAutoSave();
+    return;
+  }
+  if (deployButton) deployButton.title = "";
 
   if (!modified) {
     deployButton.disabled = true;

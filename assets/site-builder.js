@@ -275,6 +275,9 @@ function saveBlocksToCache() {
     cacheItem.content = markdown;
     cacheItem.modifiedAt = new Date().toISOString();
     modified = true;
+    if (typeof rescanForConflictMarkers === "function") {
+      rescanForConflictMarkers();
+    }
     updateDeployButtonState();
   }
 }
