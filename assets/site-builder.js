@@ -2,6 +2,8 @@
 let currentBlocks = [];
 let blockIdCounter = 0;
 let pendingBlockCallback = null;
+let activeInlineEditIndex = null;
+let activeInlineEditorInstance = null;
 
 // Generate unique block ID
 function generateBlockId() {
@@ -353,6 +355,14 @@ function renderBlock(block, index) {
   preview.className = 'block-preview';
   preview.innerHTML = renderBlockPreview(block);
 
+  if (block.type === 'panel') {
+    preview.classList.add('block-preview-clickable');
+    preview.addEventListener('click', (e) => {
+      if (activeInlineEditIndex === index) return;
+      startInlineEdit(index, e);
+    });
+  }
+
   wrapper.appendChild(controls);
   wrapper.appendChild(preview);
 
@@ -553,11 +563,8 @@ function editBlock(index) {
 
   switch (block.type) {
     case 'panel':
-      showPanelEditModal(block, (newContent) => {
-        block.content = newContent;
-        saveBlocksToCache();
-        renderAllBlocks();
-      });
+      if (activeInlineEditIndex === index) return;
+      startInlineEdit(index, null);
       break;
     case 'image':
       // Parse current caption from existing content
@@ -598,6 +605,7 @@ function editBlock(index) {
 function deleteBlock(index) {
   if (!confirm('Are you sure you want to delete this block?')) return;
 
+  saveAndCleanupInlineEdit();
   currentBlocks.splice(index, 1);
   saveBlocksToCache();
   renderAllBlocks();
@@ -609,6 +617,7 @@ function deleteBlock(index) {
 
 function moveBlockUp(index) {
   if (index <= 0) return;
+  saveAndCleanupInlineEdit();
   const temp = currentBlocks[index];
   currentBlocks[index] = currentBlocks[index - 1];
   currentBlocks[index - 1] = temp;
@@ -618,6 +627,7 @@ function moveBlockUp(index) {
 
 function moveBlockDown(index) {
   if (index >= currentBlocks.length - 1) return;
+  saveAndCleanupInlineEdit();
   const temp = currentBlocks[index];
   currentBlocks[index] = currentBlocks[index + 1];
   currentBlocks[index + 1] = temp;
@@ -626,42 +636,163 @@ function moveBlockDown(index) {
 }
 
 // ============================================
-// Panel Edit Modal
+// Panel Inline Edit
 // ============================================
 
 let panelEditor = null;
 
-function showPanelEditModal(block, callback) {
-  // Remove existing modal
-  const existingModal = document.querySelector('.panel-edit-modal-overlay');
-  if (existingModal) existingModal.remove();
+function getClickedTextInfo(event) {
+  if (!event) return null;
 
-  const overlay = document.createElement('div');
-  overlay.className = 'panel-edit-modal-overlay';
+  let range;
+  if (document.caretRangeFromPoint) {
+    range = document.caretRangeFromPoint(event.clientX, event.clientY);
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(event.clientX, event.clientY);
+    if (pos) {
+      range = document.createRange();
+      range.setStart(pos.offsetNode, pos.offset);
+      range.collapse(true);
+    }
+  }
 
-  const modal = document.createElement('div');
-  modal.className = 'panel-edit-modal';
+  if (!range || !range.startContainer) return null;
 
-  modal.innerHTML = `
-    <div class="panel-edit-header">
-      <h3>Edit Panel</h3>
-      <button class="panel-edit-close">&times;</button>
-    </div>
-    <div class="panel-edit-body">
-      <div id="panelEditor"></div>
-    </div>
-    <div class="panel-edit-footer">
-      <button class="panel-edit-cancel">Cancel</button>
-      <button class="panel-edit-confirm">Confirm</button>
-    </div>
-  `;
+  const textNode = range.startContainer;
+  if (textNode.nodeType !== Node.TEXT_NODE) return null;
 
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+  const text = textNode.textContent;
+  const offset = range.startOffset;
 
-  // Initialize ToastUI editor
+  // Find the closest block-level ancestor within the preview
+  let blockEl = textNode.parentElement;
+  while (blockEl && blockEl.classList && !blockEl.classList.contains('block-preview')) {
+    if (['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'PRE'].includes(blockEl.tagName)) {
+      break;
+    }
+    blockEl = blockEl.parentElement;
+  }
+
+  // Get text content of the block-level element and the offset within it
+  const blockText = blockEl ? blockEl.textContent : text;
+  let blockOffset = offset;
+
+  if (blockEl) {
+    const treeWalker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
+    let node;
+    let accumulated = 0;
+    while ((node = treeWalker.nextNode())) {
+      if (node === textNode) {
+        blockOffset = accumulated + offset;
+        break;
+      }
+      accumulated += node.textContent.length;
+    }
+  }
+
+  return { blockText, blockOffset };
+}
+
+function setCursorInEditor(editor, clickInfo) {
+  if (!clickInfo) return;
+
+  try {
+    let wwContainer;
+    try {
+      const els = editor.getEditorElements();
+      wwContainer = els && els.wwEditor;
+    } catch (_) {}
+    if (!wwContainer) {
+      wwContainer = document.querySelector('.inline-panel-editor .ProseMirror')
+        || document.querySelector('.inline-panel-editor [contenteditable]');
+    }
+    if (!wwContainer) return;
+
+    const { blockText, blockOffset } = clickInfo;
+
+    // Find matching block-level element in editor by text content
+    const blockSelectors = 'p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, pre';
+    const editorBlocks = wwContainer.querySelectorAll(blockSelectors);
+
+    let targetBlock = null;
+    let bestMatchLen = 0;
+
+    for (const block of editorBlocks) {
+      const editorBlockText = block.textContent;
+      // Find the block with the longest common prefix with blockText
+      if (editorBlockText === blockText) {
+        targetBlock = block;
+        break;
+      }
+      // Partial match fallback
+      const commonLen = commonPrefixLength(editorBlockText, blockText);
+      if (commonLen > bestMatchLen) {
+        bestMatchLen = commonLen;
+        targetBlock = block;
+      }
+    }
+
+    if (!targetBlock) return;
+
+    // Walk text nodes within the matched block to set cursor at the right offset
+    const treeWalker = document.createTreeWalker(targetBlock, NodeFilter.SHOW_TEXT);
+    let node;
+    let remaining = Math.min(blockOffset, targetBlock.textContent.length);
+
+    while ((node = treeWalker.nextNode())) {
+      if (remaining <= node.textContent.length) {
+        const range = document.createRange();
+        range.setStart(node, remaining);
+        range.collapse(true);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return;
+      }
+      remaining -= node.textContent.length;
+    }
+  } catch (e) {
+    // Cursor positioning is best-effort
+  }
+}
+
+function commonPrefixLength(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+}
+
+function startInlineEdit(index, clickEvent) {
+  // Capture click info before any DOM changes
+  const clickInfo = clickEvent ? getClickedTextInfo(clickEvent) : null;
+
+  // If another panel is already being edited, save and close it first
+  if (activeInlineEditIndex !== null && activeInlineEditIndex !== index) {
+    stopInlineEdit();
+  }
+
+  const block = currentBlocks[index];
+  if (!block || block.type !== 'panel') return;
+
+  activeInlineEditIndex = index;
+
+  // Find the block-item element
+  const blockItem = document.querySelector(`.block-item[data-index="${index}"]`);
+  if (!blockItem) return;
+
+  const preview = blockItem.querySelector('.block-preview');
+  if (!preview) return;
+
+  // Replace preview content with editor container
+  preview.classList.add('block-preview-editing');
+  preview.classList.remove('block-preview-clickable');
+  preview.innerHTML = '<div class="inline-panel-editor"></div>';
+
+  const editorEl = preview.querySelector('.inline-panel-editor');
+
+  // Initialize ToastUI editor inline
   panelEditor = new toastui.Editor({
-    el: document.querySelector('#panelEditor'),
+    el: editorEl,
     initialEditType: 'wysiwyg',
     previewStyle: 'vertical',
     theme: 'dark',
@@ -679,6 +810,8 @@ function showPanelEditModal(block, callback) {
       }]
     ]
   });
+
+  activeInlineEditorInstance = panelEditor;
 
   function insertImageIntoPanelEditor({ filename, caption }) {
     const url = `/s/${currentSitePathFull}/${filename}`;
@@ -699,24 +832,74 @@ function showPanelEditModal(block, callback) {
     return true;
   });
 
-  // Event handlers
-  modal.querySelector('.panel-edit-close').addEventListener('click', () => {
-    overlay.remove();
-    panelEditor = null;
+  // Set cursor position after editor renders
+  requestAnimationFrame(() => {
+    setCursorInEditor(panelEditor, clickInfo);
+    // Focus the editor
+    panelEditor.focus();
   });
 
-  modal.querySelector('.panel-edit-cancel').addEventListener('click', () => {
-    overlay.remove();
-    panelEditor = null;
-  });
+  // Hide the edit button while editing
+  const editBtn = blockItem.querySelector('.block-edit-btn');
+  if (editBtn) editBtn.style.display = 'none';
 
-  modal.querySelector('.panel-edit-confirm').addEventListener('click', () => {
-    const newContent = panelEditor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
-    overlay.remove();
-    panelEditor = null;
-    if (callback) callback(newContent);
-  });
+  // Set up click-outside listener (delayed to avoid catching the triggering click)
+  setTimeout(() => {
+    document.addEventListener('mousedown', handleClickOutsideEditor);
+  }, 0);
+}
 
+function handleClickOutsideEditor(e) {
+  if (activeInlineEditIndex === null) return;
+
+  const blockItem = document.querySelector(`.block-item[data-index="${activeInlineEditIndex}"]`);
+  if (!blockItem) return;
+
+  // Check if click is inside the editing block, or inside a popup (image upload, etc.)
+  if (blockItem.contains(e.target)) return;
+  if (e.target.closest('.block-popup')) return;
+  if (e.target.closest('.image-upload-popup')) return;
+  if (e.target.closest('.toastui-editor-popup')) return;
+
+  // Check if clicking on another panel's preview — start editing that one directly
+  const targetPreview = e.target.closest('.block-preview-clickable');
+  if (targetPreview) {
+    const targetBlockItem = targetPreview.closest('.block-item');
+    if (targetBlockItem) {
+      const targetIndex = parseInt(targetBlockItem.dataset.index, 10);
+      const targetBlock = currentBlocks[targetIndex];
+      if (targetBlock && targetBlock.type === 'panel') {
+        e.preventDefault();
+        e.stopPropagation();
+        startInlineEdit(targetIndex, e);
+        return;
+      }
+    }
+  }
+
+  stopInlineEdit();
+}
+
+function saveAndCleanupInlineEdit() {
+  if (activeInlineEditIndex === null || !activeInlineEditorInstance) return;
+
+  const block = currentBlocks[activeInlineEditIndex];
+  if (block) {
+    block.content = activeInlineEditorInstance.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
+  }
+
+  activeInlineEditorInstance.destroy();
+  activeInlineEditorInstance = null;
+  panelEditor = null;
+  activeInlineEditIndex = null;
+
+  document.removeEventListener('mousedown', handleClickOutsideEditor);
+}
+
+function stopInlineEdit() {
+  saveAndCleanupInlineEdit();
+  saveBlocksToCache();
+  renderAllBlocks();
 }
 
 // ============================================

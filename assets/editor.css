@@ -1826,6 +1826,23 @@ nav {
   min-height: 50px;
 }
 
+.block-preview-clickable {
+  cursor: text;
+}
+
+.block-preview-editing {
+  padding: 0;
+}
+
+.block-preview-editing .inline-panel-editor {
+  width: 100%;
+}
+
+.block-preview-editing .toastui-editor-defaultUI {
+  border: none;
+  border-radius: 0 0 8px 8px;
+}
+
 /* Block preview content styling - match owo-template */
 .block-preview .h-entry {
   margin: 0;
