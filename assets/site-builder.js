@@ -1065,32 +1065,41 @@ function updateWikilinkAutocomplete(editor) {
       endOffset = caretOffset + closeIdx + 2; // include the "]]"
     }
 
-    const replacement = `[[${chosen.fileName}]]`;
-    const replaceRange = document.createRange();
-    replaceRange.setStart(node, trigger.startOffset);
-    replaceRange.setEnd(node, endOffset);
-    replaceRange.deleteContents();
-    const textNode = document.createTextNode(replacement);
-    replaceRange.insertNode(textNode);
-    // Restore focus to the editor before re-applying the selection — the
-    // dropdown's mousedown ran with preventDefault, but ProseMirror still
-    // moves focus when the DOM under it changes via direct manipulation.
+    // Restore focus to the editor first so execCommand routes through it.
     if (wwContainer && typeof wwContainer.focus === "function") {
       wwContainer.focus({ preventScroll: true });
     }
-    if (editor && typeof editor.focus === "function") {
-      try { editor.focus(); } catch (_) {}
-    }
 
-    // Move caret after the inserted text
-    const after = document.createRange();
-    after.setStart(textNode, replacement.length);
-    after.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(after);
-    // Trigger an input event so ToastUI registers the change
-    const evt = new InputEvent('input', { bubbles: true, cancelable: true });
-    wwContainer.dispatchEvent(evt);
+    // Select the existing wikilink range, then use execCommand('insertText')
+    // so ProseMirror processes it as a real input — keeps its model, focus,
+    // and selection consistent. The caret naturally lands after the inserted
+    // text (i.e. after the "]]").
+    const liveSel = window.getSelection();
+    const replaceRange = document.createRange();
+    replaceRange.setStart(node, trigger.startOffset);
+    replaceRange.setEnd(node, endOffset);
+    liveSel.removeAllRanges();
+    liveSel.addRange(replaceRange);
+
+    const replacement = `[[${chosen.fileName}]]`;
+    let inserted = false;
+    try {
+      inserted = document.execCommand('insertText', false, replacement);
+    } catch (_) { inserted = false; }
+
+    if (!inserted) {
+      // Fallback: direct DOM mutation + InputEvent
+      replaceRange.deleteContents();
+      const textNode = document.createTextNode(replacement);
+      replaceRange.insertNode(textNode);
+      const after = document.createRange();
+      after.setStart(textNode, replacement.length);
+      after.collapse(true);
+      liveSel.removeAllRanges();
+      liveSel.addRange(after);
+      const evt = new InputEvent('input', { bubbles: true, cancelable: true });
+      wwContainer.dispatchEvent(evt);
+    }
   });
 }
 
