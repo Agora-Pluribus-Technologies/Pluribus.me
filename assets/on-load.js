@@ -1048,6 +1048,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
       }
 
+      // Pre-deploy check: if upstream has advanced or there are unresolved
+      // conflicts, run the merge flow and suppress the commit modal.
+      if (typeof checkUpstreamBeforeDeploy === "function") {
+        const check = await checkUpstreamBeforeDeploy(currentSiteId);
+        if (!check.canProceed) {
+          return;
+        }
+      }
+
       // Sync current cache to git working directory
       await syncCacheToGit(currentSiteId, markdownCache, imageCache);
 

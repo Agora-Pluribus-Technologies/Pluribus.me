@@ -191,6 +191,20 @@ async function handleDifferentAuthorDivergence(siteId, upstream) {
 
 async function performThreeWayMerge(siteId) {
   const dir = getRepoDir(siteId);
+
+  // Refresh the local .git directory from upstream's .git-history.json so the
+  // merge sees the latest commit objects, refs, and ancestry. The merge base
+  // (lastSeenBaseCommitOid) is preserved as an ancestor in the refreshed store.
+  try {
+    const gitData = await loadGitHistoryFromR2(siteId);
+    if (gitData && Object.keys(gitData).length > 0) {
+      await deserializeGitDirectory(siteId, gitData);
+      console.log("Reloaded .git from upstream .git-history.json before merge");
+    }
+  } catch (e) {
+    console.error("Failed to reload .git from upstream, proceeding with local state:", e);
+  }
+
   const baseOid = lastSeenBaseCommitOid || (await git.resolveRef({ fs, dir, ref: "HEAD" }));
   const username = getStoredUsername() || "user";
   const authorObj = { name: username, email: `${username}@noreply.agorapages.com` };
@@ -369,6 +383,54 @@ function rescanForConflictMarkers() {
     showConflictBanner([...stillConflicted]);
   } else {
     hideConflictBanner();
+  }
+}
+
+// Run before the publish flow opens the commit modal. If upstream has moved
+// or there are unresolved conflicts, run the merge resolution flow and tell
+// the caller to suppress the modal. Returns:
+//   { canProceed: true } - safe to open the commit modal
+//   { canProceed: false, reason: "conflicts" | "upstream-changed" | "merge-conflicts" }
+async function checkUpstreamBeforeDeploy(siteId) {
+  // Existing unresolved conflicts always block.
+  if (hasUnresolvedConflicts) {
+    showAlertBar(
+      "Cannot publish — resolve the merge conflicts in your pending pages first.",
+      false
+    );
+    if (conflictedFiles.size > 0) showConflictBanner([...conflictedFiles]);
+    return { canProceed: false, reason: "conflicts" };
+  }
+
+  const head = await fetchUpstreamHead(siteId);
+  if (!head || !lastSeenShortSha || head.shortSha === lastSeenShortSha) {
+    return { canProceed: true };
+  }
+
+  // Upstream has advanced since the local edits' base commit. Run the same
+  // resolution path as the background poll instead of opening the modal.
+  if (conflictResolutionInFlight) {
+    showAlertBar("Upstream changes are being merged — please wait.", false);
+    return { canProceed: false, reason: "upstream-changed" };
+  }
+
+  conflictResolutionInFlight = true;
+  try {
+    const me = (getStoredUsername() || "").toLowerCase();
+    const upstreamAuthor = (head.author || "").toLowerCase();
+
+    if (upstreamAuthor === me) {
+      await handleSameAuthorDivergence(siteId);
+      return { canProceed: false, reason: "upstream-changed" };
+    }
+
+    await handleDifferentAuthorDivergence(siteId, head);
+    return {
+      canProceed: false,
+      reason: hasUnresolvedConflicts ? "merge-conflicts" : "upstream-changed",
+    };
+  } finally {
+    conflictResolutionInFlight = false;
   }
 }
 
