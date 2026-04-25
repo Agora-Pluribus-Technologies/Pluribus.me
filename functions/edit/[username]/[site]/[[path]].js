@@ -87,6 +87,10 @@ export async function onRequestGet(context) {
   // Insert the script before </head>
   indexHtml = indexHtml.replace("</head>", `${injectedScript}</head>`);
 
+  // Versioning for cache busting of assets (append ?v=timestamp)
+  const version = Date.now();
+  indexHtml = indexHtml.replaceAll("QUERY_STRING_VERSION", version);
+
   return new Response(indexHtml, {
     status: 200,
     headers: {
