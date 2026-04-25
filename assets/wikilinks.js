@@ -42,26 +42,27 @@
     if (!target) return null;
     if (!Array.isArray(pages) || pages.length === 0) return null;
 
-    const normalizedTarget = target.replace(/^\/+|\/+$/g, "");
+    // Normalize: strip leading/trailing slashes and an optional .md extension
+    // so [[page]] and [[page.md]] behave the same.
+    const normalizedTarget = target
+      .replace(/^\/+|\/+$/g, "")
+      .replace(/\.md$/i, "");
     const lowerTarget = normalizedTarget.toLowerCase();
 
-    // Exact fileName match (case-insensitive).
-    let exact = pages.find(p => (p.fileName || "").toLowerCase() === lowerTarget);
+    // 1. Exact fileName match (case-insensitive). An exact path always wins,
+    //    so [[page]] with both "page" and "folder/page" resolves to "page".
+    const exact = pages.find(p => (p.fileName || "").toLowerCase() === lowerTarget);
     if (exact) return exact;
 
-    // Match by basename (last path segment) — unique resolution only.
+    // 2. Unique basename match — accept omitted folder when unambiguous.
+    //    Multiple pages sharing a basename require the folder prefix to
+    //    disambiguate (no fallback resolution).
     const basenameMatches = pages.filter(p => {
       const fn = (p.fileName || "").toLowerCase();
       const base = fn.split("/").pop();
       return base === lowerTarget;
     });
     if (basenameMatches.length === 1) return basenameMatches[0];
-
-    // Match by displayName (case-insensitive) — unique resolution only.
-    const displayMatches = pages.filter(
-      p => (p.displayName || "").toLowerCase() === lowerTarget
-    );
-    if (displayMatches.length === 1) return displayMatches[0];
 
     return null;
   }
