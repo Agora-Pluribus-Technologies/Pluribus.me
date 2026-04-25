@@ -1072,6 +1072,16 @@ function updateWikilinkAutocomplete(editor) {
     replaceRange.deleteContents();
     const textNode = document.createTextNode(replacement);
     replaceRange.insertNode(textNode);
+    // Restore focus to the editor before re-applying the selection — the
+    // dropdown's mousedown ran with preventDefault, but ProseMirror still
+    // moves focus when the DOM under it changes via direct manipulation.
+    if (wwContainer && typeof wwContainer.focus === "function") {
+      wwContainer.focus({ preventScroll: true });
+    }
+    if (editor && typeof editor.focus === "function") {
+      try { editor.focus(); } catch (_) {}
+    }
+
     // Move caret after the inserted text
     const after = document.createRange();
     after.setStart(textNode, replacement.length);
@@ -1088,6 +1098,9 @@ function showWikilinkAutocomplete(matches, position, onCommit) {
   if (!wikilinkAutocomplete) {
     const dropdown = document.createElement('div');
     dropdown.className = 'wikilink-autocomplete';
+    // Block focus shift when the user mouses down anywhere inside the dropdown
+    // (including padding/gaps between items).
+    dropdown.addEventListener('mousedown', (e) => e.preventDefault());
     document.body.appendChild(dropdown);
     wikilinkAutocomplete = {
       el: dropdown,
