@@ -8,11 +8,9 @@ async function purgeCache(env, siteId, filePaths) {
   const urls = [];
   for (const fp of filePaths) {
     if (!fp.startsWith("public/")) continue;
-    if (fp.endsWith(".json")) continue;
+    if (fp.endsWith(".html")) continue;
     const servingPath = fp.slice("public/".length);
-    if (!servingPath.endsWith(".html")) {
-      urls.push(`https://agorapages.com/s/${siteId}/${servingPath}`);
-    }
+    urls.push(`https://agorapages.com/s/${siteId}/${servingPath}`);
   }
   if (urls.length === 0) return;
   for (let i = 0; i < urls.length; i += PURGE_BATCH_SIZE) {
