@@ -902,6 +902,7 @@ function handleClickOutsideEditor(e) {
   if (e.target.closest('.block-popup')) return;
   if (e.target.closest('.image-upload-popup')) return;
   if (e.target.closest('.toastui-editor-popup')) return;
+  if (e.target.closest('.wikilink-autocomplete')) return;
 
   // Check if clicking on another panel's preview — start editing that one directly
   const targetPreview = e.target.closest('.block-preview-clickable');
