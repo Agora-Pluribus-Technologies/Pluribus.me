@@ -1006,6 +1006,15 @@ function attachWikilinkShortcuts(editor, editorEl) {
   editorEl.addEventListener('input', onInput);
   editorEl.addEventListener('keyup', onInput);
   editorEl.addEventListener('click', onInput);
+
+  // Hide the autocomplete when focus leaves the editor (clicks inside the
+  // dropdown use mousedown+preventDefault so they don't trigger blur).
+  const onFocusOut = (e) => {
+    const next = e.relatedTarget;
+    if (next && wikilinkAutocomplete && wikilinkAutocomplete.el.contains(next)) return;
+    setTimeout(hideWikilinkAutocomplete, 100);
+  };
+  editorEl.addEventListener('focusout', onFocusOut);
 }
 
 let wikilinkAutocomplete = null;
