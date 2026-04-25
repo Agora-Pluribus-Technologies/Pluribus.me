@@ -523,27 +523,43 @@ async function deployChanges(siteId) {
   });
   const template = await templateResp.text();
 
-  const existingMarkdownFiles = await getPublicFiles(siteId);
   const files = [];
-  const cacheFileNames = markdownCache.map(item => item.fileName);
 
-  // Handle deletions: files that exist but not in cache
-  for (const existingFile of existingMarkdownFiles) {
-    if (!cacheFileNames.includes(existingFile)) {
-      console.log("Preparing to delete file:", existingFile);
-      // For blog sites, we don't create individual HTML files per post
-      if (!isBlogSite) {
-        files.push({ filePath: existingFile.replace(".md", ".html"), action: "delete" });
+  // Determine which markdown files actually changed in the latest commit
+  const changedMd = new Set();
+  const deletedMd = new Set();
+  try {
+    const recent = await gitLog(siteId, 1);
+    if (recent.length > 0) {
+      const commitChanges = await getCommitChanges(siteId, recent[0].oid);
+      for (const change of commitChanges) {
+        if (!change.filepath.startsWith("public/") || !change.filepath.endsWith(".md")) continue;
+        if (change.status === "deleted") {
+          deletedMd.add(change.filepath);
+        } else {
+          changedMd.add(change.filepath);
+        }
       }
-      files.push({ filePath: existingFile, action: "delete" });
     }
+  } catch (error) {
+    console.error("Error determining changed markdown files, falling back to full deploy:", error);
+    // Fall back: treat every cache file as changed
+    for (const cacheItem of markdownCache) changedMd.add(cacheItem.fileName);
   }
 
-  // Handle creates and updates: files in cache
+  // Handle deletions: markdown files removed in this commit
+  for (const deletedFile of deletedMd) {
+    console.log("Preparing to delete file:", deletedFile);
+    if (!isBlogSite) {
+      files.push({ filePath: deletedFile.replace(".md", ".html"), action: "delete" });
+    }
+    files.push({ filePath: deletedFile, action: "delete" });
+  }
+
+  // Handle creates and updates: only files that actually changed
   for (const cacheItem of markdownCache) {
+    if (!changedMd.has(cacheItem.fileName)) continue;
     console.log("Preparing to update file:", cacheItem.fileName);
-    // For blog sites, only save markdown files (posts are loaded dynamically)
-    // For pages sites, save both HTML and markdown
     if (!isBlogSite) {
       files.push({
         filePath: cacheItem.fileName.replace(".md", ".html"),
