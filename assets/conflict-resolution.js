@@ -13,6 +13,41 @@ let conflictResolutionInFlight = false;
 const CONFLICT_POLL_INTERVAL_MS = 30000;
 const CONFLICT_MARKER_REGEX = /^<{7} |^={7}\s*$|^>{7} /m;
 
+function lastSeenStorageKey(siteId) {
+  return `agorapages.lastSeenUpstream.${siteId}`;
+}
+
+function loadPersistedLastSeen(siteId) {
+  try {
+    const raw = localStorage.getItem(lastSeenStorageKey(siteId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.shortSha === "string") return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function persistLastSeen(siteId, shortSha, author) {
+  try {
+    if (!shortSha) {
+      localStorage.removeItem(lastSeenStorageKey(siteId));
+      return;
+    }
+    localStorage.setItem(
+      lastSeenStorageKey(siteId),
+      JSON.stringify({ shortSha, author: author || null })
+    );
+  } catch {}
+}
+
+function clearPersistedLastSeen(siteId) {
+  try {
+    localStorage.removeItem(lastSeenStorageKey(siteId));
+  } catch {}
+}
+
 async function fetchUpstreamHead(siteId) {
   try {
     const resp = await fetch(`/s/${siteId}/history.json`, {
@@ -43,13 +78,23 @@ async function initConflictPolling(siteId) {
   conflictedFiles.clear();
   hideConflictBanner();
 
-  const head = await fetchUpstreamHead(siteId);
-  if (head) {
-    lastSeenShortSha = head.shortSha;
-    lastSeenAuthor = head.author;
+  // Prefer the persisted base from a prior session — that's the commit the
+  // current pending changes were based on. Falling back to the upstream head
+  // is only correct for a fresh session with no pending edits.
+  const persisted = loadPersistedLastSeen(siteId);
+  if (persisted) {
+    lastSeenShortSha = persisted.shortSha;
+    lastSeenAuthor = persisted.author;
   } else {
-    lastSeenShortSha = null;
-    lastSeenAuthor = null;
+    const head = await fetchUpstreamHead(siteId);
+    if (head) {
+      lastSeenShortSha = head.shortSha;
+      lastSeenAuthor = head.author;
+      persistLastSeen(siteId, head.shortSha, head.author);
+    } else {
+      lastSeenShortSha = null;
+      lastSeenAuthor = null;
+    }
   }
 
   await recordLocalBaseCommit(siteId);
@@ -69,8 +114,10 @@ function stopConflictPolling() {
 async function pollHistoryForConflicts(siteId) {
   if (siteId !== currentSiteId) return;
   if (conflictResolutionInFlight) return;
-
+  
+  console.log("current shortSha:", lastSeenShortSha, "author:", lastSeenAuthor);
   const head = await fetchUpstreamHead(siteId);
+  console.log("Latest shortSha:", head ? head.shortSha : null, "author:", head ? head.author : null);
   if (!head || !lastSeenShortSha) return;
   if (head.shortSha === lastSeenShortSha) return;
 
@@ -101,6 +148,7 @@ async function handleSameAuthorDivergence(siteId) {
   modified = false;
 
   clearAutoSave(siteId);
+  clearPersistedLastSeen(siteId);
   stopConflictPolling();
 
   const site = { siteId, displayName: siteId.split("/")[1] || siteId };
@@ -116,6 +164,7 @@ async function handleDifferentAuthorDivergence(siteId, upstream) {
 
     lastSeenShortSha = upstream.shortSha;
     lastSeenAuthor = upstream.author;
+    persistLastSeen(siteId, upstream.shortSha, upstream.author);
     await recordLocalBaseCommit(siteId);
 
     if (result.conflicts.length > 0) {
@@ -331,5 +380,6 @@ async function recordSelfDeploy(siteId) {
   if (head) {
     lastSeenShortSha = head.shortSha;
     lastSeenAuthor = head.author;
+    persistLastSeen(siteId, head.shortSha, head.author);
   }
 }
