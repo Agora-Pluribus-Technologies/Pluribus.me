@@ -1,5 +1,7 @@
 // Global cache for markdown files - Array of {displayName, fileName, content, createdAt, modifiedAt}
 let markdownCache = [];
+// Folder metadata keyed by folderPath (e.g. "research/ml") — { displayName, sortOrder }
+let folderMeta = {};
 let currentSitePath = null;
 let currentSiteId = null;
 let currentSitePathFull = null;
@@ -29,6 +31,7 @@ function performAutoSave() {
       markdownCache: markdownCache,
       imageCache: imageCache,
       documentCache: documentCache,
+      folderMeta: folderMeta,
       currentSitePath: currentSitePath,
       currentSiteType: currentSiteType,
       savedAt: new Date().toISOString(),
@@ -69,6 +72,7 @@ function restoreAutoSave(siteId) {
   markdownCache = data.markdownCache || [];
   imageCache = data.imageCache || [];
   documentCache = data.documentCache || [];
+  folderMeta = data.folderMeta || {};
   if (data.currentSitePath) {
     currentSitePath = data.currentSitePath;
   }
@@ -522,8 +526,8 @@ async function openSiteInEditor(site, initialPage = "index") {
       }
     }
 
-    // Load all markdown files, images.json, and documents.json in parallel via public URLs
-    const [mdResults, imagesJsonContent, documentsJsonContent] = await Promise.all([
+    // Load all markdown files, images.json, documents.json, and folders.json in parallel via public URLs
+    const [mdResults, imagesJsonContent, documentsJsonContent, foldersJsonContent] = await Promise.all([
       Promise.all(markdownFiles.map(async (file) => {
         console.log("Loading file into cache:", file);
         const content = await fetchPublicFileContent(file);
@@ -531,6 +535,7 @@ async function openSiteInEditor(site, initialPage = "index") {
       })),
       fetchPublicFileContent("public/images.json").catch(() => null),
       fetchPublicFileContent("public/documents.json").catch(() => null),
+      fetchPublicFileContent("public/folders.json").catch(() => null),
     ]);
 
     // Process markdown results into cache
@@ -569,6 +574,19 @@ async function openSiteInEditor(site, initialPage = "index") {
     } catch (error) {
       console.error("Error loading documents.json:", error);
       documentCache = [];
+    }
+
+    // Initialize folderMeta from folders.json (legacy sites won't have one)
+    try {
+      if (foldersJsonContent) {
+        const parsed = JSON.parse(foldersJsonContent);
+        folderMeta = parsed && typeof parsed === "object" ? parsed : {};
+      } else {
+        folderMeta = {};
+      }
+    } catch (error) {
+      console.error("Error loading folders.json:", error);
+      folderMeta = {};
     }
   }
 
@@ -1823,7 +1841,9 @@ async function createNewPage(displayName) {
 }
 
 async function createNewFolder(folderName) {
-  const sanitizedName = folderName.toLowerCase().replace(/\s+/g, "-");
+  const trimmedName = (folderName || "").trim();
+  if (!trimmedName) return;
+  const sanitizedName = trimmedName.toLowerCase().replace(/\s+/g, "-");
   const parentFolder = getSelectedFolder();
   const folderPath = parentFolder ? `${parentFolder}/${sanitizedName}` : sanitizedName;
 
@@ -1834,6 +1854,17 @@ async function createNewFolder(folderName) {
     alert(`A folder with that name already exists in this location.`);
     return;
   }
+
+  // Persist the folder's display name and a sort order at its level
+  const folderSiblings = getSiblingFolderPaths(folderPath);
+  const maxSortOrder = folderSiblings
+    .map(p => getFolderSortOrder(p))
+    .filter(v => v != null)
+    .reduce((a, b) => Math.max(a, b), -1);
+  folderMeta[folderPath] = {
+    displayName: trimmedName,
+    sortOrder: maxSortOrder + 1,
+  };
 
   const sortOrder = getNextSortOrder(parentFolder);
   const pageFileName = `public/${folderPath}/untitled.md`;
@@ -2062,6 +2093,19 @@ function getNextSortOrder(folder) {
   return max + 1;
 }
 
+function getFolderDisplayName(folderPath) {
+  const meta = folderMeta && folderMeta[folderPath];
+  if (meta && meta.displayName) return meta.displayName;
+  // Fallback: last path segment, with dashes/underscores converted to spaces
+  const segment = folderPath.split("/").pop() || folderPath;
+  return segment.replace(/[-_]+/g, " ");
+}
+
+function getFolderSortOrder(folderPath) {
+  const meta = folderMeta && folderMeta[folderPath];
+  return (meta && meta.sortOrder != null) ? meta.sortOrder : null;
+}
+
 function buildTreeFromCache() {
   const root = [];
   const folderMap = {};
@@ -2085,9 +2129,10 @@ function buildTreeFromCache() {
         if (!folderMap[currentPath]) {
           const folderNode = {
             type: "folder",
-            name: parts[i],
+            name: getFolderDisplayName(currentPath),
+            slug: parts[i],
             folderPath: currentPath,
-            sortOrder: null,
+            sortOrder: getFolderSortOrder(currentPath),
             children: [],
           };
           folderMap[currentPath] = folderNode;
@@ -2109,7 +2154,9 @@ function buildTreeFromCache() {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
       const aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
       const bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
-      return aOrd - bOrd;
+      if (aOrd !== bOrd) return aOrd - bOrd;
+      // Tiebreaker: alphabetical by display name
+      return (a.name || "").localeCompare(b.name || "");
     });
     for (const node of nodes) {
       if (node.type === "folder" && node.children) {
@@ -2119,6 +2166,80 @@ function buildTreeFromCache() {
   }
   sortTree(root);
   return root;
+}
+
+// Get all sibling folder nodes at the same level as `folderPath`.
+function getSiblingFolderPaths(folderPath) {
+  const parentPrefix = folderPath.includes("/")
+    ? folderPath.slice(0, folderPath.lastIndexOf("/")) + "/"
+    : "";
+  const siblings = new Set();
+  for (const item of markdownCache) {
+    const rel = item.fileName.replace("public/", "").replace(".md", "");
+    const segs = rel.split("/");
+    // The folder this file lives in (immediate parent)
+    if (segs.length < 2) continue;
+    for (let i = 1; i < segs.length; i++) {
+      const path = segs.slice(0, i).join("/");
+      // Same parent depth as folderPath
+      if (parentPrefix === "" && !path.includes("/")) {
+        siblings.add(path);
+      } else if (path.startsWith(parentPrefix) && path.slice(parentPrefix.length).indexOf("/") < 0) {
+        siblings.add(path);
+      }
+    }
+  }
+  return [...siblings];
+}
+
+function reorderFolder(folderPath, direction) {
+  const siblings = getSiblingFolderPaths(folderPath);
+  // Sort siblings by current sortOrder (folderMeta) then alphabetically
+  siblings.sort((a, b) => {
+    const aOrd = getFolderSortOrder(a);
+    const bOrd = getFolderSortOrder(b);
+    const ax = aOrd != null ? aOrd : Infinity;
+    const bx = bOrd != null ? bOrd : Infinity;
+    if (ax !== bx) return ax - bx;
+    return getFolderDisplayName(a).localeCompare(getFolderDisplayName(b));
+  });
+  const idx = siblings.indexOf(folderPath);
+  if (idx < 0) return;
+  const swapWith = idx + direction;
+  if (swapWith < 0 || swapWith >= siblings.length) return;
+  const tmp = siblings[idx];
+  siblings[idx] = siblings[swapWith];
+  siblings[swapWith] = tmp;
+
+  // Reassign sortOrders
+  for (let i = 0; i < siblings.length; i++) {
+    if (!folderMeta[siblings[i]]) folderMeta[siblings[i]] = {};
+    folderMeta[siblings[i]].sortOrder = i;
+  }
+}
+
+function renameFolderDisplayName(folderPath, newDisplayName) {
+  if (!folderPath) return;
+  const trimmed = (newDisplayName || "").trim();
+  if (!trimmed) return;
+  if (!folderMeta[folderPath]) folderMeta[folderPath] = {};
+  folderMeta[folderPath].displayName = trimmed;
+}
+
+// Remove folderMeta entries whose folderPath no longer corresponds to any
+// markdown file path. Call after deletes / moves.
+function pruneFolderMeta() {
+  const validPaths = new Set();
+  for (const item of markdownCache) {
+    const rel = item.fileName.replace("public/", "").replace(".md", "");
+    const segs = rel.split("/");
+    for (let i = 1; i < segs.length; i++) {
+      validPaths.add(segs.slice(0, i).join("/"));
+    }
+  }
+  for (const key of Object.keys(folderMeta)) {
+    if (!validPaths.has(key)) delete folderMeta[key];
+  }
 }
 
 // Track which folders are expanded in the sidebar
@@ -2186,6 +2307,42 @@ function renderFolderNode(container, node, depth, siteId) {
   const actions = document.createElement("span");
   actions.classList.add("sidebar-tree-actions");
 
+  const moveUpBtn = document.createElement("button");
+  moveUpBtn.classList.add("sidebar-tree-action-btn", "folder-move");
+  moveUpBtn.innerHTML = "&#x25B2;";
+  moveUpBtn.title = "Move folder up";
+  moveUpBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    reorderFolder(node.folderPath, -1);
+    modified = true;
+    updateDeployButtonState();
+    await populateSidebar(siteId);
+  });
+  actions.appendChild(moveUpBtn);
+
+  const moveDownBtn = document.createElement("button");
+  moveDownBtn.classList.add("sidebar-tree-action-btn", "folder-move");
+  moveDownBtn.innerHTML = "&#x25BC;";
+  moveDownBtn.title = "Move folder down";
+  moveDownBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    reorderFolder(node.folderPath, 1);
+    modified = true;
+    updateDeployButtonState();
+    await populateSidebar(siteId);
+  });
+  actions.appendChild(moveDownBtn);
+
+  const renameBtn = document.createElement("button");
+  renameBtn.classList.add("sidebar-tree-action-btn");
+  renameBtn.textContent = "✎";
+  renameBtn.title = "Rename folder";
+  renameBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    startRenameFolderInSidebar(folderEl, label, node, siteId);
+  });
+  actions.appendChild(renameBtn);
+
   const deleteBtn = document.createElement("button");
   deleteBtn.classList.add("sidebar-tree-action-btn", "delete");
   deleteBtn.textContent = "×";
@@ -2208,6 +2365,7 @@ function renderFolderNode(container, node, depth, siteId) {
       if (currentSitePath && currentSitePath.startsWith(`public/${node.folderPath}/`)) {
         selectSidebarPage(markdownCache[0].fileName);
       }
+      pruneFolderMeta();
       modified = true;
       updateDeployButtonState();
       await populateSidebar(siteId);
@@ -2450,6 +2608,40 @@ function startRenameInSidebar(fileEl, node, siteId) {
     updateDeployButtonState();
     await populateSidebar(siteId);
     selectSidebarPage(newFilePath);
+  });
+}
+
+// Inline-rename a folder's display name in the sidebar.
+function startRenameFolderInSidebar(folderEl, label, node, siteId) {
+  const oldName = label.textContent;
+  label.style.display = "none";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "sidebar-inline-input";
+  input.value = oldName;
+  label.parentNode.insertBefore(input, label.nextSibling);
+  input.focus();
+  input.select();
+
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") input.blur();
+    if (e.key === "Escape") {
+      input.remove();
+      label.style.display = "";
+    }
+  });
+
+  input.addEventListener("blur", async () => {
+    const newName = input.value.trim();
+    input.remove();
+    label.style.display = "";
+
+    if (!newName || newName === oldName) return;
+    renameFolderDisplayName(node.folderPath, newName);
+    modified = true;
+    updateDeployButtonState();
+    await populateSidebar(siteId);
   });
 }
 

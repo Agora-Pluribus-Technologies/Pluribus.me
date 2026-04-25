@@ -15,13 +15,14 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   const pagesJson = await fetchPagesJson(origin, basePath);
   const siteJson = await fetchSiteJson(origin, basePath);
+  const foldersJson = await fetchFoldersJson(origin, basePath);
   const siteName = siteJson ? siteJson.siteName : null;
   const showHistory = siteJson ? siteJson.showHistory : false;
 
   const wrapper = document.createElement("div");
   wrapper.className = "site-layout";
 
-  const sidebar = createSidebar(origin, basePath, pagesJson);
+  const sidebar = createSidebar(origin, basePath, pagesJson, foldersJson);
   wrapper.appendChild(sidebar);
 
   const mainContent = document.createElement("div");
@@ -322,6 +323,23 @@ async function fetchWikilinksJson(origin, basePath) {
   }
 }
 
+async function fetchFoldersJson(origin, basePath) {
+  try {
+    const resp = await fetch(`${origin}${basePath}/folders.json`, {
+      method: "GET",
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache, must-revalidate",
+      },
+    });
+    if (!resp.ok) return {};
+    const parsed = await resp.json();
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
 function renderBacklinksSection(backlinksForPage, origin, basePath) {
   if (!Array.isArray(backlinksForPage) || backlinksForPage.length === 0) return null;
 
@@ -351,10 +369,22 @@ function renderBacklinksSection(backlinksForPage, origin, basePath) {
   return section;
 }
 
-function buildTreeFromPages(pagesJson) {
+function buildTreeFromPages(pagesJson, foldersJson) {
   if (!pagesJson) return [];
   const root = [];
   const folderMap = {};
+  const folders = foldersJson || {};
+
+  function folderDisplayName(folderPath, segment) {
+    var meta = folders[folderPath];
+    if (meta && meta.displayName) return meta.displayName;
+    return (segment || "").replace(/[-_]+/g, " ");
+  }
+
+  function folderSortOrder(folderPath) {
+    var meta = folders[folderPath];
+    return (meta && meta.sortOrder != null) ? meta.sortOrder : null;
+  }
 
   for (var idx = 0; idx < pagesJson.length; idx++) {
     var page = pagesJson[idx];
@@ -366,7 +396,13 @@ function buildTreeFromPages(pagesJson) {
     for (let i = 0; i < parts.length - 1; i++) {
       currentPath = currentPath ? currentPath + "/" + parts[i] : parts[i];
       if (!folderMap[currentPath]) {
-        const folder = { name: parts[i], type: "folder", path: currentPath, sortOrder: null, children: [] };
+        const folder = {
+          name: folderDisplayName(currentPath, parts[i]),
+          type: "folder",
+          path: currentPath,
+          sortOrder: folderSortOrder(currentPath),
+          children: [],
+        };
         folderMap[currentPath] = folder;
         currentLevel.push(folder);
       }
@@ -387,7 +423,8 @@ function buildTreeFromPages(pagesJson) {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
       var aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
       var bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
-      return aOrd - bOrd;
+      if (aOrd !== bOrd) return aOrd - bOrd;
+      return (a.name || "").localeCompare(b.name || "");
     });
     for (var i = 0; i < nodes.length; i++) {
       if (nodes[i].children) sortTree(nodes[i].children);
@@ -397,11 +434,11 @@ function buildTreeFromPages(pagesJson) {
   return root;
 }
 
-function createSidebar(origin, basePath, pagesJson) {
+function createSidebar(origin, basePath, pagesJson, foldersJson) {
   const sidebar = document.createElement("aside");
   sidebar.className = "site-sidebar";
 
-  const tree = buildTreeFromPages(pagesJson);
+  const tree = buildTreeFromPages(pagesJson, foldersJson);
 
   let currentPage = "";
   if (

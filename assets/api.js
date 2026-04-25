@@ -636,6 +636,16 @@ async function deployChanges(siteId) {
     contentType: "application/json",
   });
 
+  // Update folders.json (folder display names + sort orders) for pages sites
+  if (!isBlogSite) {
+    const safeFolderMeta = (typeof folderMeta === "object" && folderMeta) ? folderMeta : {};
+    files.push({
+      filePath: "public/folders.json",
+      content: JSON.stringify(safeFolderMeta),
+      contentType: "application/json",
+    });
+  }
+
   // Generate history.json from git log
   const historyJson = await generateHistoryJson(siteId);
   files.push({
