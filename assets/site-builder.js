@@ -1045,12 +1045,30 @@ function updateWikilinkAutocomplete(editor) {
 
   // Position dropdown near caret
   const rect = range.getBoundingClientRect();
+  const caretOffset = range.startOffset;
   showWikilinkAutocomplete(matches, { left: rect.left, top: rect.bottom + 4 }, (chosen) => {
-    // Replace text from trigger.startOffset to current caret with [[fileName]]
+    // Determine where the existing wikilink ends after the caret. If a "]]"
+    // closer is reachable in the same text node (no intervening newline or
+    // new "[[" opener), include it in the deletion so the new replacement
+    // fully overwrites the previous wikilink.
+    const fullText = node.textContent;
+    const suffix = fullText.slice(caretOffset);
+    let endOffset = caretOffset;
+    const closeIdx = suffix.indexOf("]]");
+    const newlineIdx = suffix.indexOf("\n");
+    const nextOpenIdx = suffix.indexOf("[[");
+    if (
+      closeIdx >= 0 &&
+      (newlineIdx < 0 || closeIdx < newlineIdx) &&
+      (nextOpenIdx < 0 || closeIdx < nextOpenIdx)
+    ) {
+      endOffset = caretOffset + closeIdx + 2; // include the "]]"
+    }
+
     const replacement = `[[${chosen.fileName}]]`;
     const replaceRange = document.createRange();
     replaceRange.setStart(node, trigger.startOffset);
-    replaceRange.setEnd(node, range.startOffset);
+    replaceRange.setEnd(node, endOffset);
     replaceRange.deleteContents();
     const textNode = document.createTextNode(replacement);
     replaceRange.insertNode(textNode);
