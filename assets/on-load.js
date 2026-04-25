@@ -448,8 +448,29 @@ async function openSiteInEditor(site, initialPage = "index") {
     userMenuContainer.style.display = "none";
   }
 
-  // Fetch site tree from R2
-  const markdownFiles = await getPublicFiles(currentSiteId);
+  // Fetch site tree from public URL
+  const fetchPublicFileContent = async (filePath) => {
+    const servingPath = filePath.replace(/^public\//, "");
+    const resp = await fetch(`/s/${currentSiteId}/${servingPath}`, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache, must-revalidate" },
+    });
+    if (!resp.ok) return null;
+    return await resp.text();
+  };
+
+  const pagesJsonText = await fetchPublicFileContent("public/pages.json");
+  let pagesJsonData = null;
+  let markdownFiles = [];
+  if (pagesJsonText) {
+    try {
+      pagesJsonData = JSON.parse(pagesJsonText);
+      markdownFiles = pagesJsonData.map(page => `public/${page.fileName}.md`);
+    } catch {
+      pagesJsonData = null;
+      markdownFiles = [];
+    }
+  }
 
   console.log("Markdown files:", markdownFiles);
 
@@ -485,7 +506,7 @@ async function openSiteInEditor(site, initialPage = "index") {
     // Site has been published before, enable Visit Site button
     setSiteAvailable(true);
     // Initialize markdownCache from pages.json (exclude latest.md)
-    markdownCache = JSON.parse(await getFileContent(currentSiteId, "public/pages.json"));
+    markdownCache = (pagesJsonData || []).slice();
     markdownCache = markdownCache.filter(item => item.fileName !== "latest");
     for (let i=0; i < markdownCache.length; i++) {
       let fileName = markdownCache[i].fileName;
@@ -501,15 +522,15 @@ async function openSiteInEditor(site, initialPage = "index") {
       }
     }
 
-    // Load all markdown files, images.json, and documents.json in parallel
+    // Load all markdown files, images.json, and documents.json in parallel via public URLs
     const [mdResults, imagesJsonContent, documentsJsonContent] = await Promise.all([
       Promise.all(markdownFiles.map(async (file) => {
         console.log("Loading file into cache:", file);
-        const content = await getFileContent(currentSiteId, file);
+        const content = await fetchPublicFileContent(file);
         return { file, content };
       })),
-      getFileContent(currentSiteId, "public/images.json").catch(() => null),
-      getFileContent(currentSiteId, "public/documents.json").catch(() => null),
+      fetchPublicFileContent("public/images.json").catch(() => null),
+      fetchPublicFileContent("public/documents.json").catch(() => null),
     ]);
 
     // Process markdown results into cache
