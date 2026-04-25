@@ -863,6 +863,17 @@ function startInlineEdit(index, clickEvent) {
   // Cmd/Ctrl+K shortcut and autocomplete dropdown
   attachWikilinkShortcuts(panelEditor, editorEl);
 
+  // Live-sync editor markdown to currentBlocks + markdownCache so the cache
+  // (and therefore auto-save / wikilink resolver) stays current during typing,
+  // not only on commit.
+  panelEditor.on('change', () => {
+    if (activeInlineEditIndex !== index) return;
+    const liveBlock = currentBlocks[index];
+    if (!liveBlock) return;
+    liveBlock.content = panelEditor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
+    saveBlocksToCache();
+  });
+
   // Set cursor position after editor renders
   requestAnimationFrame(() => {
     setCursorInEditor(panelEditor, clickInfo);
