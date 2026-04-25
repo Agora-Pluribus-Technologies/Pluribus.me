@@ -167,19 +167,19 @@ async function handleDifferentAuthorDivergence(siteId, upstream) {
     persistLastSeen(siteId, upstream.shortSha, upstream.author);
     await recordLocalBaseCommit(siteId);
 
-    if (result.conflicts.length > 0) {
-      hasUnresolvedConflicts = true;
-      conflictedFiles = new Set(result.conflicts);
-      showConflictBanner(result.conflicts);
+    hasUnresolvedConflicts = false;
+    conflictedFiles.clear();
+    hideConflictBanner();
+
+    if (result.conflictsDiscarded) {
+      modified = false;
+      clearAutoSave(siteId);
       updateDeployButtonState();
       showAlertBar(
-        `Merge produced conflicts in ${result.conflicts.length} file(s). Resolve before deploying.`,
+        "Merge conflicts detected — pending local changes were discarded and the upstream version was loaded.",
         false
       );
     } else {
-      hasUnresolvedConflicts = false;
-      conflictedFiles.clear();
-      hideConflictBanner();
       updateDeployButtonState();
       showAlertBar("Upstream changes merged into your edits.", true);
     }
@@ -242,7 +242,7 @@ async function performThreeWayMerge(siteId) {
   // Merge upstream into local
   await git.checkout({ fs, dir, ref: "agora-merge-local", force: true });
 
-  const conflicts = [];
+  let mergeConflicted = false;
   try {
     await git.merge({
       fs, dir,
@@ -253,16 +253,39 @@ async function performThreeWayMerge(siteId) {
     });
   } catch (err) {
     const filepaths = (err && err.data && err.data.filepaths) || [];
-    if (filepaths.length > 0 || (err.code || "").includes("Merge")) {
-      conflicts.push(...filepaths);
+    const looksLikeMerge = filepaths.length > 0 || (err && (err.code || "").includes("Merge"));
+    if (looksLikeMerge) {
+      mergeConflicted = true;
     } else {
       throw err;
     }
   }
 
-  await reloadCacheFromWorkingTree(siteId, conflicts);
+  // Defensive: even if git.merge succeeded, scan the working tree for any
+  // conflict markers it may have written. Treat marker presence as a conflict.
+  if (!mergeConflicted) {
+    const matrix = await git.statusMatrix({ fs, dir });
+    for (const [filepath] of matrix) {
+      if (!filepath.startsWith("public/") || !filepath.endsWith(".md")) continue;
+      try {
+        const content = await gitReadFile(siteId, filepath);
+        if (content && CONFLICT_MARKER_REGEX.test(content)) {
+          mergeConflicted = true;
+          break;
+        }
+      } catch {}
+    }
+  }
 
-  return { conflicts: [...new Set(conflicts)] };
+  // Auto-resolve any conflict by taking upstream and discarding local edits.
+  if (mergeConflicted) {
+    console.log("Three-way merge produced conflicts — auto-resolving by taking upstream");
+    await git.checkout({ fs, dir, ref: "agora-merge-upstream", force: true });
+  }
+
+  await reloadCacheFromWorkingTree(siteId, []);
+
+  return { conflictsDiscarded: mergeConflicted };
 }
 
 async function stageAllChanges(siteId) {
