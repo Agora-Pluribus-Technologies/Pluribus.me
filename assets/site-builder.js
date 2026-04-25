@@ -361,6 +361,10 @@ function renderBlock(block, index) {
   if (block.type === 'panel') {
     preview.classList.add('block-preview-clickable');
     preview.addEventListener('click', (e) => {
+      // Wikilinks in the preview should not navigate; they only enter edit mode.
+      if (e.target.closest && e.target.closest('.wikilink')) {
+        e.preventDefault();
+      }
       if (activeInlineEditIndex === index) return;
       startInlineEdit(index, e);
     });
@@ -389,8 +393,13 @@ function renderBlockPreview(block) {
 
 function renderPanelPreview(markdown) {
   marked.setOptions({ gfm: true, breaks: true });
-  const parsed = marked.parse(markdown);
-  const sanitized = DOMPurify.sanitize(parsed);
+  let source = markdown;
+  if (typeof AgoraWikilinks !== "undefined") {
+    const pages = AgoraWikilinks.pagesFromCache(typeof markdownCache !== "undefined" ? markdownCache : []);
+    source = AgoraWikilinks.preprocessWikilinks(markdown, pages, "");
+  }
+  const parsed = marked.parse(source);
+  const sanitized = DOMPurify.sanitize(parsed, { ADD_ATTR: ["data-target"] });
   return `<article class="h-entry"><div class="e-content">${sanitized}</div></article>`;
 }
 
@@ -810,6 +819,12 @@ function startInlineEdit(index, clickEvent) {
         tooltip: 'Insert image',
         className: 'toastui-editor-toolbar-icons image',
         command: 'insertImage'
+      }, {
+        name: 'wikilink',
+        tooltip: 'Insert wikilink (Cmd/Ctrl+K)',
+        text: '[[ ]]',
+        className: 'toastui-editor-toolbar-icons wikilink-toolbar-btn',
+        command: 'insertWikilink'
       }]
     ]
   });
@@ -834,6 +849,19 @@ function startInlineEdit(index, clickEvent) {
     showImageUploadPopup(insertImageIntoPanelEditor);
     return true;
   });
+
+  panelEditor.addCommand('wysiwyg', 'insertWikilink', () => {
+    insertWikilinkBrackets(panelEditor);
+    return true;
+  });
+
+  panelEditor.addCommand('markdown', 'insertWikilink', () => {
+    insertWikilinkBrackets(panelEditor);
+    return true;
+  });
+
+  // Cmd/Ctrl+K shortcut and autocomplete dropdown
+  attachWikilinkShortcuts(panelEditor, editorEl);
 
   // Set cursor position after editor renders
   requestAnimationFrame(() => {
@@ -903,6 +931,181 @@ function stopInlineEdit() {
   saveAndCleanupInlineEdit();
   saveBlocksToCache();
   renderAllBlocks();
+}
+
+// ============================================
+// Wikilink helpers (toolbar, shortcut, autocomplete)
+// ============================================
+
+function insertWikilinkBrackets(editor) {
+  if (!editor) return;
+  const wasWysiwyg = editor.isWysiwygMode();
+  if (wasWysiwyg) editor.changeMode('markdown');
+  // Insert [[]] then move cursor between the brackets
+  editor.insertText('[[]]');
+  try {
+    const sel = editor.getSelection();
+    if (sel && Array.isArray(sel)) {
+      // Markdown selection is [[line, ch], [line, ch]]; back up two cols
+      const end = sel[1] || sel[0];
+      const newPos = [end[0], Math.max(0, end[1] - 2)];
+      editor.setSelection(newPos, newPos);
+    }
+  } catch (_) {}
+  if (wasWysiwyg) editor.changeMode('wysiwyg');
+  editor.focus();
+}
+
+function getWysiwygContainer(editor) {
+  try {
+    const els = editor.getEditorElements();
+    if (els && els.wwEditor) return els.wwEditor;
+  } catch (_) {}
+  return document.querySelector('.toastui-editor-ww-container .ProseMirror')
+    || document.querySelector('.inline-panel-editor [contenteditable]');
+}
+
+function attachWikilinkShortcuts(editor, editorEl) {
+  // Keyboard shortcut handler — Cmd/Ctrl+K inserts brackets
+  const onKeyDown = (e) => {
+    const isMod = e.metaKey || e.ctrlKey;
+    if (isMod && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      e.stopPropagation();
+      insertWikilinkBrackets(editor);
+      return;
+    }
+    // Autocomplete navigation
+    if (wikilinkAutocomplete && wikilinkAutocomplete.visible) {
+      if (e.key === 'ArrowDown') { wikilinkAutocomplete.move(1); e.preventDefault(); return; }
+      if (e.key === 'ArrowUp')   { wikilinkAutocomplete.move(-1); e.preventDefault(); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (wikilinkAutocomplete.commit()) { e.preventDefault(); }
+        return;
+      }
+      if (e.key === 'Escape') { wikilinkAutocomplete.hide(); e.preventDefault(); return; }
+    }
+  };
+  editorEl.addEventListener('keydown', onKeyDown, true);
+
+  // Autocomplete dropdown — re-evaluate on input
+  const onInput = () => {
+    requestAnimationFrame(() => updateWikilinkAutocomplete(editor));
+  };
+  editorEl.addEventListener('input', onInput);
+  editorEl.addEventListener('keyup', onInput);
+  editorEl.addEventListener('click', onInput);
+}
+
+let wikilinkAutocomplete = null;
+
+function updateWikilinkAutocomplete(editor) {
+  if (typeof AgoraWikilinks === 'undefined') return;
+  if (!editor || !editor.isWysiwygMode()) {
+    hideWikilinkAutocomplete();
+    return;
+  }
+  const wwContainer = getWysiwygContainer(editor);
+  if (!wwContainer) { hideWikilinkAutocomplete(); return; }
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) { hideWikilinkAutocomplete(); return; }
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) { hideWikilinkAutocomplete(); return; }
+  if (!wwContainer.contains(range.startContainer)) { hideWikilinkAutocomplete(); return; }
+
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) { hideWikilinkAutocomplete(); return; }
+  const trigger = AgoraWikilinks.findActiveWikilinkTrigger(node.textContent, range.startOffset);
+  if (!trigger) { hideWikilinkAutocomplete(); return; }
+
+  const pages = AgoraWikilinks.pagesFromCache(typeof markdownCache !== 'undefined' ? markdownCache : []);
+  const matches = AgoraWikilinks.filterPagesByQuery(pages, trigger.query);
+  if (matches.length === 0) { hideWikilinkAutocomplete(); return; }
+
+  // Position dropdown near caret
+  const rect = range.getBoundingClientRect();
+  showWikilinkAutocomplete(matches, { left: rect.left, top: rect.bottom + 4 }, (chosen) => {
+    // Replace text from trigger.startOffset to current caret with [[fileName]]
+    const replacement = `[[${chosen.fileName}]]`;
+    const replaceRange = document.createRange();
+    replaceRange.setStart(node, trigger.startOffset);
+    replaceRange.setEnd(node, range.startOffset);
+    replaceRange.deleteContents();
+    const textNode = document.createTextNode(replacement);
+    replaceRange.insertNode(textNode);
+    // Move caret after the inserted text
+    const after = document.createRange();
+    after.setStart(textNode, replacement.length);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+    // Trigger an input event so ToastUI registers the change
+    const evt = new InputEvent('input', { bubbles: true, cancelable: true });
+    wwContainer.dispatchEvent(evt);
+  });
+}
+
+function showWikilinkAutocomplete(matches, position, onCommit) {
+  if (!wikilinkAutocomplete) {
+    const dropdown = document.createElement('div');
+    dropdown.className = 'wikilink-autocomplete';
+    document.body.appendChild(dropdown);
+    wikilinkAutocomplete = {
+      el: dropdown,
+      visible: false,
+      items: [],
+      selectedIndex: 0,
+      onCommit: null,
+      hide() { this.el.style.display = 'none'; this.visible = false; },
+      move(delta) {
+        if (!this.items.length) return;
+        this.selectedIndex = (this.selectedIndex + delta + this.items.length) % this.items.length;
+        this.render();
+      },
+      commit() {
+        if (!this.visible) return false;
+        const chosen = this.items[this.selectedIndex];
+        if (chosen && this.onCommit) this.onCommit(chosen);
+        this.hide();
+        return true;
+      },
+      render() {
+        this.el.innerHTML = '';
+        this.items.forEach((page, i) => {
+          const item = document.createElement('div');
+          item.className = 'wikilink-autocomplete-item' + (i === this.selectedIndex ? ' selected' : '');
+          item.textContent = page.displayName || page.fileName;
+          if (page.displayName && page.displayName !== page.fileName) {
+            const sub = document.createElement('span');
+            sub.className = 'wikilink-autocomplete-path';
+            sub.textContent = page.fileName;
+            item.appendChild(sub);
+          }
+          item.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            this.selectedIndex = i;
+            this.commit();
+          });
+          this.el.appendChild(item);
+        });
+      },
+    };
+  }
+  wikilinkAutocomplete.items = matches;
+  wikilinkAutocomplete.selectedIndex = 0;
+  wikilinkAutocomplete.onCommit = onCommit;
+  wikilinkAutocomplete.render();
+  wikilinkAutocomplete.el.style.display = 'block';
+  wikilinkAutocomplete.el.style.left = position.left + 'px';
+  wikilinkAutocomplete.el.style.top = position.top + 'px';
+  wikilinkAutocomplete.visible = true;
+}
+
+function hideWikilinkAutocomplete() {
+  if (wikilinkAutocomplete && wikilinkAutocomplete.visible) {
+    wikilinkAutocomplete.hide();
+  }
 }
 
 // ============================================

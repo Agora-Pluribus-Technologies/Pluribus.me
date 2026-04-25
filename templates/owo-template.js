@@ -510,8 +510,17 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
       let text = await content.text();
       text = text.replaceAll("<br>", "");
       console.log(text);
+      if (typeof AgoraWikilinks !== "undefined") {
+        const pages = (pagesJson || []).map(p => ({
+          fileName: p.fileName,
+          displayName: p.displayName,
+        }));
+        text = AgoraWikilinks.preprocessWikilinks(text, pages, basePath);
+      }
       const parsedMarkdown = await marked.parse(text);
-      const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown);
+      const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown, {
+        ADD_ATTR: ["data-target"],
+      });
 
       const markdownSections = sanitizedMarkdown.split("<hr>");
       for (let i = 0; i < markdownSections.length; i++) {
