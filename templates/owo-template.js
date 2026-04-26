@@ -69,7 +69,6 @@ function decodeImages(basePath) {
 
       p.style.textAlign = "center";
       p.parentElement.parentElement.classList.add("image-container");
-      p.parentElement.classList.remove("e-content");
 
       // Reconstruct image URL: /s/<owner>/<siteName>/imageFileName -> basePath/imageFileName
       const src = img.getAttribute("src");
