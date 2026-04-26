@@ -969,9 +969,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     document.getElementById("siteNamePrefix").textContent = username + "/";
     document.getElementById("siteName").value = "";
     document.getElementById("siteType").value = "pages";
+    const sourceField = document.getElementById("siteSource");
+    if (sourceField) sourceField.value = "scratch";
     document.querySelectorAll(".site-type-card").forEach(function(c) { c.classList.remove("selected"); });
     const defaultCard = document.querySelector('.site-type-card[data-value="pages"]');
     if (defaultCard) defaultCard.classList.add("selected");
+    const defaultSourceCard = document.querySelector('.site-type-card[data-source="scratch"]');
+    if (defaultSourceCard) defaultSourceCard.classList.add("selected");
+    // Pages is the default, so make sure the starting-content group is visible.
+    const sourceGroup = document.getElementById("siteSourceGroup");
+    if (sourceGroup) sourceGroup.style.display = "";
   });
 
   // Handle create site form submission
@@ -991,21 +998,13 @@ document.addEventListener("DOMContentLoaded", async function () {
       try {
         const rawSiteName = document.getElementById("siteName").value.trim();
         const siteType = document.getElementById("siteType").value;
+        const sourceField = document.getElementById("siteSource");
+        const siteSource = sourceField ? sourceField.value : "scratch";
 
-        // Sanitize site name: lowercase, only letters, numbers, and hyphens
-        let siteName = rawSiteName
-          .toLowerCase()
-          .replace(/[^a-z0-9-]/g, '-')  // Replace invalid chars with hyphens
-          .replace(/-+/g, '-')           // Collapse multiple hyphens into one
-          .replace(/^-+|-+$/g, '');      // Trim hyphens from start and end
-
-        // Truncate to 30 chars max, then trim any trailing hyphen from truncation
-        if (siteName.length > 30) {
-          siteName = siteName.substring(0, 30).replace(/-+$/, '');
-        }
-
-        // Validate that we have a usable site name after sanitization
-        if (siteName.length < 2) {
+        // Validate the site name up front so the import modal doesn't open
+        // for an obviously-bad submission.
+        const sanitized = sanitizeSiteName(rawSiteName);
+        if (!sanitized) {
           alert("Site name is too short. Please enter at least 2 valid characters (letters or numbers).");
           submitButton.disabled = false;
           submitButton.innerText = originalButtonText;
@@ -1013,64 +1012,26 @@ document.addEventListener("DOMContentLoaded", async function () {
           submitButton.style.cursor = "";
           return;
         }
-
-        console.log("Creating new site:", siteName);
-
         const owner = getStoredUsername();
         if (!owner) {
           alert("No username found. Please log in again.");
           return;
         }
 
-        const repo = siteName;
-        const siteId = `${owner}/${repo}`;
-
-        const createResponse = await fetch("/api/sites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            repo: repo,
-            displayName: rawSiteName,
-            siteType: siteType,
-          }),
-        });
-
-        if (!createResponse.ok) {
-          const errorText = await createResponse.text();
-          console.error("Failed to create site:", errorText);
-          alert("Failed to create site: " + errorText);
+        // Branch: import flow opens the dropzone modal, scratch flow creates immediately.
+        if (siteType === "pages" && siteSource === "import") {
+          $("#createSiteModal").modal("hide");
+          openImportFolderModal({ rawSiteName, sanitized, owner, siteType });
           return;
         }
 
-        console.log("Site config stored successfully");
-
-        // Create initial files and git history in R2 (single API call)
-        await initialCommitWithGitHistory(siteId, { siteName, repo, owner, siteType });
-
-        // Add new site to cache
-        const newSite = {
-          siteId: siteId,
-          owner: owner,
-          repo: repo,
-          displayName: rawSiteName,
-          siteType: siteType,
-        };
-        sitesCache.unshift(newSite);
-
-        // Close the modal
-        $("#createSiteModal").modal("hide");
-
-        // Clear the form
-        document.getElementById("createSiteForm").reset();
-
-        // Repopulate sites list
-        populateSitesList(sitesCache, sharedSitesCache);
-
-        // Click into the newly created site to open the editor
-        const newSiteButton = document.getElementById(siteId);
-        if (newSiteButton) {
-          newSiteButton.click();
-        }
+        await createNewSite({
+          rawSiteName,
+          sanitized,
+          owner,
+          siteType,
+          importedPages: null,
+        });
       } catch (error) {
         console.error("Error creating site:", error);
         alert("Failed to create site. Please try again.");
@@ -1082,6 +1043,216 @@ document.addEventListener("DOMContentLoaded", async function () {
         submitButton.style.cursor = "pointer";
       }
     });
+
+  // Wire up the folder-import dropzone once on first load.
+  initImportFolderModal();
+
+  // === Helpers for the create-site / import-from-folder flow ===
+
+  // Lower-cases, hyphenates, and clamps a raw site name. Returns "" if the
+  // result has fewer than 2 valid characters.
+  function sanitizeSiteName(rawSiteName) {
+    let siteName = rawSiteName
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (siteName.length > 30) {
+      siteName = siteName.substring(0, 30).replace(/-+$/, "");
+    }
+    return siteName.length >= 2 ? siteName : "";
+  }
+
+  // Shared site-creation pipeline used by both the "create from scratch" and
+  // "import from folder" flows. importedPages is null for scratch.
+  async function createNewSite({ rawSiteName, sanitized, owner, siteType, importedPages }) {
+    console.log("Creating new site:", sanitized);
+
+    const repo = sanitized;
+    const siteId = `${owner}/${repo}`;
+
+    const createResponse = await fetch("/api/sites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        repo: repo,
+        displayName: rawSiteName,
+        siteType: siteType,
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      console.error("Failed to create site:", errorText);
+      alert("Failed to create site: " + errorText);
+      return false;
+    }
+
+    console.log("Site config stored successfully");
+
+    await initialCommitWithGitHistory(siteId, {
+      siteName: sanitized,
+      repo,
+      owner,
+      siteType,
+      importedPages,
+    });
+
+    sitesCache.unshift({
+      siteId: siteId,
+      owner: owner,
+      repo: repo,
+      displayName: rawSiteName,
+      siteType: siteType,
+    });
+
+    $("#createSiteModal").modal("hide");
+    document.getElementById("createSiteForm").reset();
+    populateSitesList(sitesCache, sharedSitesCache);
+
+    const newSiteButton = document.getElementById(siteId);
+    if (newSiteButton) newSiteButton.click();
+    return true;
+  }
+
+  // Per-create context captured when the user picks "Import from folder" and
+  // hits Create — survives until the import modal is dismissed or confirmed.
+  let pendingImportContext = null;
+  let pendingImportPages = null;
+
+  function openImportFolderModal(context) {
+    pendingImportContext = context;
+    pendingImportPages = null;
+    document.getElementById("importFolderSiteName").textContent =
+      `${context.owner}/${context.sanitized}`;
+    document.getElementById("importSummary").style.display = "none";
+    document.getElementById("importSummaryList").innerHTML = "";
+    document.getElementById("importSummarySkipped").textContent = "";
+    document.getElementById("importError").style.display = "none";
+    document.getElementById("confirmImportButton").disabled = true;
+    document.getElementById("importDropzone").classList.remove("drag-over");
+    document.getElementById("importFolderInput").value = "";
+    $("#importFolderModal").modal("show");
+  }
+
+  function initImportFolderModal() {
+    const dropzone = document.getElementById("importDropzone");
+    const fileInput = document.getElementById("importFolderInput");
+    const confirmBtn = document.getElementById("confirmImportButton");
+    if (!dropzone || !fileInput || !confirmBtn) return;
+
+    dropzone.addEventListener("click", function () {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", async function (e) {
+      await ingestImportSelection(e.target.files);
+    });
+
+    dropzone.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add("drag-over");
+    });
+    dropzone.addEventListener("dragleave", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove("drag-over");
+    });
+    dropzone.addEventListener("drop", async function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove("drag-over");
+      await ingestImportSelection(e.dataTransfer);
+    });
+
+    confirmBtn.addEventListener("click", async function () {
+      if (!pendingImportContext || !pendingImportPages || pendingImportPages.length === 0) return;
+      const originalText = confirmBtn.innerText;
+      confirmBtn.disabled = true;
+      confirmBtn.innerText = "Creating...";
+      try {
+        const ok = await createNewSite({
+          ...pendingImportContext,
+          importedPages: pendingImportPages,
+        });
+        if (ok) $("#importFolderModal").modal("hide");
+      } catch (e) {
+        console.error("Import-create failed:", e);
+        showImportError("Failed to create site from imported folder.");
+      } finally {
+        confirmBtn.innerText = originalText;
+        confirmBtn.disabled = !pendingImportPages || pendingImportPages.length === 0;
+      }
+    });
+  }
+
+  async function ingestImportSelection(source) {
+    if (typeof AgoraFolderImport === "undefined") {
+      showImportError("Import module is not available. Reload the page and try again.");
+      return;
+    }
+    showImportError("");
+    const summaryEl = document.getElementById("importSummary");
+    const countEl = document.getElementById("importSummaryCount");
+    const skippedEl = document.getElementById("importSummarySkipped");
+    const listEl = document.getElementById("importSummaryList");
+    countEl.textContent = "Reading folder…";
+    skippedEl.textContent = "";
+    listEl.innerHTML = "";
+    summaryEl.style.display = "";
+
+    try {
+      const result = await AgoraFolderImport.importFromDataTransfer(source);
+      pendingImportPages = result.pages;
+      if (result.pages.length === 0) {
+        countEl.textContent = "No Markdown files found.";
+        skippedEl.textContent = result.skipped > 0
+          ? `${result.skipped} non-Markdown file(s) ignored.`
+          : "";
+        document.getElementById("confirmImportButton").disabled = true;
+        return;
+      }
+      countEl.textContent =
+        `${result.pages.length} Markdown file${result.pages.length === 1 ? "" : "s"} ready to import.`;
+      if (result.skipped > 0) {
+        skippedEl.textContent = `${result.skipped} non-Markdown file(s) ignored.`;
+      }
+      const previewLimit = 50;
+      const preview = result.pages.slice(0, previewLimit);
+      preview.forEach(function (p) {
+        const li = document.createElement("li");
+        li.textContent = p.fileName + ".md";
+        listEl.appendChild(li);
+      });
+      if (result.pages.length > previewLimit) {
+        const li = document.createElement("li");
+        li.textContent = `…and ${result.pages.length - previewLimit} more.`;
+        li.style.fontStyle = "italic";
+        listEl.appendChild(li);
+      }
+      document.getElementById("confirmImportButton").disabled = false;
+      if (result.errors && result.errors.length > 0) {
+        console.warn("Import file errors:", result.errors);
+      }
+    } catch (e) {
+      console.error("Import ingest failed:", e);
+      showImportError("Couldn't read that folder. Try dragging it again or using the file picker.");
+      document.getElementById("confirmImportButton").disabled = true;
+    }
+  }
+
+  function showImportError(message) {
+    const el = document.getElementById("importError");
+    if (!el) return;
+    if (!message) {
+      el.style.display = "none";
+      el.textContent = "";
+      return;
+    }
+    el.textContent = message;
+    el.style.display = "";
+  }
 
   // Handle back button click
   document.getElementById("backButton").addEventListener("click", function () {

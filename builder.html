@@ -38,6 +38,7 @@
   <script src="/assets/git.js?v=QUERY_STRING_VERSION"></script>
   <script src="/assets/wikilinks.js?v=QUERY_STRING_VERSION"></script>
   <script src="/assets/math.js?v=QUERY_STRING_VERSION"></script>
+  <script src="/assets/folder-import.js?v=QUERY_STRING_VERSION"></script>
   <script src="/assets/site-builder.js?v=QUERY_STRING_VERSION"></script>
   <script src="/assets/conflict-resolution.js?v=QUERY_STRING_VERSION"></script>
   <script src="/assets/on-load.js?v=QUERY_STRING_VERSION"></script>
@@ -147,10 +148,62 @@
                 </div>
               </div>
             </div>
+            <!-- Source-type cards: only meaningful for "pages" sites; hidden for blogs. -->
+            <div class="form-group" id="siteSourceGroup">
+              <label>Starting content</label>
+              <input type="hidden" id="siteSource" value="scratch">
+              <div class="site-type-cards">
+                <div class="site-type-card selected" data-source="scratch">
+                  <div class="site-type-card-icon">&#x2728;</div>
+                  <div class="site-type-card-title">Create from scratch</div>
+                  <div class="site-type-card-desc">Start with a blank Home page and build out your site in the editor.</div>
+                </div>
+                <div class="site-type-card" data-source="import">
+                  <div class="site-type-card-icon">&#x1F4C2;</div>
+                  <div class="site-type-card-title">Import from folder of Markdown files</div>
+                  <div class="site-type-card-desc">Drop a folder (e.g. an Obsidian vault) to seed your site from existing notes.</div>
+                </div>
+              </div>
+            </div>
           </form>
         </div>
         <div class="modal-footer">
           <button id="create-site-button" type="submit" form="createSiteForm" class="btn btn-primary">Create Site</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Folder Modal -->
+  <div class="modal fade" id="importFolderModal" tabindex="-1" role="dialog" aria-labelledby="importFolderModalLabel">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="importFolderModalLabel">Import from folder</h4>
+        </div>
+        <div class="modal-body">
+          <p>
+            Site name: <strong id="importFolderSiteName"></strong>
+          </p>
+          <div id="importDropzone" class="import-dropzone">
+            <div class="import-dropzone-icon">&#x1F4C2;</div>
+            <div class="import-dropzone-title">Drag and drop a folder here</div>
+            <div class="import-dropzone-hint">…or click to choose a folder</div>
+            <input type="file" id="importFolderInput" webkitdirectory directory multiple style="display: none;">
+          </div>
+          <div id="importSummary" class="import-summary" style="display: none;">
+            <div><strong id="importSummaryCount"></strong></div>
+            <div id="importSummarySkipped" class="import-summary-skipped"></div>
+            <ul id="importSummaryList" class="import-summary-list"></ul>
+          </div>
+          <p id="importError" class="text-danger" style="display: none; margin-top: 10px;"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="confirmImportButton" type="button" class="btn btn-primary" disabled>Create Site</button>
           <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
         </div>
       </div>
@@ -489,12 +542,26 @@
     // Initialize theme on page load
     initTheme();
 
-    // Site type card selection
-    document.querySelectorAll('.site-type-card').forEach(function(card) {
-      card.addEventListener('click', function() {
-        document.querySelectorAll('.site-type-card').forEach(function(c) { c.classList.remove('selected'); });
-        card.classList.add('selected');
-        document.getElementById('siteType').value = card.dataset.value;
+    // Card selection — scoped to each .site-type-cards group so the two
+    // card groups (site-type and starting-content) stay independent.
+    document.querySelectorAll('.site-type-cards').forEach(function(group) {
+      group.querySelectorAll('.site-type-card').forEach(function(card) {
+        card.addEventListener('click', function() {
+          group.querySelectorAll('.site-type-card').forEach(function(c) { c.classList.remove('selected'); });
+          card.classList.add('selected');
+          if (card.dataset.value !== undefined) {
+            document.getElementById('siteType').value = card.dataset.value;
+            // Importing only makes sense for "pages" sites; hide the
+            // starting-content group for blogs.
+            const sourceGroup = document.getElementById('siteSourceGroup');
+            if (sourceGroup) {
+              sourceGroup.style.display = card.dataset.value === 'pages' ? '' : 'none';
+            }
+          }
+          if (card.dataset.source !== undefined) {
+            document.getElementById('siteSource').value = card.dataset.source;
+          }
+        });
       });
     });
   </script>

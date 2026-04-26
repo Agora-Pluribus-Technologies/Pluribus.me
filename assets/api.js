@@ -331,7 +331,7 @@ function guessContentType(filename) {
 
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
-  const { siteName, repo, owner, siteType } = siteSettings;
+  const { siteName, repo, owner, siteType, importedPages } = siteSettings;
   const isBlog = siteType === "blog";
 
   const siteJson = {
@@ -343,26 +343,44 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     ...(isBlog ? {} : { showHistory: true }),
   };
 
-  // Create default home page content for pages sites
+  // Imported-folder flow: caller passes already-parsed pages from a vault.
+  // Skip the default Home page and seed pages.json from the import instead.
+  const hasImport = !isBlog && Array.isArray(importedPages) && importedPages.length > 0;
+
   const defaultHomeContent = "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above.";
   const now = new Date().toISOString();
-  const pagesJson = isBlog ? [] : [
-    {
+
+  let pagesJson;
+  if (isBlog) {
+    pagesJson = [];
+  } else if (hasImport) {
+    pagesJson = importedPages.map(p => ({
+      displayName: p.displayName,
+      fileName: p.fileName,
+      createdAt: p.createdAt || now,
+      modifiedAt: p.modifiedAt || now,
+    }));
+  } else {
+    pagesJson = [{
       displayName: "Home",
       fileName: "home",
       createdAt: now,
       modifiedAt: now,
-    },
-  ];
+    }];
+  }
 
   // Initialize git repository and create initial commit with content
   await gitInit(siteId);
   await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pagesJson));
   await gitWriteFile(siteId, "public/images.json", "[]");
-  if (!isBlog) {
+  if (hasImport) {
+    for (const page of importedPages) {
+      await gitWriteFile(siteId, `public/${page.fileName}.md`, page.content);
+    }
+  } else if (!isBlog) {
     await gitWriteFile(siteId, "public/home.md", defaultHomeContent);
   }
-  await gitCommit(siteId, "Initial commit");
+  await gitCommit(siteId, hasImport ? "Initial import" : "Initial commit");
   console.log("Git repo initialized for site:", siteId);
 
   // Serialize git history
@@ -392,9 +410,11 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const historyJson = [{
     shortSha: "initial",
     date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(),
-    message: "Initial commit",
+    message: hasImport ? "Initial import" : "Initial commit",
     author: owner || "Unknown",
-    changes: [],
+    changes: hasImport
+      ? importedPages.map(p => ({ file: `public/${p.fileName}.md`, status: "added" }))
+      : [],
   }];
 
   // Combine all files into a single batch — full deploy so site is immediately live
@@ -435,7 +455,22 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     });
   }
 
-  if (!isBlog) {
+  if (hasImport) {
+    for (const page of importedPages) {
+      files.push({
+        filePath: `public/${page.fileName}.md`,
+        content: page.content,
+        contentType: "text/markdown",
+      });
+      if (templateHtml) {
+        files.push({
+          filePath: `public/${page.fileName}.html`,
+          content: templateHtml,
+          contentType: "text/html",
+        });
+      }
+    }
+  } else if (!isBlog) {
     files.push({
       filePath: "public/home.md",
       content: defaultHomeContent,
