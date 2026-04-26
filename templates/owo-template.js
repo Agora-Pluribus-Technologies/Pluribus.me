@@ -598,10 +598,29 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
         }));
         text = AgoraWikilinks.preprocessWikilinks(text, pages, basePath);
       }
+
+      // Lazy-load KaTeX only if the page actually contains math, then
+      // preprocess math expressions into placeholder tokens so marked +
+      // DOMPurify don't mangle the LaTeX source.
+      let mathPlaceholders = [];
+      if (typeof AgoraMath !== "undefined" && AgoraMath.containsMath(text)) {
+        try {
+          await AgoraMath.loadKaTeX();
+          const pre = AgoraMath.preprocessMath(text);
+          text = pre.markdown;
+          mathPlaceholders = pre.placeholders;
+        } catch (e) {
+          console.error("KaTeX failed to load; rendering math as raw LaTeX:", e);
+        }
+      }
+
       const parsedMarkdown = await marked.parse(text);
-      const sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown, {
+      let sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown, {
         ADD_ATTR: ["data-target"],
       });
+      if (mathPlaceholders.length > 0) {
+        sanitizedMarkdown = AgoraMath.restoreMath(sanitizedMarkdown, mathPlaceholders);
+      }
 
       const markdownSections = sanitizedMarkdown.split("<hr>");
       for (let i = 0; i < markdownSections.length; i++) {

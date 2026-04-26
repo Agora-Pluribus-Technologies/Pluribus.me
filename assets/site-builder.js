@@ -401,9 +401,40 @@ function renderPanelPreview(markdown) {
     const pages = AgoraWikilinks.pagesFromCache(typeof markdownCache !== "undefined" ? markdownCache : []);
     source = AgoraWikilinks.preprocessWikilinks(markdown, pages, "");
   }
+
+  // If math is present, lazy-load KaTeX. If it's not loaded yet, preview
+  // renders math as raw text for now — the load promise re-renders blocks
+  // once KaTeX is ready (see renderAllBlocksAfterKaTeX below).
+  let mathPlaceholders = [];
+  if (typeof AgoraMath !== "undefined" && AgoraMath.containsMath(source)) {
+    if (typeof window !== "undefined" && window.katex) {
+      const pre = AgoraMath.preprocessMath(source);
+      source = pre.markdown;
+      mathPlaceholders = pre.placeholders;
+    } else {
+      ensureKaTeXLoadedForEditor();
+    }
+  }
+
   const parsed = marked.parse(source);
-  const sanitized = DOMPurify.sanitize(parsed, { ADD_ATTR: ["data-target"] });
+  let sanitized = DOMPurify.sanitize(parsed, { ADD_ATTR: ["data-target"] });
+  if (mathPlaceholders.length > 0) {
+    sanitized = AgoraMath.restoreMath(sanitized, mathPlaceholders);
+  }
   return `<article class="h-entry"><div class="e-content">${sanitized}</div></article>`;
+}
+
+// Trigger a KaTeX load once and re-render all blocks once it resolves so the
+// preview catches up. Idempotent — repeated calls share the same promise.
+function ensureKaTeXLoadedForEditor() {
+  if (typeof AgoraMath === "undefined") return;
+  if (ensureKaTeXLoadedForEditor._triggered) return;
+  ensureKaTeXLoadedForEditor._triggered = true;
+  AgoraMath.loadKaTeX().then(() => {
+    if (typeof renderAllBlocks === "function") renderAllBlocks();
+  }).catch(err => {
+    console.error("KaTeX failed to load; math will render as raw LaTeX:", err);
+  });
 }
 
 function renderImagePreview(content) {

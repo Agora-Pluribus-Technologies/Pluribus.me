@@ -870,3 +870,23 @@ body {
         font-size: 8pt;
     }
 }
+
+/* Math (KaTeX) — display blocks and fallback styling for unparsable LaTeX. */
+.e-content .math-display {
+    margin: 1rem 0;
+    overflow-x: auto;
+}
+
+.e-content .katex-fallback {
+    color: var(--text-muted, #b89a4d);
+    border: 1px dashed var(--text-muted, #b89a4d);
+    background: transparent;
+}
+
+.e-content .katex-fallback-display {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    margin: 1rem 0;
+    text-align: center;
+    white-space: pre-wrap;
+}
