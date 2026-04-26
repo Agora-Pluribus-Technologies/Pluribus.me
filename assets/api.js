@@ -953,8 +953,24 @@ async function renamePage(siteId, pageName, newPageName) {
   return await saveFilesToR2(siteId, files);
 }
 
+// All uploaded images live under public/attachments/ at the site root so
+// markdown content has a stable, predictable place to reference them
+// regardless of which folder the page lives in.
+const ATTACHMENTS_DIR = "attachments";
+
+function attachmentR2Path(filename) {
+  return `public/${ATTACHMENTS_DIR}/${filename}`;
+}
+
+// Public URL fragment (after the site basePath) that points at an attachment.
+// Used by the editor when inserting markdown image syntax and by the
+// published-page renderer when rewriting absolute image URLs.
+function attachmentPublicPath(filename) {
+  return `${ATTACHMENTS_DIR}/${filename}`;
+}
+
 async function uploadImage(siteId, filename, base64Content) {
-  const result = await saveFileToR2(siteId, `public/${filename}`, base64Content, {
+  const result = await saveFileToR2(siteId, attachmentR2Path(filename), base64Content, {
     encoding: "base64",
     contentType: guessContentType(filename),
   });
@@ -969,7 +985,7 @@ async function uploadImage(siteId, filename, base64Content) {
 }
 
 async function deleteImage(siteId, filename) {
-  const result = await deleteFileFromR2(siteId, `public/${filename}`);
+  const result = await deleteFileFromR2(siteId, attachmentR2Path(filename));
 
   if (result) {
     console.log("Image deleted from R2 successfully:", filename);

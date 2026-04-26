@@ -660,7 +660,7 @@ function editBlock(index) {
       const captionMatch = block.content.match(/!\[[^\]]*\]\([^)]+\s+"([^"]+)"\)/);
       const currentCaption = captionMatch ? captionMatch[1] : '';
       showImageUploadPopup(({ filename, caption }) => {
-        const imageUrl = `/s/${currentSitePathFull}/${filename}`;
+        const imageUrl = `/s/${currentSitePathFull}/attachments/${filename}`;
         if (caption) {
           block.content = `![${filename}](${imageUrl} "${caption}")`;
         } else {
@@ -921,7 +921,7 @@ function startInlineEdit(index, clickEvent) {
   activeInlineEditorInstance = panelEditor;
 
   function insertImageIntoPanelEditor({ filename, caption }) {
-    const url = `/s/${currentSitePathFull}/${filename}`;
+    const url = `/s/${currentSitePathFull}/attachments/${filename}`;
     const alt = caption || filename;
     const wasWysiwyg = panelEditor.isWysiwygMode();
     if (wasWysiwyg) panelEditor.changeMode('markdown');
@@ -1426,7 +1426,7 @@ function populateImageGalleryForBlock(galleryElement, popup, captionInput, confi
   }
 
   imageCache.forEach(filename => {
-    const imageUrl = `/s/${currentSitePathFull}/${filename}`;
+    const imageUrl = `/s/${currentSitePathFull}/attachments/${filename}`;
 
     const itemDiv = document.createElement('div');
     itemDiv.className = 'image-gallery-item';
@@ -1826,7 +1826,7 @@ function showBlogPostEditModal(content, displayName, callback) {
   });
 
   function insertImageIntoBlogEditor({ filename, caption }) {
-    const url = `/s/${currentSitePathFull}/${filename}`;
+    const url = `/s/${currentSitePathFull}/attachments/${filename}`;
     const alt = caption || filename;
     const wasWysiwyg = blogPostEditor.isWysiwygMode();
     if (wasWysiwyg) blogPostEditor.changeMode('markdown');
