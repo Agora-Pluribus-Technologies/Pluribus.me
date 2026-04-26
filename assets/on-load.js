@@ -2952,7 +2952,9 @@ function renderFileNode(container, node, depth, siteId) {
 
   const icon = document.createElement("span");
   icon.classList.add("sidebar-tree-icon");
-  icon.textContent = "📄";
+  // Homepage gets a house icon to distinguish the site's "/" landing page
+  // from regular content pages.
+  icon.textContent = isHomePage ? "🏠" : "📄";
 
   const label = document.createElement("span");
   label.classList.add("sidebar-tree-label");
