@@ -424,6 +424,20 @@ function renderPanelPreview(markdown) {
   return `<article class="h-entry"><div class="e-content">${sanitized}</div></article>`;
 }
 
+// Read markdown back from a Toast UI WYSIWYG editor and undo two
+// round-trip side effects:
+//   1) Stray <br> tags inserted by Toast UI's WYSIWYG-to-markdown serializer.
+//   2) Backslashes inside math regions doubled by markdown-spec escaping
+//      (`\frac` -> `\\frac`), which would break KaTeX rendering.
+function readMarkdownFromEditor(editor) {
+  if (!editor) return '';
+  let md = editor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
+  if (typeof AgoraMath !== "undefined") {
+    md = AgoraMath.unescapeMathBackslashes(md);
+  }
+  return md;
+}
+
 // Trigger a KaTeX load once and re-render all blocks once it resolves so the
 // preview catches up. Idempotent — repeated calls share the same promise.
 function ensureKaTeXLoadedForEditor() {
@@ -904,7 +918,7 @@ function startInlineEdit(index, clickEvent) {
     if (activeInlineEditIndex !== index) return;
     const liveBlock = currentBlocks[index];
     if (!liveBlock) return;
-    liveBlock.content = panelEditor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
+    liveBlock.content = readMarkdownFromEditor(panelEditor);
     saveBlocksToCache();
   });
 
@@ -962,7 +976,7 @@ function saveAndCleanupInlineEdit() {
 
   const block = currentBlocks[activeInlineEditIndex];
   if (block) {
-    block.content = activeInlineEditorInstance.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
+    block.content = readMarkdownFromEditor(activeInlineEditorInstance);
   }
 
   activeInlineEditorInstance.destroy();
@@ -1778,7 +1792,7 @@ function showBlogPostEditModal(content, displayName, callback) {
       tags: document.getElementById('blogPostTags').value.trim(),
       image: document.getElementById('blogPostImage').value.trim(),
       embed: document.getElementById('blogPostEmbed').value.trim(),
-      body: blogPostEditor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim()
+      body: readMarkdownFromEditor(blogPostEditor)
     };
 
     const newMarkdown = generateBlogPostMarkdown(newPostData);

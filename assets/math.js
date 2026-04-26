@@ -252,6 +252,65 @@
     return out;
   }
 
+  // Toast UI's WYSIWYG markdown serializer escapes literal backslashes
+  // (`\` -> `\\`) for markdown-spec compliance, which breaks LaTeX commands
+  // like `\frac`. This is applied to the markdown output after getMarkdown()
+  // and collapses `\\` -> `\` inside math regions only. Code blocks and
+  // inline code spans are left untouched.
+  //
+  // A LaTeX line break (`\\`) round-trips correctly: it leaves WYSIWYG as
+  // `\\\\` (four backslashes), and this routine collapses pairwise back to
+  // `\\` (two backslashes).
+  function unescapeMathBackslashes(markdown) {
+    if (!markdown || typeof markdown !== "string") return markdown;
+    if (markdown.indexOf("\\\\") < 0) return markdown;
+
+    const segs = [];
+    let lastIdx = 0;
+    let m;
+    const fenceRe = new RegExp(FENCE_REGEX_SRC, "gm");
+    while ((m = fenceRe.exec(markdown)) !== null) {
+      if (m.index > lastIdx) {
+        segs.push({ kind: "text", text: markdown.slice(lastIdx, m.index) });
+      }
+      segs.push({ kind: "code", text: m[0] });
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < markdown.length) {
+      segs.push({ kind: "text", text: markdown.slice(lastIdx) });
+    }
+
+    return segs
+      .map(s => (s.kind === "code" ? s.text : unescapeOutsideCodeSpans(s.text)))
+      .join("");
+
+    function unescapeOutsideCodeSpans(text) {
+      const codeRe = new RegExp(INLINE_CODE_REGEX_SRC, "g");
+      let result = "";
+      let last = 0;
+      let cm;
+      while ((cm = codeRe.exec(text)) !== null) {
+        result += unescapeInMathRegions(text.slice(last, cm.index));
+        result += cm[0];
+        last = cm.index + cm[0].length;
+      }
+      result += unescapeInMathRegions(text.slice(last));
+      return result;
+    }
+
+    function unescapeInMathRegions(text) {
+      const displayRe = new RegExp(DISPLAY_REGEX_SRC, "g");
+      let after = text.replace(displayRe, (_, body) =>
+        "$$" + body.replace(/\\\\/g, "\\") + "$$"
+      );
+      const inlineRe = new RegExp(INLINE_REGEX_SRC, "g");
+      after = after.replace(inlineRe, (_, body) =>
+        "$" + body.replace(/\\\\/g, "\\") + "$"
+      );
+      return after;
+    }
+  }
+
   const api = {
     KATEX_CSS,
     KATEX_JS,
@@ -259,6 +318,7 @@
     loadKaTeX,
     preprocessMath,
     restoreMath,
+    unescapeMathBackslashes,
   };
 
   root.AgoraMath = api;
