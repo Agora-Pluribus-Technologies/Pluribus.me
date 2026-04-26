@@ -424,19 +424,24 @@ function renderPanelPreview(markdown) {
   return `<article class="h-entry"><div class="e-content">${sanitized}</div></article>`;
 }
 
-// Read markdown back from a Toast UI WYSIWYG editor and undo two
+// Read markdown back from a Toast UI WYSIWYG editor and undo three
 // round-trip side effects:
-//   1) Stray <br> tags inserted by Toast UI's WYSIWYG-to-markdown serializer.
-//   2) Markdown-spec escapes the serializer adds inside math regions
+//   1) Markdown-spec escapes the serializer adds inside math regions
 //      (`\` -> `\\`, `_` -> `\_`, `{` -> `\{`, ...), which would break
 //      KaTeX rendering. See escapeMathForEditor for the matching pre-escape.
+//   2) <br> tags emitted for what was originally a LaTeX `\\` line break.
+//      unescapeMathRoundTrip converts these back to `\\` inside math regions
+//      so multi-line `\begin{aligned}` blocks still render row-by-row.
+//   3) Stray <br> tags Toast UI inserts in regular prose.
+// Order matters: unescape FIRST (so math-region <br> become `\\`), then
+// strip the remaining outside-math <br> globally.
 function readMarkdownFromEditor(editor) {
   if (!editor) return '';
-  let md = editor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
+  let md = editor.getMarkdown();
   if (typeof AgoraMath !== "undefined") {
     md = AgoraMath.unescapeMathRoundTrip(md);
   }
-  return md;
+  return md.replace(/<br\s*\/?>/gi, '').trim();
 }
 
 // Pre-escape math regions before handing markdown to Toast UI so the

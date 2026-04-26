@@ -296,10 +296,18 @@
   }
 
   function unescapeBody(body) {
+    // 1. Stash escaped backslashes (`\\`) as a sentinel so step 2 leaves them alone.
+    // 2. Strip serializer-added markdown escapes (`\X` -> `X`).
+    // 3. Restore the sentinel as a single `\`.
+    // 4. Convert <br> tags to LaTeX line breaks (`\\`). Toast UI turns
+    //    a markdown `\\`-at-end-of-line hard break into a <br> when
+    //    serializing the WYSIWYG state back to markdown; without this,
+    //    multi-line `\begin{aligned}` blocks collapse onto a single row.
     return body
       .replace(/\\\\/g, " ")
       .replace(ESCAPED_CHAR_RE, "$1")
-      .replace(/ /g, "\\");
+      .replace(/ /g, "\\")
+      .replace(/<br\s*\/?>/gi, "\\\\");
   }
 
   // Apply `transform` only to the body of `$...$` and `$$...$$` regions,
