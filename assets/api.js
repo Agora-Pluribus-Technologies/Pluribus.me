@@ -522,6 +522,35 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     });
   }
 
+  // Build wikilinks.json (backlink index) for pages sites — at deploy-time
+  // this is regenerated from markdownCache, but on initial import the
+  // editor hasn't loaded the cache yet, so seed it from the pages we're
+  // about to write. Without this the imported site's "Links to this page"
+  // sections stay empty until the user re-publishes.
+  if (!isBlog && hasImport && typeof AgoraWikilinks !== "undefined") {
+    try {
+      const indexablePages = pagesToWrite.map(p => ({
+        fileName: p.fileName,
+        displayName: p.displayName || p.fileName,
+      }));
+      const contentByFileName = new Map(
+        pagesToWrite.map(p => [p.fileName, p.content])
+      );
+      const backlinks = AgoraWikilinks.buildBacklinkIndex(
+        indexablePages,
+        (fileName) => contentByFileName.get(fileName),
+        null
+      );
+      files.push({
+        filePath: "public/wikilinks.json",
+        content: JSON.stringify(backlinks),
+        contentType: "application/json",
+      });
+    } catch (e) {
+      console.error("Failed to build initial wikilinks.json:", e);
+    }
+  }
+
   const result = await saveFilesToR2(siteId, files);
   if (result) {
     console.log("Initial commit with full deploy completed successfully");
