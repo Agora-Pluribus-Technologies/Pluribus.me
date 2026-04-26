@@ -266,6 +266,15 @@ function decodeEmbeds(basePath) {
   }
 }
 
+// Remove a leading YAML frontmatter block (`---\n...\n---\n`) if present.
+// Only matches when `---` is the very first line; trailing whitespace and
+// either CRLF or LF line endings are accepted. Pages without frontmatter
+// are returned unchanged.
+function stripFrontmatter(text) {
+  if (!text || typeof text !== "string") return text;
+  return text.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, "");
+}
+
 async function fetchSiteJson(origin, basePath) {
   const siteJsonLink = `${origin}${basePath}/site.json`;
 
@@ -590,6 +599,10 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
     if (content.ok) {
       let text = await content.text();
       text = text.replaceAll("<br>", "");
+      // Strip YAML frontmatter (a `---`-delimited block at the very top of
+      // the file). Imported pages can carry frontmatter fields like `title`,
+      // `date`, `tags`, etc.; we don't render those as page content.
+      text = stripFrontmatter(text);
       console.log(text);
       if (typeof AgoraWikilinks !== "undefined") {
         const pages = (pagesJson || []).map(p => ({
