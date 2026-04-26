@@ -278,6 +278,9 @@ function saveBlocksToCache() {
     if (typeof rescanForConflictMarkers === "function") {
       rescanForConflictMarkers();
     }
+    if (typeof checkPageSizeLimit === "function") {
+      checkPageSizeLimit();
+    }
     updateDeployButtonState();
   }
 }

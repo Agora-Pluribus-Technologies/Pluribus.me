@@ -2,6 +2,39 @@
 let markdownCache = [];
 // Folder metadata keyed by folderPath (e.g. "research/ml") — { displayName, sortOrder }
 let folderMeta = {};
+
+// Naming and path-length limits for folders and pages
+const MAX_NAME_LENGTH = 100;
+const MAX_PATH_LENGTH = 250;
+const MAX_FOLDER_DEPTH = 5;
+// Max number of characters allowed in a single page's serialized markdown
+// (sum of all blocks on the page).
+const MAX_FILE_CHARS = 100000;
+let hasOverlimitContent = false;
+let oversizedPageNames = [];
+
+function checkPageSizeLimit() {
+  const wasOver = hasOverlimitContent;
+  const oversized = [];
+  for (const item of markdownCache) {
+    if ((item.content || "").length > MAX_FILE_CHARS) {
+      oversized.push(item.displayName || item.fileName);
+    }
+  }
+  hasOverlimitContent = oversized.length > 0;
+  oversizedPageNames = oversized;
+  if (hasOverlimitContent && !wasOver) {
+    showAlertBar(
+      `A page exceeds the ${MAX_FILE_CHARS.toLocaleString()} character limit. Trim it before publishing.`,
+      false
+    );
+  }
+}
+
+function getFolderDepth(folderPath) {
+  if (!folderPath) return 0;
+  return folderPath.split("/").filter(Boolean).length;
+}
 let currentSitePath = null;
 let currentSiteId = null;
 let currentSitePathFull = null;
@@ -662,6 +695,9 @@ async function openSiteInEditor(site, initialPage = "index") {
 
   // Remember whether we restored from auto-save so we can preserve the modified flag
   const wasRestoredFromAutoSave = restoredFromAutoSave;
+
+  // Detect any pages already over the size limit on load
+  checkPageSizeLimit();
 
   // Find and click the appropriate page in the sidebar
   setTimeout(() => {
@@ -1818,10 +1854,22 @@ function showSidebarInlineInput(type) {
 }
 
 async function createNewPage(displayName) {
-  const sanitizedFileName = displayName.toLowerCase().replace(/\s+/g, "-");
+  const trimmedDisplayName = (displayName || "").trim();
+  if (!trimmedDisplayName) return;
+  if (trimmedDisplayName.length > MAX_NAME_LENGTH) {
+    alert(`Page name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+    return;
+  }
+  const sanitizedFileName = trimmedDisplayName.toLowerCase().replace(/\s+/g, "-");
   const folder = getSelectedFolder();
   const folderPrefix = folder ? `${folder}/` : "";
-  const fileName = `public/${folderPrefix}${sanitizedFileName}.md`;
+  const relativePath = `${folderPrefix}${sanitizedFileName}.md`;
+  const fileName = `public/${relativePath}`;
+
+  if (relativePath.length > MAX_PATH_LENGTH) {
+    alert(`The total page path cannot exceed ${MAX_PATH_LENGTH} characters.`);
+    return;
+  }
 
   const existing = getCacheByFileName(fileName);
   if (existing) {
@@ -1830,8 +1878,8 @@ async function createNewPage(displayName) {
   }
 
   const sortOrder = getNextSortOrder(folder);
-  const content = `# ${displayName}\n\nClick **Edit** on this panel to start writing. Use the **+** buttons to add more panels.`;
-  addOrUpdateCache(fileName, displayName, content, { sortOrder });
+  const content = `# ${trimmedDisplayName}\n\nClick **Edit** on this panel to start writing. Use the **+** buttons to add more panels.`;
+  addOrUpdateCache(fileName, trimmedDisplayName, content, { sortOrder });
 
   modified = true;
   updateDeployButtonState();
@@ -1843,6 +1891,10 @@ async function createNewPage(displayName) {
 async function createNewFolder(folderName) {
   const trimmedName = (folderName || "").trim();
   if (!trimmedName) return;
+  if (trimmedName.length > MAX_NAME_LENGTH) {
+    alert(`Folder name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+    return;
+  }
   // Slugify: lowercase, spaces -> dashes, then strip anything outside [a-zA-Z0-9-_.],
   // collapse repeats, and trim leading/trailing separator chars.
   const sanitizedName = trimmedName
@@ -1857,6 +1909,15 @@ async function createNewFolder(folderName) {
   }
   const parentFolder = getSelectedFolder();
   const folderPath = parentFolder ? `${parentFolder}/${sanitizedName}` : sanitizedName;
+
+  if (getFolderDepth(folderPath) > MAX_FOLDER_DEPTH) {
+    alert(`Folders cannot be nested more than ${MAX_FOLDER_DEPTH} levels deep.`);
+    return;
+  }
+  if (folderPath.length > MAX_PATH_LENGTH) {
+    alert(`The total folder path cannot exceed ${MAX_PATH_LENGTH} characters.`);
+    return;
+  }
 
   const existingFolder = markdownCache.some(c =>
     c.fileName.startsWith(`public/${folderPath}/`)
@@ -1900,6 +1961,20 @@ function updateDeployButtonState() {
     deployButton.title = "Resolve merge conflicts before publishing";
     if (publishStatus) {
       publishStatus.textContent = "Merge conflicts — cannot publish";
+      publishStatus.className = "publish-status pending-changes";
+    }
+    if (currentSiteId) scheduleAutoSave();
+    return;
+  }
+  if (hasOverlimitContent) {
+    deployButton.disabled = true;
+    deployButton.style.opacity = "0.5";
+    deployButton.style.cursor = "not-allowed";
+    deployButton.title =
+      `Pages exceed the ${MAX_FILE_CHARS.toLocaleString()} character limit: ` +
+      oversizedPageNames.join(", ");
+    if (publishStatus) {
+      publishStatus.textContent = "Page too long — cannot publish";
       publishStatus.className = "publish-status pending-changes";
     }
     if (currentSiteId) scheduleAutoSave();
@@ -2598,6 +2673,10 @@ function startRenameInSidebar(fileEl, node, siteId) {
     label.style.display = "";
 
     if (!newName || newName === oldName) return;
+    if (newName.length > MAX_NAME_LENGTH) {
+      alert(`Page name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+      return;
+    }
 
     const oldFilePath = cacheItem.fileName;
     const sanitized = newName.toLowerCase().replace(/\s+/g, "-");
@@ -2605,7 +2684,13 @@ function startRenameInSidebar(fileEl, node, siteId) {
     // Preserve the folder prefix
     const pathParts = oldFilePath.replace("public/", "").split("/");
     pathParts[pathParts.length - 1] = `${sanitized}.md`;
-    const newFilePath = `public/${pathParts.join("/")}`;
+    const newRelativePath = pathParts.join("/");
+    const newFilePath = `public/${newRelativePath}`;
+
+    if (newRelativePath.length > MAX_PATH_LENGTH) {
+      alert(`The total page path cannot exceed ${MAX_PATH_LENGTH} characters.`);
+      return;
+    }
 
     cacheItem.displayName = newName;
     cacheItem.fileName = newFilePath;
@@ -2649,6 +2734,10 @@ function startRenameFolderInSidebar(folderEl, label, node, siteId) {
     label.style.display = "";
 
     if (!newName || newName === oldName) return;
+    if (newName.length > MAX_NAME_LENGTH) {
+      alert(`Folder name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+      return;
+    }
     renameFolderDisplayName(node.folderPath, newName);
     modified = true;
     updateDeployButtonState();
@@ -2694,6 +2783,12 @@ async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
     const baseName = draggedPath.split("/").pop();
     const newPrefix = targetFolder ? `public/${targetFolder}/` : "public/";
     const newPath = newPrefix + baseName;
+    const newRelative = newPath.replace(/^public\//, "");
+
+    if (newRelative.length > MAX_PATH_LENGTH) {
+      alert(`The total page path cannot exceed ${MAX_PATH_LENGTH} characters.`);
+      return;
+    }
 
     if (getCacheByFileName(newPath)) {
       alert("A file with that name already exists in the target folder.");
@@ -2733,6 +2828,12 @@ async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
 
   const baseName = draggedPath.split("/").pop();
   const newPath = targetFolderPath ? `public/${targetFolderPath}/${baseName}` : `public/${baseName}`;
+  const newRelative = newPath.replace(/^public\//, "");
+
+  if (newRelative.length > MAX_PATH_LENGTH) {
+    alert(`The total page path cannot exceed ${MAX_PATH_LENGTH} characters.`);
+    return;
+  }
 
   if (getCacheByFileName(newPath)) {
     alert("A file with that name already exists in the target folder.");
