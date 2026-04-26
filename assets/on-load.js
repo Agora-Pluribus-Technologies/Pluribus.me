@@ -1843,7 +1843,18 @@ async function createNewPage(displayName) {
 async function createNewFolder(folderName) {
   const trimmedName = (folderName || "").trim();
   if (!trimmedName) return;
-  const sanitizedName = trimmedName.toLowerCase().replace(/\s+/g, "-");
+  // Slugify: lowercase, spaces -> dashes, then strip anything outside [a-zA-Z0-9-_.],
+  // collapse repeats, and trim leading/trailing separator chars.
+  const sanitizedName = trimmedName
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9\-_.]+/g, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_.]+|[-_.]+$/g, "");
+  if (!sanitizedName) {
+    alert("Folder name must contain at least one letter, number, dash, underscore, or dot.");
+    return;
+  }
   const parentFolder = getSelectedFolder();
   const folderPath = parentFolder ? `${parentFolder}/${sanitizedName}` : sanitizedName;
 
