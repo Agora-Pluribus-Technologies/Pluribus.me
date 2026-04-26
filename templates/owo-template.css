@@ -47,7 +47,7 @@ body.light-mode .e-content blockquote blockquote {
 }
 
 body.light-mode .e-content code {
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: rgba(0, 0, 0, 0.5);
     color: var(--text-primary-alt, #1a1a1a);
 }
 
