@@ -2931,6 +2931,15 @@ function startRenameFolderInSidebar(folderEl, label, node, siteId) {
     modified = true;
     updateDeployButtonState();
     await populateSidebar(siteId);
+    // Reload the active page so the editor picks up rewritten wikilinks /
+    // path changes from the rename — otherwise the next block save would
+    // overwrite the cache with stale (pre-rewrite) editor content.
+    if (currentSitePath) {
+      const cacheItem = getCacheByFileName(currentSitePath);
+      if (cacheItem && typeof loadPageIntoBlockEditor === "function") {
+        loadPageIntoBlockEditor(cacheItem.content);
+      }
+    }
   });
 }
 
@@ -3018,6 +3027,12 @@ async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
   modified = true;
   updateDeployButtonState();
   await populateSidebar(siteId);
+  if (currentSitePath) {
+    const cacheItem = getCacheByFileName(currentSitePath);
+    if (cacheItem && typeof loadPageIntoBlockEditor === "function") {
+      loadPageIntoBlockEditor(cacheItem.content);
+    }
+  }
 }
 
 async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
@@ -3067,6 +3082,12 @@ async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
   updateDeployButtonState();
   expandedFolders.add(targetFolderPath);
   await populateSidebar(siteId);
+  if (currentSitePath) {
+    const cacheItem = getCacheByFileName(currentSitePath);
+    if (cacheItem && typeof loadPageIntoBlockEditor === "function") {
+      loadPageIntoBlockEditor(cacheItem.content);
+    }
+  }
 }
 
 // ==================== User Menu Functions ====================

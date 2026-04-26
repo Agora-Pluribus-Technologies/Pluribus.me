@@ -280,10 +280,12 @@
   }
 
   // Choose the best replacement target text for a wikilink whose resolved
-  // page was renamed. If the original wikilink wrote out the full path,
-  // produce the new full path. If it used the basename and that basename is
-  // still unique under the new layout, keep the basename style; otherwise
-  // fall back to the new full path.
+  // page was renamed.
+  //   - Original wrote the full path  -> new full path
+  //   - Original wrote a basename and it's still unique  -> keep basename
+  //   - Original wrote a relative slug-suffix that matches the trailing
+  //     part of oldFileName  -> rewrite the same trailing part of newFileName
+  //   - Otherwise  -> new full path
   function chooseRenamedTarget(originalTarget, oldFileName, newFileName, newPagesList) {
     const stripped = (originalTarget || "").replace(/\.md$/i, "").replace(/^\/+|\/+$/g, "");
     const lower = stripped.toLowerCase();
@@ -291,7 +293,10 @@
     const oldBase = (oldFileName || "").split("/").pop().toLowerCase();
     const newBase = (newFileName || "").split("/").pop();
 
+    // Exact full-path match
     if (lower === oldLower) return newFileName;
+
+    // Basename match (preserve basename style if still unambiguous)
     if (lower === oldBase) {
       const newBaseLower = newBase.toLowerCase();
       const matches = (newPagesList || []).filter(p => {
@@ -299,7 +304,22 @@
         return fn === newBaseLower || fn.split("/").pop() === newBaseLower;
       }).length;
       if (matches <= 1) return newBase;
+      return newFileName;
     }
+
+    // Trailing-segment match — e.g. originalTarget="child/page" while
+    // oldFileName="parent/child/page". Preserve the same number of
+    // trailing segments from the new path.
+    const oldSegs = (oldFileName || "").split("/");
+    const newSegs = (newFileName || "").split("/");
+    const targetSegs = stripped.split("/");
+    if (targetSegs.length < oldSegs.length && targetSegs.length > 0) {
+      const tailJoin = oldSegs.slice(-targetSegs.length).join("/").toLowerCase();
+      if (lower === tailJoin && newSegs.length >= targetSegs.length) {
+        return newSegs.slice(-targetSegs.length).join("/");
+      }
+    }
+
     return newFileName;
   }
 
