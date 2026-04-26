@@ -350,11 +350,33 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const defaultHomeContent = "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above.";
   const now = new Date().toISOString();
 
+  // Imports without their own home/index page get one prepended so the
+  // published-site router has a top-level entry to serve at "/". Imports
+  // that DO carry one already had it surfaced to position 0 by the importer.
+  let pagesToWrite = importedPages;
+  if (hasImport) {
+    const hasHome = importedPages.some(
+      p => p.fileName === "home" || p.fileName === "index"
+    );
+    if (!hasHome) {
+      pagesToWrite = [
+        {
+          displayName: "Home",
+          fileName: "home",
+          content: defaultHomeContent,
+          createdAt: now,
+          modifiedAt: now,
+        },
+        ...importedPages,
+      ];
+    }
+  }
+
   let pagesJson;
   if (isBlog) {
     pagesJson = [];
   } else if (hasImport) {
-    pagesJson = importedPages.map(p => ({
+    pagesJson = pagesToWrite.map(p => ({
       displayName: p.displayName,
       fileName: p.fileName,
       createdAt: p.createdAt || now,
@@ -374,7 +396,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pagesJson));
   await gitWriteFile(siteId, "public/images.json", "[]");
   if (hasImport) {
-    for (const page of importedPages) {
+    for (const page of pagesToWrite) {
       await gitWriteFile(siteId, `public/${page.fileName}.md`, page.content);
     }
   } else if (!isBlog) {
@@ -413,7 +435,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     message: hasImport ? "Initial import" : "Initial commit",
     author: owner || "Unknown",
     changes: hasImport
-      ? importedPages.map(p => ({ file: `public/${p.fileName}.md`, status: "added" }))
+      ? pagesToWrite.map(p => ({ file: `public/${p.fileName}.md`, status: "added" }))
       : [],
   }];
 
@@ -456,7 +478,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   }
 
   if (hasImport) {
-    for (const page of importedPages) {
+    for (const page of pagesToWrite) {
       files.push({
         filePath: `public/${page.fileName}.md`,
         content: page.content,

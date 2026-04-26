@@ -245,8 +245,16 @@
       });
     }
 
-    // Sort pages alphabetically by slug for deterministic order.
+    // Sort alphabetically, then promote any root-level `home` or `index` page
+    // to position 0 so the published-site router treats it as the homepage.
+    // Vault conventions vary (Obsidian uses `Home.md`, Hugo/Jekyll use
+    // `index.md`); both are accepted.
     pages.sort((a, b) => a.fileName.localeCompare(b.fileName));
+    const homeIdx = pages.findIndex(p => p.fileName === "home" || p.fileName === "index");
+    if (homeIdx > 0) {
+      const [home] = pages.splice(homeIdx, 1);
+      pages.unshift(home);
+    }
 
     return { pages, skipped, errors };
   }

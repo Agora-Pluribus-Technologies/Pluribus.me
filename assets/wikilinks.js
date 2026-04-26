@@ -17,6 +17,14 @@
   const WIKILINK_INLINE_REGEX = /\[\[([^\]\n|]+?)(?:\|([^\]\n]*))?\]\]/g;
   const WIKILINK_TOKENIZE_REGEX = /^\[\[([^\]\n|]+?)(?:\|([^\]\n]*))?\]\]/;
 
+  // Case-fold helper used for every displayName / slug comparison in this
+  // module. `toLocaleLowerCase()` is safer than `toLowerCase()` for
+  // Unicode-bearing display names (e.g. it folds `İ` to `i̇` predictably).
+  // All wikilink display-name and slug matching is case-insensitive.
+  function fold(s) {
+    return (s == null ? "" : String(s)).toLocaleLowerCase();
+  }
+
   function parseWikilinkBody(body) {
     // Split target and optional heading
     const hashIdx = body.indexOf("#");
@@ -63,20 +71,20 @@
     const normalizedTarget = target
       .replace(/^\/+|\/+$/g, "")
       .replace(/\.md$/i, "");
-    const lowerTarget = normalizedTarget.toLowerCase();
+    const foldedTarget = fold(normalizedTarget);
 
     // 1. Exact fileName match (case-insensitive). An exact path always wins,
     //    so [[page]] with both "page" and "folder/page" resolves to "page".
-    const exact = pages.find(p => (p.fileName || "").toLowerCase() === lowerTarget);
+    const exact = pages.find(p => fold(p.fileName) === foldedTarget);
     if (exact) return exact;
 
     // 2. Unique basename slug match — accept omitted folder when unambiguous.
     //    Multiple pages sharing a basename require the folder prefix to
     //    disambiguate (no fallback resolution).
     const basenameMatches = pages.filter(p => {
-      const fn = (p.fileName || "").toLowerCase();
+      const fn = fold(p.fileName);
       const base = fn.split("/").pop();
-      return base === lowerTarget;
+      return base === foldedTarget;
     });
     if (basenameMatches.length === 1) return basenameMatches[0];
 
@@ -86,11 +94,11 @@
     if (normalizedTarget.indexOf("/") >= 0) {
       const segments = normalizedTarget.split("/").filter(Boolean);
       if (segments.length >= 2) {
-        const noteSeg = segments[segments.length - 1].toLowerCase();
-        const folderSegs = segments.slice(0, -1).map(s => s.toLowerCase());
+        const noteSeg = fold(segments[segments.length - 1]);
+        const folderSegs = segments.slice(0, -1).map(fold);
 
         const pathMatches = pages.filter(p => {
-          if ((p.displayName || "").toLowerCase() !== noteSeg) return false;
+          if (fold(p.displayName) !== noteSeg) return false;
           const fn = p.fileName || "";
           if (fn.indexOf("/") < 0) return false;
           const folderSlugs = fn.split("/").slice(0, -1);
@@ -101,15 +109,15 @@
           // itself, or the slug humanized (hyphens/underscores -> spaces).
           const tail = folderSlugs.slice(-folderSegs.length);
           return folderSegs.every((typed, i) => {
-            const slug = tail[i].toLowerCase();
+            const slug = fold(tail[i]);
             if (slug === typed) return true;
             const fullPath = folderSlugs
               .slice(0, folderSlugs.length - folderSegs.length + i + 1)
               .join("/");
             const meta = folders && folders[fullPath];
-            const metaDisplay = (meta && meta.displayName) ? meta.displayName.toLowerCase() : "";
+            const metaDisplay = meta && meta.displayName ? fold(meta.displayName) : "";
             if (metaDisplay && metaDisplay === typed) return true;
-            const humanized = tail[i].replace(/[-_]+/g, " ").toLowerCase();
+            const humanized = fold(tail[i].replace(/[-_]+/g, " "));
             return humanized === typed;
           });
         });
@@ -117,9 +125,9 @@
       }
     }
 
-    // 4. Unique displayName match across the whole site.
+    // 4. Unique displayName match across the whole site (case-insensitive).
     const displayMatches = pages.filter(p =>
-      (p.displayName || "").toLowerCase() === lowerTarget
+      fold(p.displayName) === foldedTarget
     );
     if (displayMatches.length === 1) return displayMatches[0];
 
@@ -242,12 +250,12 @@
   }
 
   function filterPagesByQuery(pages, query) {
-    const q = (query || "").toLowerCase().trim();
+    const q = fold(query).trim();
     if (!q) return pages.slice(0, 8);
     const scored = [];
     for (const p of pages) {
-      const fn = (p.fileName || "").toLowerCase();
-      const dn = (p.displayName || "").toLowerCase();
+      const fn = fold(p.fileName);
+      const dn = fold(p.displayName);
       const base = fn.split("/").pop();
       let score = -1;
       if (base.startsWith(q)) score = 100 - base.length;

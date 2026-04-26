@@ -2880,17 +2880,24 @@ function renderFileNode(container, node, depth, siteId) {
   fileEl.style.paddingLeft = (depth * 16 + 8) + "px";
   fileEl.dataset.filePath = node.path;
 
-  // Drag source
-  fileEl.draggable = true;
-  fileEl.addEventListener("dragstart", (e) => {
-    e.dataTransfer.setData("text/plain", node.path);
-    e.dataTransfer.effectAllowed = "move";
-    fileEl.classList.add("dragging");
-  });
-  fileEl.addEventListener("dragend", () => {
-    fileEl.classList.remove("dragging");
-    clearDropIndicators();
-  });
+  // The homepage (root-level `home.md` or `index.md`) is protected from
+  // rename, move, and delete — it backs the published-site URL "/".
+  const isHomePage = isHomePagePath(node.path);
+
+  // Drag source — disabled for the homepage so the user can't move it
+  // (out of root, into a folder, or up/down to a different sortOrder).
+  fileEl.draggable = !isHomePage;
+  if (!isHomePage) {
+    fileEl.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", node.path);
+      e.dataTransfer.effectAllowed = "move";
+      fileEl.classList.add("dragging");
+    });
+    fileEl.addEventListener("dragend", () => {
+      fileEl.classList.remove("dragging");
+      clearDropIndicators();
+    });
+  }
 
   // Drop target for reordering
   fileEl.addEventListener("dragover", (e) => {
@@ -2929,35 +2936,37 @@ function renderFileNode(container, node, depth, siteId) {
   const actions = document.createElement("span");
   actions.classList.add("sidebar-tree-actions");
 
-  const renameBtn = document.createElement("button");
-  renameBtn.classList.add("sidebar-tree-action-btn");
-  renameBtn.textContent = "✎";
-  renameBtn.title = "Rename";
-  renameBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    startRenameInSidebar(fileEl, node, siteId);
-  });
-  actions.appendChild(renameBtn);
-
-  if (markdownCache.length > 1) {
-    const deleteBtn = document.createElement("button");
-    deleteBtn.classList.add("sidebar-tree-action-btn", "delete");
-    deleteBtn.textContent = "×";
-    deleteBtn.title = "Delete";
-    deleteBtn.addEventListener("click", async (e) => {
+  if (!isHomePage) {
+    const renameBtn = document.createElement("button");
+    renameBtn.classList.add("sidebar-tree-action-btn");
+    renameBtn.textContent = "✎";
+    renameBtn.title = "Rename";
+    renameBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (confirm(`Delete "${node.name}"?`)) {
-        const wasSelected = currentSitePath === node.path;
-        removeCacheByFileName(node.path);
-        modified = true;
-        updateDeployButtonState();
-        await populateSidebar(siteId);
-        if (wasSelected && markdownCache.length > 0) {
-          selectSidebarPage(markdownCache[0].fileName);
-        }
-      }
+      startRenameInSidebar(fileEl, node, siteId);
     });
-    actions.appendChild(deleteBtn);
+    actions.appendChild(renameBtn);
+
+    if (markdownCache.length > 1) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.classList.add("sidebar-tree-action-btn", "delete");
+      deleteBtn.textContent = "×";
+      deleteBtn.title = "Delete";
+      deleteBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete "${node.name}"?`)) {
+          const wasSelected = currentSitePath === node.path;
+          removeCacheByFileName(node.path);
+          modified = true;
+          updateDeployButtonState();
+          await populateSidebar(siteId);
+          if (wasSelected && markdownCache.length > 0) {
+            selectSidebarPage(markdownCache[0].fileName);
+          }
+        }
+      });
+      actions.appendChild(deleteBtn);
+    }
   }
 
   fileEl.appendChild(icon);
@@ -3000,7 +3009,15 @@ function selectSidebarPage(fileName) {
   updateDeployButtonState();
 }
 
+// True for the root-level `home.md` or `index.md` cache entry — these back
+// the published site's "/" URL and are protected from rename/move/delete in
+// the sidebar.
+function isHomePagePath(path) {
+  return path === "public/home.md" || path === "public/index.md";
+}
+
 function startRenameInSidebar(fileEl, node, siteId) {
+  if (isHomePagePath(node.path)) return;
   const cacheItem = getCacheByFileName(node.path);
   if (!cacheItem) return;
 
@@ -3149,6 +3166,9 @@ function getSiblingsInFolder(folder) {
 }
 
 async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
+  // Defense-in-depth: the homepage is non-draggable in the UI, but block
+  // moves through this code path too in case something else triggers a drop.
+  if (isHomePagePath(draggedPath)) return;
   const draggedItem = getCacheByFileName(draggedPath);
   if (!draggedItem) return;
 
@@ -3218,6 +3238,7 @@ async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
 }
 
 async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
+  if (isHomePagePath(draggedPath)) return;
   const draggedItem = getCacheByFileName(draggedPath);
   if (!draggedItem) return;
 
