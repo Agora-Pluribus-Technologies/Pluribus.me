@@ -252,19 +252,55 @@
     return out;
   }
 
-  // Toast UI's WYSIWYG markdown serializer escapes literal backslashes
-  // (`\` -> `\\`) for markdown-spec compliance, which breaks LaTeX commands
-  // like `\frac`. This is applied to the markdown output after getMarkdown()
-  // and collapses `\\` -> `\` inside math regions only. Code blocks and
-  // inline code spans are left untouched.
+  // Toast UI's WYSIWYG round-trip mangles LaTeX in math regions in two ways:
+  //   - The MARKDOWN PARSER consumes `\X` as a backslash escape when X is an
+  //     ASCII-punctuation char (so `\{`, `\}`, `\[`, `\]`, `\_`, `\*`, `\\`,
+  //     etc. lose their backslash entering WYSIWYG).
+  //   - The MARKDOWN SERIALIZER escapes literal backslashes and markdown
+  //     specials on the way out (`\` -> `\\`, `_` -> `\_`, ...).
   //
-  // A LaTeX line break (`\\`) round-trips correctly: it leaves WYSIWYG as
-  // `\\\\` (four backslashes), and this routine collapses pairwise back to
-  // `\\` (two backslashes).
-  function unescapeMathBackslashes(markdown) {
-    if (!markdown || typeof markdown !== "string") return markdown;
-    if (markdown.indexOf("\\\\") < 0) return markdown;
+  // To survive round-trip, we double every backslash inside math regions
+  // before handing markdown to Toast UI (so the parser still ends up with
+  // the original char sequence in ProseMirror), and undo all the serializer
+  // escapes on the way back.
 
+  // Markdown specials that Toast UI's serializer is likely to re-escape
+  // when emitting the WYSIWYG state back to markdown. `]` must be escaped
+  // inside the char class so it doesn't close the bracket expression.
+  const MD_ESCAPED_CHARS = "\\\\`*_{}\\[\\]()#+\\-.!~<>|";
+  const ESCAPED_CHAR_RE = new RegExp("\\\\([" + MD_ESCAPED_CHARS + "])", "g");
+
+  // Pre-escape: double every backslash in math regions so the markdown
+  // parser preserves the original char (`\\` -> literal `\`) on its way to
+  // ProseMirror state. Other characters are left alone — the serializer's
+  // escapes on those round-trip via unescapeMathRoundTrip.
+  function escapeMathForWysiwyg(markdown) {
+    if (!markdown || typeof markdown !== "string") return markdown;
+    if (markdown.indexOf("$") < 0) return markdown;
+    return walkMathRegions(markdown, body => body.replace(/\\/g, "\\\\"));
+  }
+
+  // Reverse of the WYSIWYG round-trip. Inside each math region:
+  //   1. Stash `\\` (literal-backslash escape) as a NUL sentinel.
+  //   2. Strip remaining `\X` (markdown-spec escapes for `_`, `*`, `{`, etc.).
+  //   3. Restore the sentinel as a single `\`.
+  // The two-pass approach keeps `\\` from being mistaken for `\X`.
+  function unescapeMathRoundTrip(markdown) {
+    if (!markdown || typeof markdown !== "string") return markdown;
+    if (markdown.indexOf("\\") < 0) return markdown;
+    return walkMathRegions(markdown, unescapeBody);
+  }
+
+  function unescapeBody(body) {
+    return body
+      .replace(/\\\\/g, " ")
+      .replace(ESCAPED_CHAR_RE, "$1")
+      .replace(/ /g, "\\");
+  }
+
+  // Apply `transform` only to the body of `$...$` and `$$...$$` regions,
+  // skipping fenced code blocks and inline code spans entirely.
+  function walkMathRegions(markdown, transform) {
     const segs = [];
     let lastIdx = 0;
     let m;
@@ -281,34 +317,30 @@
     }
 
     return segs
-      .map(s => (s.kind === "code" ? s.text : unescapeOutsideCodeSpans(s.text)))
+      .map(s => (s.kind === "code" ? s.text : walkOutsideCodeSpans(s.text, transform)))
       .join("");
+  }
 
-    function unescapeOutsideCodeSpans(text) {
-      const codeRe = new RegExp(INLINE_CODE_REGEX_SRC, "g");
-      let result = "";
-      let last = 0;
-      let cm;
-      while ((cm = codeRe.exec(text)) !== null) {
-        result += unescapeInMathRegions(text.slice(last, cm.index));
-        result += cm[0];
-        last = cm.index + cm[0].length;
-      }
-      result += unescapeInMathRegions(text.slice(last));
-      return result;
+  function walkOutsideCodeSpans(text, transform) {
+    const codeRe = new RegExp(INLINE_CODE_REGEX_SRC, "g");
+    let result = "";
+    let last = 0;
+    let cm;
+    while ((cm = codeRe.exec(text)) !== null) {
+      result += transformMath(text.slice(last, cm.index), transform);
+      result += cm[0];
+      last = cm.index + cm[0].length;
     }
+    result += transformMath(text.slice(last), transform);
+    return result;
+  }
 
-    function unescapeInMathRegions(text) {
-      const displayRe = new RegExp(DISPLAY_REGEX_SRC, "g");
-      let after = text.replace(displayRe, (_, body) =>
-        "$$" + body.replace(/\\\\/g, "\\") + "$$"
-      );
-      const inlineRe = new RegExp(INLINE_REGEX_SRC, "g");
-      after = after.replace(inlineRe, (_, body) =>
-        "$" + body.replace(/\\\\/g, "\\") + "$"
-      );
-      return after;
-    }
+  function transformMath(text, transform) {
+    const displayRe = new RegExp(DISPLAY_REGEX_SRC, "g");
+    let after = text.replace(displayRe, (_, body) => "$$" + transform(body) + "$$");
+    const inlineRe = new RegExp(INLINE_REGEX_SRC, "g");
+    after = after.replace(inlineRe, (_, body) => "$" + transform(body) + "$");
+    return after;
   }
 
   const api = {
@@ -318,7 +350,8 @@
     loadKaTeX,
     preprocessMath,
     restoreMath,
-    unescapeMathBackslashes,
+    escapeMathForWysiwyg,
+    unescapeMathRoundTrip,
   };
 
   root.AgoraMath = api;

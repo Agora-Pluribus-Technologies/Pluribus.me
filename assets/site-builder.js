@@ -427,15 +427,26 @@ function renderPanelPreview(markdown) {
 // Read markdown back from a Toast UI WYSIWYG editor and undo two
 // round-trip side effects:
 //   1) Stray <br> tags inserted by Toast UI's WYSIWYG-to-markdown serializer.
-//   2) Backslashes inside math regions doubled by markdown-spec escaping
-//      (`\frac` -> `\\frac`), which would break KaTeX rendering.
+//   2) Markdown-spec escapes the serializer adds inside math regions
+//      (`\` -> `\\`, `_` -> `\_`, `{` -> `\{`, ...), which would break
+//      KaTeX rendering. See escapeMathForEditor for the matching pre-escape.
 function readMarkdownFromEditor(editor) {
   if (!editor) return '';
   let md = editor.getMarkdown().replace(/<br\s*\/?>/gi, '').trim();
   if (typeof AgoraMath !== "undefined") {
-    md = AgoraMath.unescapeMathBackslashes(md);
+    md = AgoraMath.unescapeMathRoundTrip(md);
   }
   return md;
+}
+
+// Pre-escape math regions before handing markdown to Toast UI so the
+// MARKDOWN PARSER doesn't consume `\X` escapes (`\{`, `\}`, `\\`, `\_`, ...)
+// when populating the WYSIWYG ProseMirror state. Doubling every backslash
+// in math regions makes the parser emit the original chars; readMarkdownFromEditor
+// reverses this on the way back out.
+function escapeMathForEditor(markdown) {
+  if (typeof AgoraMath === "undefined") return markdown;
+  return AgoraMath.escapeMathForWysiwyg(markdown);
 }
 
 // Trigger a KaTeX load once and re-render all blocks once it resolves so the
@@ -857,7 +868,7 @@ function startInlineEdit(index, clickEvent) {
     previewStyle: 'vertical',
     theme: 'dark',
     height: '300px',
-    initialValue: block.content,
+    initialValue: escapeMathForEditor(block.content),
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
@@ -1725,7 +1736,7 @@ function showBlogPostEditModal(content, displayName, callback) {
     previewStyle: 'vertical',
     theme: 'dark',
     height: '300px',
-    initialValue: postData.body,
+    initialValue: escapeMathForEditor(postData.body),
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
