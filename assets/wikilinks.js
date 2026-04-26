@@ -464,6 +464,24 @@
     }
   }
 
+  // Toast UI's WYSIWYG markdown serializer escapes `[`, `]`, and `|` (along
+  // with other markdown specials) on its way back out, so a wikilink that
+  // started as `[[species/Amanita muscaria|Species profiles]]` round-trips
+  // as `\[\[species/Amanita muscaria\|Species profiles\]\]`. Detect the
+  // escaped form anywhere in the markdown and undo the inner escapes so
+  // wikilinks survive a panel-edit cycle.
+  function unescapeWikilinkBrackets(markdown) {
+    if (!markdown || typeof markdown !== "string") return markdown;
+    if (markdown.indexOf("\\[") < 0) return markdown;
+    return markdown.replace(/\\\[\\\[([^\n]+?)\\\]\\\]/g, function (_, body) {
+      // Inside the escaped wikilink, undo any backslash-escape of a
+      // markdown-special character. Wikilink targets/aliases don't legitimately
+      // contain literal backslashes, so this is safe.
+      const inner = body.replace(/\\([\\`*_{}\[\]()#+\-.!~<>|])/g, "$1");
+      return "[[" + inner + "]]";
+    });
+  }
+
   const api = {
     parseWikilinkBody,
     resolveWikilink,
@@ -478,6 +496,7 @@
     buildBacklinkIndex,
     chooseRenamedTarget,
     rewriteWikilinkTargets,
+    unescapeWikilinkBrackets,
     WIKILINK_INLINE_REGEX,
     WIKILINK_TOKENIZE_REGEX,
   };

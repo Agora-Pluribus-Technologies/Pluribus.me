@@ -441,12 +441,18 @@ function readMarkdownFromEditor(editor) {
   let md = editor.getMarkdown();
   // Only undo the WYSIWYG-round-trip escapes when the editor is actually in
   // WYSIWYG mode. In markdown mode the user is typing raw text, so escape
-  // sequences like `\{` in their LaTeX are literal and must be preserved.
+  // sequences like `\{` in their LaTeX (or `\[\[` in literal-bracket text)
+  // are intentional and must be preserved.
   const inWysiwyg = typeof editor.isWysiwygMode === "function"
     ? editor.isWysiwygMode()
     : true;
-  if (inWysiwyg && typeof AgoraMath !== "undefined") {
-    md = AgoraMath.unescapeMathRoundTrip(md);
+  if (inWysiwyg) {
+    if (typeof AgoraMath !== "undefined") {
+      md = AgoraMath.unescapeMathRoundTrip(md);
+    }
+    if (typeof AgoraWikilinks !== "undefined") {
+      md = AgoraWikilinks.unescapeWikilinkBrackets(md);
+    }
   }
   return md.replace(/<br\s*\/?>/gi, '').trim();
 }
