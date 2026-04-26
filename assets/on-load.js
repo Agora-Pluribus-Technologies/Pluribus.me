@@ -2321,10 +2321,29 @@ function slugifyFolderName(name) {
     .replace(/^[-_.]+|[-_.]+$/g, "");
 }
 
+// Returns true if `filePath` (a "public/..." markdown path) lives inside the
+// folder identified by `folderPath`, at any depth.
+function fileBelongsToFolder(filePath, folderPath) {
+  if (!filePath || !folderPath) return false;
+  const rel = filePath.replace(/^public\//, "");
+  return rel === folderPath || rel.startsWith(folderPath + "/");
+}
+
+// Returns true if `metaKey` is the folder itself or any descendant.
+function folderKeyBelongsToFolder(metaKey, folderPath) {
+  if (!metaKey || !folderPath) return false;
+  return metaKey === folderPath || metaKey.startsWith(folderPath + "/");
+}
+
 // Rename both the slug (path) and the display name of an existing folder.
-// Returns true on success, false on validation failure.
+// Updates every descendant file path, every folderMeta entry beneath the
+// folder, and any UI/selection state that referenced the old path. Returns
+// true on success, false on validation failure.
 function renameFolder(folderPath, newDisplayName) {
   if (!folderPath) return false;
+  // Defensive: strip any leading/trailing slashes the caller may have included.
+  folderPath = folderPath.replace(/^\/+|\/+$/g, "");
+
   const trimmed = (newDisplayName || "").trim();
   if (!trimmed) return false;
   if (trimmed.length > MAX_NAME_LENGTH) {
@@ -2358,8 +2377,9 @@ function renameFolder(folderPath, newDisplayName) {
 
   // Fail if any descendant file's new path would exceed the limit.
   for (const item of markdownCache) {
-    if (item.fileName.startsWith(oldPrefix)) {
-      const newFile = newPrefix + item.fileName.slice(oldPrefix.length);
+    if (fileBelongsToFolder(item.fileName, folderPath)) {
+      const tail = item.fileName.slice(oldPrefix.length);
+      const newFile = newPrefix + tail;
       if (newFile.replace(/^public\//, "").length > MAX_PATH_LENGTH) {
         alert(`The total page path cannot exceed ${MAX_PATH_LENGTH} characters.`);
         return false;
@@ -2369,31 +2389,47 @@ function renameFolder(folderPath, newDisplayName) {
 
   // Fail if a sibling folder with the new slug already exists.
   const conflict = markdownCache.some(item =>
-    item.fileName.startsWith(newPrefix) && !item.fileName.startsWith(oldPrefix)
+    item.fileName.startsWith(newPrefix) && !fileBelongsToFolder(item.fileName, folderPath)
   );
   if (conflict) {
     alert("A folder with that name already exists in this location.");
     return false;
   }
 
-  // Move every descendant file path to the new prefix.
-  for (const item of markdownCache) {
+  // Rebuild markdownCache in place, swapping every descendant path. Mutating
+  // item.fileName isn't enough on its own — we also use a fresh array so any
+  // stale references are dropped, and we double-check no entry retains the
+  // old prefix afterwards.
+  const updated = markdownCache.map(item => {
+    if (fileBelongsToFolder(item.fileName, folderPath)) {
+      const tail = item.fileName.slice(oldPrefix.length);
+      item.fileName = newPrefix + tail;
+    }
+    return item;
+  });
+  // Defensive sweep: catches any lingering reference to the old prefix.
+  for (const item of updated) {
     if (item.fileName.startsWith(oldPrefix)) {
       item.fileName = newPrefix + item.fileName.slice(oldPrefix.length);
     }
   }
+  markdownCache.length = 0;
+  for (const item of updated) markdownCache.push(item);
 
   // Re-key folderMeta entries (the folder itself + any nested subfolders).
   const newMeta = {};
   for (const [key, value] of Object.entries(folderMeta)) {
-    if (key === folderPath) {
-      newMeta[newFolderPath] = Object.assign({}, value, { displayName: trimmed });
-    } else if (key.startsWith(folderPath + "/")) {
-      newMeta[newFolderPath + key.slice(folderPath.length)] = value;
+    if (folderKeyBelongsToFolder(key, folderPath)) {
+      const tail = key === folderPath ? "" : key.slice(folderPath.length); // keeps leading "/"
+      const remappedKey = newFolderPath + tail;
+      newMeta[remappedKey] = key === folderPath
+        ? Object.assign({}, value, { displayName: trimmed })
+        : value;
     } else {
       newMeta[key] = value;
     }
   }
+  // Make sure the renamed folder has an entry with the new display name.
   if (!newMeta[newFolderPath]) {
     newMeta[newFolderPath] = { displayName: trimmed };
   } else {
@@ -2401,8 +2437,12 @@ function renameFolder(folderPath, newDisplayName) {
   }
   folderMeta = newMeta;
 
+  // Drop folderMeta entries that are no longer backed by any file (e.g.
+  // entries left over from the old path if iteration order missed anything).
+  pruneFolderMeta();
+
   // Update active page selection
-  if (currentSitePath && currentSitePath.startsWith(oldPrefix)) {
+  if (currentSitePath && fileBelongsToFolder(currentSitePath, folderPath)) {
     currentSitePath = newPrefix + currentSitePath.slice(oldPrefix.length);
   }
 
@@ -2410,16 +2450,17 @@ function renameFolder(folderPath, newDisplayName) {
   const expandedSnapshot = [...expandedFolders];
   expandedFolders.clear();
   for (const p of expandedSnapshot) {
-    if (p === folderPath) expandedFolders.add(newFolderPath);
-    else if (p.startsWith(folderPath + "/")) expandedFolders.add(newFolderPath + p.slice(folderPath.length));
-    else expandedFolders.add(p);
+    if (folderKeyBelongsToFolder(p, folderPath)) {
+      expandedFolders.add(newFolderPath + (p === folderPath ? "" : p.slice(folderPath.length)));
+    } else {
+      expandedFolders.add(p);
+    }
   }
 
   // Update selectedSidebarFolder
-  if (selectedSidebarFolder === folderPath) {
-    selectedSidebarFolder = newFolderPath;
-  } else if (selectedSidebarFolder && selectedSidebarFolder.startsWith(folderPath + "/")) {
-    selectedSidebarFolder = newFolderPath + selectedSidebarFolder.slice(folderPath.length);
+  if (folderKeyBelongsToFolder(selectedSidebarFolder, folderPath)) {
+    selectedSidebarFolder = newFolderPath +
+      (selectedSidebarFolder === folderPath ? "" : selectedSidebarFolder.slice(folderPath.length));
   }
 
   return true;
