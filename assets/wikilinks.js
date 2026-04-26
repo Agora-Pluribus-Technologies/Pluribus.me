@@ -279,6 +279,99 @@
     return index;
   }
 
+  // Choose the best replacement target text for a wikilink whose resolved
+  // page was renamed. If the original wikilink wrote out the full path,
+  // produce the new full path. If it used the basename and that basename is
+  // still unique under the new layout, keep the basename style; otherwise
+  // fall back to the new full path.
+  function chooseRenamedTarget(originalTarget, oldFileName, newFileName, newPagesList) {
+    const stripped = (originalTarget || "").replace(/\.md$/i, "").replace(/^\/+|\/+$/g, "");
+    const lower = stripped.toLowerCase();
+    const oldLower = (oldFileName || "").toLowerCase();
+    const oldBase = (oldFileName || "").split("/").pop().toLowerCase();
+    const newBase = (newFileName || "").split("/").pop();
+
+    if (lower === oldLower) return newFileName;
+    if (lower === oldBase) {
+      const newBaseLower = newBase.toLowerCase();
+      const matches = (newPagesList || []).filter(p => {
+        const fn = (p.fileName || "").toLowerCase();
+        return fn === newBaseLower || fn.split("/").pop() === newBaseLower;
+      }).length;
+      if (matches <= 1) return newBase;
+    }
+    return newFileName;
+  }
+
+  // Rewrite every [[...]] in `markdownCache` items whose resolved target was
+  // renamed. `renameMap` is a Map<oldFileName, newFileName> keyed by the
+  // pages.json-style fileName (no "public/" prefix, no ".md" suffix).
+  // `oldPagesList` and `newPagesList` are the pre/post-rename page arrays in
+  // the same shape pagesFromCache returns. Returns the number of items whose
+  // content was modified.
+  function rewriteWikilinkTargets(cacheItems, renameMap, oldPagesList, newPagesList) {
+    if (!Array.isArray(cacheItems) || !renameMap || renameMap.size === 0) return 0;
+    let modified = 0;
+
+    for (const item of cacheItems) {
+      const original = item.content || "";
+      if (!original) continue;
+
+      // Walk fenced code blocks vs prose so wikilinks inside code stay intact.
+      const fenceRegex = /^(```[\s\S]*?^```$|~~~[\s\S]*?^~~~$)/gm;
+      const segments = [];
+      let lastIdx = 0;
+      let m;
+      while ((m = fenceRegex.exec(original)) !== null) {
+        if (m.index > lastIdx) segments.push({ kind: "text", text: original.slice(lastIdx, m.index) });
+        segments.push({ kind: "code", text: m[0] });
+        lastIdx = m.index + m[0].length;
+      }
+      if (lastIdx < original.length) segments.push({ kind: "text", text: original.slice(lastIdx) });
+
+      const updated = segments
+        .map(seg => seg.kind === "code" ? seg.text : rewriteInline(seg.text))
+        .join("");
+
+      if (updated !== original) {
+        item.content = updated;
+        modified++;
+      }
+    }
+    return modified;
+
+    function rewriteInline(text) {
+      // Carve out inline code spans first.
+      const codeSpanRegex = /(`+)([^`\n]+?)\1/g;
+      let out = "";
+      let last = 0;
+      let cm;
+      while ((cm = codeSpanRegex.exec(text)) !== null) {
+        out += rewriteWikilinks(text.slice(last, cm.index));
+        out += cm[0];
+        last = cm.index + cm[0].length;
+      }
+      out += rewriteWikilinks(text.slice(last));
+      return out;
+    }
+
+    function rewriteWikilinks(text) {
+      const re = new RegExp(WIKILINK_INLINE_REGEX.source, "g");
+      return text.replace(re, (whole, body, alias) => {
+        const { target, heading } = parseWikilinkBody(body);
+        const oldResolved = resolveWikilink(target, oldPagesList);
+        if (!oldResolved) return whole;
+
+        const newFileName = renameMap.get(oldResolved.fileName);
+        if (!newFileName || newFileName === oldResolved.fileName) return whole;
+
+        const newTarget = chooseRenamedTarget(target, oldResolved.fileName, newFileName, newPagesList);
+        const newBody = heading ? `${newTarget}#${heading}` : newTarget;
+        return alias != null ? `[[${newBody}|${alias}]]` : `[[${newBody}]]`;
+      });
+    }
+  }
+
   const api = {
     parseWikilinkBody,
     resolveWikilink,
@@ -291,6 +384,8 @@
     slugifyHeading,
     extractWikilinkBodies,
     buildBacklinkIndex,
+    chooseRenamedTarget,
+    rewriteWikilinkTargets,
     WIKILINK_INLINE_REGEX,
     WIKILINK_TOKENIZE_REGEX,
   };

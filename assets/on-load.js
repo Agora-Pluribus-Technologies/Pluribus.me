@@ -2396,6 +2396,20 @@ function renameFolder(folderPath, newDisplayName) {
     return false;
   }
 
+  // Snapshot pre-rename pages list and build rename map (for wikilink rewrite).
+  const oldPagesList = (typeof AgoraWikilinks !== "undefined")
+    ? AgoraWikilinks.pagesFromCache(markdownCache)
+    : [];
+  const renameMap = new Map();
+  for (const item of markdownCache) {
+    if (fileBelongsToFolder(item.fileName, folderPath)) {
+      const tail = item.fileName.slice(oldPrefix.length);
+      const oldKey = item.fileName.replace(/^public\//, "").replace(/\.md$/, "");
+      const newKey = (newPrefix + tail).replace(/^public\//, "").replace(/\.md$/, "");
+      renameMap.set(oldKey, newKey);
+    }
+  }
+
   // Rebuild markdownCache in place, swapping every descendant path. Mutating
   // item.fileName isn't enough on its own — we also use a fresh array so any
   // stale references are dropped, and we double-check no entry retains the
@@ -2415,6 +2429,13 @@ function renameFolder(folderPath, newDisplayName) {
   }
   markdownCache.length = 0;
   for (const item of updated) markdownCache.push(item);
+
+  // Rewrite wikilinks across all pages so [[old-path]] / [[basename]]
+  // references continue to point at the renamed pages.
+  if (typeof AgoraWikilinks !== "undefined" && renameMap.size > 0) {
+    const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
+    AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+  }
 
   // Re-key folderMeta entries (the folder itself + any nested subfolders).
   const newMeta = {};
@@ -2846,9 +2867,23 @@ function startRenameInSidebar(fileEl, node, siteId) {
       return;
     }
 
+    // Snapshot pages list before mutation so wikilink rewriter can resolve
+    // [[old-name]] references against the pre-rename layout.
+    const oldPagesList = (typeof AgoraWikilinks !== "undefined")
+      ? AgoraWikilinks.pagesFromCache(markdownCache)
+      : [];
+    const oldKey = oldFilePath.replace(/^public\//, "").replace(/\.md$/, "");
+    const newKey = newFilePath.replace(/^public\//, "").replace(/\.md$/, "");
+
     cacheItem.displayName = newName;
     cacheItem.fileName = newFilePath;
     cacheItem.modifiedAt = new Date().toISOString();
+
+    if (typeof AgoraWikilinks !== "undefined" && oldKey !== newKey) {
+      const renameMap = new Map([[oldKey, newKey]]);
+      const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
+      AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+    }
 
     if (currentSitePath === oldFilePath) {
       currentSitePath = newFilePath;
@@ -2949,8 +2984,20 @@ async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
       return;
     }
 
+    const oldPagesList = (typeof AgoraWikilinks !== "undefined")
+      ? AgoraWikilinks.pagesFromCache(markdownCache)
+      : [];
+    const oldKey = draggedPath.replace(/^public\//, "").replace(/\.md$/, "");
+    const newKey = newPath.replace(/^public\//, "").replace(/\.md$/, "");
+
     if (currentSitePath === draggedPath) currentSitePath = newPath;
     draggedItem.fileName = newPath;
+
+    if (typeof AgoraWikilinks !== "undefined" && oldKey !== newKey) {
+      const renameMap = new Map([[oldKey, newKey]]);
+      const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
+      AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+    }
   }
 
   // Determine insertion point via sortOrder
@@ -2994,9 +3041,21 @@ async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
     return;
   }
 
+  const oldPagesList = (typeof AgoraWikilinks !== "undefined")
+    ? AgoraWikilinks.pagesFromCache(markdownCache)
+    : [];
+  const oldKey = draggedPath.replace(/^public\//, "").replace(/\.md$/, "");
+  const newKey = newPath.replace(/^public\//, "").replace(/\.md$/, "");
+
   if (currentSitePath === draggedPath) currentSitePath = newPath;
   draggedItem.fileName = newPath;
   draggedItem.sortOrder = getNextSortOrder(targetFolderPath);
+
+  if (typeof AgoraWikilinks !== "undefined" && oldKey !== newKey) {
+    const renameMap = new Map([[oldKey, newKey]]);
+    const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
+    AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+  }
 
   // Reassign sort orders in the old folder
   const oldSiblings = getSiblingsInFolder(currentFolder);
