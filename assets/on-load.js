@@ -2312,6 +2312,119 @@ function renameFolderDisplayName(folderPath, newDisplayName) {
   folderMeta[folderPath].displayName = trimmed;
 }
 
+function slugifyFolderName(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9\-_.]+/g, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_.]+|[-_.]+$/g, "");
+}
+
+// Rename both the slug (path) and the display name of an existing folder.
+// Returns true on success, false on validation failure.
+function renameFolder(folderPath, newDisplayName) {
+  if (!folderPath) return false;
+  const trimmed = (newDisplayName || "").trim();
+  if (!trimmed) return false;
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    alert(`Folder name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+    return false;
+  }
+
+  const sanitized = slugifyFolderName(trimmed);
+  if (!sanitized) {
+    alert("Folder name must contain at least one letter, number, dash, underscore, or dot.");
+    return false;
+  }
+
+  const lastSlash = folderPath.lastIndexOf("/");
+  const parentPath = lastSlash >= 0 ? folderPath.slice(0, lastSlash) : "";
+  const newFolderPath = parentPath ? `${parentPath}/${sanitized}` : sanitized;
+
+  // Slug unchanged → only the display name needs updating.
+  if (newFolderPath === folderPath) {
+    renameFolderDisplayName(folderPath, trimmed);
+    return true;
+  }
+
+  if (newFolderPath.length > MAX_PATH_LENGTH) {
+    alert(`The total folder path cannot exceed ${MAX_PATH_LENGTH} characters.`);
+    return false;
+  }
+
+  const oldPrefix = `public/${folderPath}/`;
+  const newPrefix = `public/${newFolderPath}/`;
+
+  // Fail if any descendant file's new path would exceed the limit.
+  for (const item of markdownCache) {
+    if (item.fileName.startsWith(oldPrefix)) {
+      const newFile = newPrefix + item.fileName.slice(oldPrefix.length);
+      if (newFile.replace(/^public\//, "").length > MAX_PATH_LENGTH) {
+        alert(`The total page path cannot exceed ${MAX_PATH_LENGTH} characters.`);
+        return false;
+      }
+    }
+  }
+
+  // Fail if a sibling folder with the new slug already exists.
+  const conflict = markdownCache.some(item =>
+    item.fileName.startsWith(newPrefix) && !item.fileName.startsWith(oldPrefix)
+  );
+  if (conflict) {
+    alert("A folder with that name already exists in this location.");
+    return false;
+  }
+
+  // Move every descendant file path to the new prefix.
+  for (const item of markdownCache) {
+    if (item.fileName.startsWith(oldPrefix)) {
+      item.fileName = newPrefix + item.fileName.slice(oldPrefix.length);
+    }
+  }
+
+  // Re-key folderMeta entries (the folder itself + any nested subfolders).
+  const newMeta = {};
+  for (const [key, value] of Object.entries(folderMeta)) {
+    if (key === folderPath) {
+      newMeta[newFolderPath] = Object.assign({}, value, { displayName: trimmed });
+    } else if (key.startsWith(folderPath + "/")) {
+      newMeta[newFolderPath + key.slice(folderPath.length)] = value;
+    } else {
+      newMeta[key] = value;
+    }
+  }
+  if (!newMeta[newFolderPath]) {
+    newMeta[newFolderPath] = { displayName: trimmed };
+  } else {
+    newMeta[newFolderPath].displayName = trimmed;
+  }
+  folderMeta = newMeta;
+
+  // Update active page selection
+  if (currentSitePath && currentSitePath.startsWith(oldPrefix)) {
+    currentSitePath = newPrefix + currentSitePath.slice(oldPrefix.length);
+  }
+
+  // Update expandedFolders entries
+  const expandedSnapshot = [...expandedFolders];
+  expandedFolders.clear();
+  for (const p of expandedSnapshot) {
+    if (p === folderPath) expandedFolders.add(newFolderPath);
+    else if (p.startsWith(folderPath + "/")) expandedFolders.add(newFolderPath + p.slice(folderPath.length));
+    else expandedFolders.add(p);
+  }
+
+  // Update selectedSidebarFolder
+  if (selectedSidebarFolder === folderPath) {
+    selectedSidebarFolder = newFolderPath;
+  } else if (selectedSidebarFolder && selectedSidebarFolder.startsWith(folderPath + "/")) {
+    selectedSidebarFolder = newFolderPath + selectedSidebarFolder.slice(folderPath.length);
+  }
+
+  return true;
+}
+
 // Remove folderMeta entries whose folderPath no longer corresponds to any
 // markdown file path. Call after deletes / moves.
 function pruneFolderMeta() {
@@ -2738,7 +2851,7 @@ function startRenameFolderInSidebar(folderEl, label, node, siteId) {
       alert(`Folder name must be ${MAX_NAME_LENGTH} characters or fewer.`);
       return;
     }
-    renameFolderDisplayName(node.folderPath, newName);
+    if (!renameFolder(node.folderPath, newName)) return;
     modified = true;
     updateDeployButtonState();
     await populateSidebar(siteId);
