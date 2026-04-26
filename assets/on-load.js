@@ -1128,6 +1128,17 @@ document.addEventListener("DOMContentLoaded", async function () {
       $("#commitModal").modal("show");
     });
 
+  // Pressing Enter inside the commit message field publishes the site.
+  document
+    .getElementById("commitMessage")
+    .addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.isComposing && !e.shiftKey) {
+        e.preventDefault();
+        const confirmBtn = document.getElementById("confirmCommitButton");
+        if (confirmBtn && !confirmBtn.disabled) confirmBtn.click();
+      }
+    });
+
   // Handle commit confirmation
   document
     .getElementById("confirmCommitButton")
