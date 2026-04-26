@@ -811,12 +811,27 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
   const dir = getRepoDir(siteId);
 
   try {
-    // Find existing markdown files in git and delete ones no longer in cache
+    // Find existing tracked files in git and delete ones no longer backed by
+    // an entry in the cache. This handles BOTH the .md source files AND the
+    // .html shells generated for them — otherwise renaming or moving a page
+    // (especially nested folder renames) leaves stale .html files behind in
+    // the git tree at the old path.
     const statusMatrix = await git.statusMatrix({ fs, dir });
     const cacheFileNames = new Set(markdownCache.map(item => item.fileName));
+    const cacheBaseNames = new Set(
+      markdownCache.map(item => item.fileName.replace(/\.md$/, ""))
+    );
     for (const [filepath, head] of statusMatrix) {
-      if (filepath.startsWith("public/") && filepath.endsWith(".md") && head === 1) {
+      if (head !== 1) continue;
+      if (!filepath.startsWith("public/")) continue;
+
+      if (filepath.endsWith(".md")) {
         if (!cacheFileNames.has(filepath)) {
+          await gitDeleteFile(siteId, filepath);
+        }
+      } else if (filepath.endsWith(".html") && filepath !== "public/index.html") {
+        const base = filepath.replace(/\.html$/, "");
+        if (!cacheBaseNames.has(base)) {
           await gitDeleteFile(siteId, filepath);
         }
       }
