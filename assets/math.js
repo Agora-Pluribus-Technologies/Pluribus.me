@@ -274,14 +274,26 @@
   const MD_ESCAPED_CHARS = "\\\\`*_{}\\[\\]()#+\\-.!~<>|";
   const ESCAPED_CHAR_RE = new RegExp("\\\\([" + MD_ESCAPED_CHARS + "])", "g");
 
-  // Pre-escape: double every backslash in math regions so the markdown
-  // parser preserves the original char (`\\` -> literal `\`) on its way to
-  // ProseMirror state. Other characters are left alone — the serializer's
-  // escapes on those round-trip via unescapeMathRoundTrip.
+  // Pre-escape math regions before Toast UI sees them:
+  //   1. Collapse internal newlines to spaces so the entire math body
+  //      lives on a single line in the markdown handed to the parser.
+  //      ProseMirror represents multi-line math as separate paragraphs,
+  //      and a LaTeX `\\` at the end of a line is consumed as a markdown
+  //      hard break (the second backslash gets eaten), so multi-line
+  //      `\begin{aligned}` blocks lose their row separators on round-trip.
+  //      KaTeX cares about `\\`, not source newlines, so flattening to one
+  //      line is semantically equivalent.
+  //   2. Double every backslash so the parser preserves the original
+  //      char (`\\` -> literal `\`) on its way to ProseMirror state. Other
+  //      characters are left alone — the serializer's escapes on those
+  //      round-trip via unescapeMathRoundTrip.
   function escapeMathForWysiwyg(markdown) {
     if (!markdown || typeof markdown !== "string") return markdown;
     if (markdown.indexOf("$") < 0) return markdown;
-    return walkMathRegions(markdown, body => body.replace(/\\/g, "\\\\"));
+    return walkMathRegions(markdown, body => {
+      const oneLine = body.replace(/[ \t]*\n[ \t]*/g, " ");
+      return oneLine.replace(/\\/g, "\\\\");
+    });
   }
 
   // Reverse of the WYSIWYG round-trip. Inside each math region:
