@@ -150,6 +150,4 @@ Michael Yee
 
 Agora Pluribus Technologies
 
-Mailing Address: 7244 Castor Ave #1316, Philadelphia, PA 19149
-
 Contact: [https://forms.gle/f748mnWptBjNmsJw7](https://forms.gle/f748mnWptBjNmsJw7)

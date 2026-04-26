@@ -2,15 +2,15 @@ document.addEventListener("DOMContentLoaded", async function () {
   // https://agorapages.com
   const origin = document.location.origin;
 
-  // /s/username/sitename/path/to/page.html --> /s/username/sitename
-  let basePath;
-  if (
-    document.location.origin.includes("agorapages.com") ||
-    document.location.origin.includes("pluribus-me.pages.dev")
-  ) {
-    basePath = document.location.pathname.split("/").slice(0, 4).join("/");
-  } else {
-    basePath = "";
+  // Published user sites live at /s/<owner>/<site>/...; everything else
+  // (root marketing pages like /about.html, the dev server) is treated as
+  // basePath = "". Detect by checking the actual path, not the host —
+  // matching only on host previously caused root pages to compute a junk
+  // basePath like "/about.html".
+  let basePath = "";
+  const sitePathMatch = document.location.pathname.match(/^\/s\/[^/]+\/[^/]+/);
+  if (sitePathMatch) {
+    basePath = sitePathMatch[0];
   }
 
   const pagesJson = await fetchPagesJson(origin, basePath);
@@ -449,10 +449,7 @@ function createSidebar(origin, basePath, pagesJson, foldersJson) {
   const tree = buildTreeFromPages(pagesJson, foldersJson);
 
   let currentPage = "";
-  if (
-    document.location.href.includes("agorapages.com/s") ||
-    document.location.href.includes("pluribus-me.pages.dev/s")
-  ) {
+  if (/^\/s\/[^/]+\/[^/]+\//.test(window.location.pathname)) {
     currentPage = window.location.pathname.split("/").slice(4).join("/").replace(".html", "");
   } else {
     currentPage = window.location.pathname.substring(1).replace(".html", "");
@@ -531,12 +528,10 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
     breaks: true,
   });
 
-  // https://agorapages.com/s/username/sitename/path/to/page.html --> path/to/page
+  // /s/<owner>/<site>/path/to/page.html -> path/to/page; root pages
+  // (e.g. /about.html on the marketing site) -> about
   let pathName;
-  if (
-    document.location.href.includes("agorapages.com/s") ||
-    document.location.href.includes("pluribus-me.pages.dev/s")
-  ) {
+  if (/^\/s\/[^/]+\/[^/]+\//.test(window.location.pathname)) {
     pathName = window.location.pathname
       .split("/")
       .slice(4)
@@ -603,7 +598,6 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
       // the file). Imported pages can carry frontmatter fields like `title`,
       // `date`, `tags`, etc.; we don't render those as page content.
       text = stripFrontmatter(text);
-      console.log(text);
       if (typeof AgoraWikilinks !== "undefined") {
         const pages = (pagesJson || []).map(p => ({
           fileName: p.fileName,
