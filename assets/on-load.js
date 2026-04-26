@@ -2961,37 +2961,40 @@ function renderFileNode(container, node, depth, siteId) {
   const actions = document.createElement("span");
   actions.classList.add("sidebar-tree-actions");
 
-  if (!isHomePage) {
-    const renameBtn = document.createElement("button");
-    renameBtn.classList.add("sidebar-tree-action-btn");
-    renameBtn.textContent = "✎";
-    renameBtn.title = "Rename";
-    renameBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      startRenameInSidebar(fileEl, node, siteId);
-    });
-    actions.appendChild(renameBtn);
+  // Rename is allowed on every page including the homepage — the slug
+  // changes but the page stays at position 0 so the published-site URL
+  // (`/`) keeps resolving to it.
+  const renameBtn = document.createElement("button");
+  renameBtn.classList.add("sidebar-tree-action-btn");
+  renameBtn.textContent = "✎";
+  renameBtn.title = "Rename";
+  renameBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    startRenameInSidebar(fileEl, node, siteId);
+  });
+  actions.appendChild(renameBtn);
 
-    if (markdownCache.length > 1) {
-      const deleteBtn = document.createElement("button");
-      deleteBtn.classList.add("sidebar-tree-action-btn", "delete");
-      deleteBtn.textContent = "×";
-      deleteBtn.title = "Delete";
-      deleteBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (confirm(`Delete "${node.name}"?`)) {
-          const wasSelected = currentSitePath === node.path;
-          removeCacheByFileName(node.path);
-          modified = true;
-          updateDeployButtonState();
-          await populateSidebar(siteId);
-          if (wasSelected && markdownCache.length > 0) {
-            selectSidebarPage(markdownCache[0].fileName);
-          }
+  // Delete remains blocked on the homepage so the site always has a
+  // landing page; non-home pages still respect the "last page" guard.
+  if (!isHomePage && markdownCache.length > 1) {
+    const deleteBtn = document.createElement("button");
+    deleteBtn.classList.add("sidebar-tree-action-btn", "delete");
+    deleteBtn.textContent = "×";
+    deleteBtn.title = "Delete";
+    deleteBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete "${node.name}"?`)) {
+        const wasSelected = currentSitePath === node.path;
+        removeCacheByFileName(node.path);
+        modified = true;
+        updateDeployButtonState();
+        await populateSidebar(siteId);
+        if (wasSelected && markdownCache.length > 0) {
+          selectSidebarPage(markdownCache[0].fileName);
         }
-      });
-      actions.appendChild(deleteBtn);
-    }
+      }
+    });
+    actions.appendChild(deleteBtn);
   }
 
   fileEl.appendChild(icon);
@@ -3034,15 +3037,17 @@ function selectSidebarPage(fileName) {
   updateDeployButtonState();
 }
 
-// True for the root-level `home.md` or `index.md` cache entry — these back
-// the published site's "/" URL and are protected from rename/move/delete in
-// the sidebar.
+// True for whichever cache entry sits at position 0 of pages.json — that's
+// the page the published-site router serves at "/", regardless of slug.
+// Protected from rename/move/delete in the sidebar so the homepage URL
+// can't disappear out from under the site.
 function isHomePagePath(path) {
-  return path === "public/home.md" || path === "public/index.md";
+  if (!path) return false;
+  if (typeof markdownCache === "undefined" || !markdownCache.length) return false;
+  return path === markdownCache[0].fileName;
 }
 
 function startRenameInSidebar(fileEl, node, siteId) {
-  if (isHomePagePath(node.path)) return;
   const cacheItem = getCacheByFileName(node.path);
   if (!cacheItem) return;
 
