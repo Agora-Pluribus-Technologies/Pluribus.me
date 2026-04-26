@@ -816,7 +816,7 @@ function startInlineEdit(index, clickEvent) {
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
-      ['table', 'link'],
+      ['table', 'link', 'code', 'codeblock'],
       [{
         name: 'image',
         tooltip: 'Insert image',
@@ -1684,7 +1684,7 @@ function showBlogPostEditModal(content, displayName, callback) {
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
-      ['table', 'link'],
+      ['table', 'link', 'code', 'codeblock'],
       [{
         name: 'image',
         tooltip: 'Insert image',

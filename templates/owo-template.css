@@ -4,7 +4,7 @@
     padding: 0.5rem 1rem;
     border-left: 3px solid var(--accent-color, gold);
     background-color: rgba(255, 255, 255, 0.04);
-    color: var(--text-secondary, #ccc);
+    color: var(--text-primary, #ccc);
     font-style: italic;
     border-radius: 0 4px 4px 0;
 }
@@ -28,8 +28,8 @@
 
 body.light-mode .e-content blockquote {
     background-color: rgba(0, 0, 0, 0.04);
-    color: var(--text-secondary-alt, #444);
-    border-left-color: var(--accent-color-alt, #b8860b);
+    color: var(--text-secondary, #444);
+    border-left-color: var(--accent-color, #b8860b);
 }
 
 body.light-mode .e-content blockquote blockquote {
@@ -467,7 +467,7 @@ td {
 }
 
 th {
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-primary);
     font-weight: bold;
     color: var(--text-primary);
     transition: background-color 0.3s ease, color 0.3s ease;
