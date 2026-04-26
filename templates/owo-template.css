@@ -1,3 +1,85 @@
+/* Blockquotes */
+.e-content blockquote {
+    margin: 1rem 0;
+    padding: 0.5rem 1rem;
+    border-left: 3px solid var(--accent-color, gold);
+    background-color: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary, #ccc);
+    font-style: italic;
+    border-radius: 0 4px 4px 0;
+}
+
+.e-content blockquote p {
+    margin: 0.4rem 0;
+}
+
+.e-content blockquote p:first-child {
+    margin-top: 0;
+}
+
+.e-content blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+.e-content blockquote blockquote {
+    margin: 0.6rem 0;
+    border-left-color: var(--text-muted, #888);
+}
+
+body.light-mode .e-content blockquote {
+    background-color: rgba(0, 0, 0, 0.04);
+    color: var(--text-secondary-alt, #444);
+    border-left-color: var(--accent-color-alt, #b8860b);
+}
+
+body.light-mode .e-content blockquote blockquote {
+    border-left-color: var(--text-muted-alt, #666);
+}
+
+/* Inline code */
+.e-content code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em;
+    padding: 0.15em 0.35em;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    color: var(--text-primary, #fff);
+}
+
+body.light-mode .e-content code {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: var(--text-primary-alt, #1a1a1a);
+}
+
+/* Fenced code blocks (skip the special embed / attachment / link-button
+   blocks decodeEmbeds() rewrites — those are handled separately). */
+.e-content pre {
+    margin: 1rem 0;
+    padding: 0.85rem 1rem;
+    background-color: var(--bg-tertiary, #252525);
+    color: var(--text-primary, #fff);
+    border: 1px solid var(--border-color, #404040);
+    border-radius: 6px;
+    overflow-x: auto;
+    line-height: 1.5;
+    font-size: 0.9rem;
+}
+
+.e-content pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+    color: inherit;
+    white-space: pre;
+}
+
+body.light-mode .e-content pre {
+    background-color: var(--bg-tertiary-alt, #ffffff);
+    color: var(--text-primary-alt, #1a1a1a);
+    border-color: var(--border-color-alt, #ccc);
+}
+
 /* Backlinks ("Referenced by") */
 .backlinks-section {
     margin-top: 3rem;

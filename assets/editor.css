@@ -1963,6 +1963,50 @@ nav {
   margin-top: 0;
 }
 
+.block-preview .e-content blockquote {
+  margin: 0.75rem 0;
+  padding: 0.5rem 1rem;
+  border-left: 3px solid var(--link-color, #3a86ff);
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary, #ccc);
+  font-style: italic;
+  border-radius: 0 4px 4px 0;
+}
+
+.block-preview .e-content blockquote p {
+  margin: 0.4rem 0;
+}
+
+.block-preview .e-content blockquote p:first-child { margin-top: 0; }
+.block-preview .e-content blockquote p:last-child { margin-bottom: 0; }
+
+.block-preview .e-content code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+  padding: 0.15em 0.35em;
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+.block-preview .e-content pre {
+  margin: 0.75rem 0;
+  padding: 0.85rem 1rem;
+  background-color: var(--bg-tertiary, #0a0a0a);
+  border: 1px solid var(--border-color, #404040);
+  border-radius: 6px;
+  overflow-x: auto;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.block-preview .e-content pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  white-space: pre;
+}
+
 .block-preview .embed-container {
   text-align: center;
 }

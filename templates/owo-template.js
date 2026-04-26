@@ -348,7 +348,7 @@ function renderBacklinksSection(backlinksForPage, origin, basePath) {
 
   const heading = document.createElement("h3");
   heading.className = "backlinks-heading";
-  heading.textContent = "Referenced by";
+  heading.textContent = "Links to this page";
   section.appendChild(heading);
 
   const list = document.createElement("ul");
@@ -645,7 +645,7 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
 
   mainContent.appendChild(panel);
 
-  // Append "Referenced by" section if there are any backlinks for this page
+  // Append "Links to this page" section if there are any backlinks for this page
   try {
     const backlinks = await fetchWikilinksJson(origin, basePath);
     const refs = backlinks && backlinks[pathName];
