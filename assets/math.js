@@ -307,7 +307,7 @@
     return walkMathRegions(markdown, unescapeBody);
   }
 
-  function unescapeBody(body) {
+  function unescapeBody(body, displayMode) {
     // 1. Stash escaped backslashes (`\\`) as a sentinel so step 2 leaves them alone.
     // 2. Strip serializer-added markdown escapes (`\X` -> `X`).
     // 3. Restore the sentinel as a single `\`.
@@ -315,11 +315,26 @@
     //    a markdown `\\`-at-end-of-line hard break into a <br> when
     //    serializing the WYSIWYG state back to markdown; without this,
     //    multi-line `\begin{aligned}` blocks collapse onto a single row.
-    return body
+    const recovered = body
       .replace(/\\\\/g, " ")
       .replace(ESCAPED_CHAR_RE, "$1")
       .replace(/ /g, "\\")
       .replace(/<br\s*\/?>/gi, "\\\\");
+    return displayMode ? reflowDisplayBody(recovered) : recovered;
+  }
+
+  // Re-emit display-math bodies in canonical multi-line form so the saved
+  // markdown stays readable after a Toast UI WYSIWYG round-trip (which
+  // collapses everything onto a single line). Newlines go after each
+  // `\begin{...}`, before each `\end{...}`, and after each `\\` row break.
+  function reflowDisplayBody(body) {
+    let s = body.trim().replace(/[ \t]+/g, " ");
+    s = s.replace(/(\\begin\{[^}]+\}) */g, "$1\n");
+    s = s.replace(/ *(\\end\{[^}]+\})/g, "\n$1");
+    s = s.replace(/\\\\ */g, "\\\\\n");
+    // Collapse any accidental triple-newline runs from adjacent rules.
+    s = s.replace(/\n{2,}/g, "\n");
+    return "\n" + s.trim() + "\n";
   }
 
   // Apply `transform` only to the body of `$...$` and `$$...$$` regions,
@@ -361,9 +376,9 @@
 
   function transformMath(text, transform) {
     const displayRe = new RegExp(DISPLAY_REGEX_SRC, "g");
-    let after = text.replace(displayRe, (_, body) => "$$" + transform(body) + "$$");
+    let after = text.replace(displayRe, (_, body) => "$$" + transform(body, true) + "$$");
     const inlineRe = new RegExp(INLINE_REGEX_SRC, "g");
-    after = after.replace(inlineRe, (_, body) => "$" + transform(body) + "$");
+    after = after.replace(inlineRe, (_, body) => "$" + transform(body, false) + "$");
     return after;
   }
 
