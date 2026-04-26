@@ -115,9 +115,7 @@ async function pollHistoryForConflicts(siteId) {
   if (siteId !== currentSiteId) return;
   if (conflictResolutionInFlight) return;
   
-  console.log("current shortSha:", lastSeenShortSha, "author:", lastSeenAuthor);
   const head = await fetchUpstreamHead(siteId);
-  console.log("Latest shortSha:", head ? head.shortSha : null, "author:", head ? head.author : null);
   if (!head || !lastSeenShortSha) return;
   if (head.shortSha === lastSeenShortSha) return;
 

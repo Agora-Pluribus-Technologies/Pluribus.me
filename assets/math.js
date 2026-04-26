@@ -130,8 +130,12 @@
 
   function renderTex(tex, displayMode) {
     if (typeof window === "undefined" || !window.katex) return null;
+    // Collapse blank lines inside the math body. KaTeX rejects them as
+    // "paragraph break in math mode", and Toast UI's WYSIWYG round-trip
+    // tends to insert them between every line of a multi-line $$…$$ block.
+    const normalized = tex.replace(/\n[\t ]*\n+/g, "\n");
     try {
-      return window.katex.renderToString(tex, {
+      return window.katex.renderToString(normalized, {
         displayMode: !!displayMode,
         throwOnError: true,
         output: "htmlAndMathml",
