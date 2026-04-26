@@ -1,23 +1,16 @@
-# About this tool
-
-AgoraPages is a mobile-friendly web app that allows users to create and edit webpages easily for free. Optionally, the user can add collaborators to provide shared access to editable websites.
+# About AgoraPages
+AgoraPages is a free, mobile-friendly tool for publishing interconnected writing on the web. Write in Markdown, link your pages together, and put your work somewhere it will stay. Sites can be solo or shared; invite collaborators to work on a site together, wiki-style.
 
 ---
 
 ## The Goal
-The goal of AgoraPages is to democratize the open web by lowering the barrier to entry for creative and non-technical people to create an online presence on the internet.
+AgoraPages is a home for writing that lasts. The goal is to give writers, researchers, and thinkers a place to publish their work where it stays connected, findable, and theirs without subscriptions, without setup, and without lock-in.
 
 ---
 
 ## How it works
-When creating an Agora site, this app uses a Cloudflare Pages function to dynamically link to the user's files in Cloudflare R2 storage.
+When you create a site on AgoraPages, your writing is stored as plain Markdown files, the same simple text format used by Wikipedia, Reddit, and most modern note-taking apps. Your files live on a fast global network and are loaded into your site whenever someone visits.
 
-This distributed model is inspired by a tool created in Taiwan's g0v movement called [hackfoldr](https://github.com/hackfoldr/hackfoldr). Similar to hackfoldr, AgoraPages dynamically links various files when the main page is accessed.
+This approach is inspired by hackfoldr, a tool created by Taiwan's g0v civic technology movement. The idea is the same: a website assembled on the fly from a collection of files you own, rather than locked inside a database somewhere.
 
-An Agora site is made up of JSON, markdown, and image files:
-
-* site.json - top-level site settings
-* pages.json - a list of pages, each of which has a corresponding markdown file
-* images.json - a list of images, each of which has a corresponding image file
-
-When an Agora site is accessed, these JSON files are fetched, and the contents of the site are fetched and rendered dynamically.
+Your content is yours, in formats you can read and edit anywhere. If you ever want to leave AgoraPages, you can take everything with you — no export tool needed.
