@@ -1,29 +1,37 @@
 // Folder-import for AgoraPages "pages" sites.
 //
-// Walks a dropped folder (e.g. an Obsidian vault), filters to .md files, and
-// produces an array of pages ready to seed a new site:
+// Walks a dropped folder (e.g. an Obsidian vault), filters to .md files +
+// images, and produces { pages, assets, skipped, errors } ready to seed a
+// new site:
 //
-//   [{
-//     fileName:    "research/transformers",   // pages.json slug, no .md
-//     displayName: "Transformers",            // sidebar label
-//     content:     "<frontmatter-stripped markdown>",
-//     createdAt:   ISO timestamp,
-//     modifiedAt:  ISO timestamp,
-//   }, ...]
+//   pages: [{ fileName, displayName, content, createdAt, modifiedAt }, ...]
+//   assets: [{ filename, base64, contentType }, ...]   // WebP-compressed
 //
 // Currently in scope:
 //   - Recursive walk of dropped folder via DataTransferItem.webkitGetAsEntry
-//   - .md file ingestion only; other extensions skipped silently
+//   - .md file ingestion
+//   - Image ingestion: png/jpg/gif/webp/avif/heic/bmp/tiff are run through
+//     the editor's WebP pipeline (via window.processImage) and uploaded to
+//     public/attachments/<slug>.webp. SVGs pass through untouched.
+//   - Standard `![alt](path)` and Obsidian `![[file]]` image refs are
+//     resolved against the imported file set (path-aware, with fallback to
+//     basename-only) and rewritten to point at the new attachment URLs.
 //   - .obsidian/, .git/, .trash/ and other dotfolders ignored
 //   - Filenames with spaces produce kebab-case slugs + spaced display names
 //   - YAML frontmatter stripped from content; `title` field used as displayName when present
 //
 // Deferred (handled in follow-up work):
-//   - Image/attachment ingestion (resize to WebP, rewrite paths)
 //   - `[text](./page.md)` -> wikilink rewriting
 
 (function (root) {
   const MARKDOWN_EXTENSIONS = [".md", ".markdown"];
+  // Raster image formats run through the WebP encoder. SVG is treated as
+  // its own asset class — uploaded as-is without conversion.
+  const RASTER_IMAGE_EXTENSIONS = [
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif",
+    ".heic", ".heif", ".bmp", ".tif", ".tiff",
+  ];
+  const SVG_EXTENSION = ".svg";
   // Folders never worth importing (Obsidian/Vault metadata, VCS, OS junk).
   const IGNORED_DIR_NAMES = new Set([
     ".obsidian",
@@ -39,6 +47,15 @@
   function isMarkdownFile(name) {
     const lower = name.toLowerCase();
     return MARKDOWN_EXTENSIONS.some(ext => lower.endsWith(ext));
+  }
+
+  function isRasterImageFile(name) {
+    const lower = name.toLowerCase();
+    return RASTER_IMAGE_EXTENSIONS.some(ext => lower.endsWith(ext));
+  }
+
+  function isSvgFile(name) {
+    return name.toLowerCase().endsWith(SVG_EXTENSION);
   }
 
   function shouldIgnoreDir(name) {
@@ -156,14 +173,190 @@
     }));
   }
 
+  // Asset helpers — image ingestion + path-aware reference resolution.
+
+  function attachmentSlug(relativePath, ext, seen) {
+    const base = relativePath.split("/").pop() || "image";
+    const stem = base.replace(/\.[^.]+$/, "");
+    let slug = stem
+      .toLowerCase()
+      .replace(/['"`]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!slug) slug = "image";
+    let candidate = `${slug}${ext}`;
+    let n = 2;
+    while (seen.has(candidate)) {
+      candidate = `${slug}-${n}${ext}`;
+      n++;
+    }
+    seen.add(candidate);
+    return candidate;
+  }
+
+  // Run a raster image through the editor's WebP pipeline. Falls back to
+  // the original blob if the global processor isn't available (e.g. tests).
+  async function processImageBlob(file) {
+    const fn = (typeof window !== "undefined" && window.processImage)
+      || (typeof processImage !== "undefined" ? processImage : null);
+    if (typeof fn === "function") return await fn(file);
+    return file;
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result || "";
+        const idx = String(result).indexOf(",");
+        resolve(idx >= 0 ? String(result).slice(idx + 1) : "");
+      };
+      reader.onerror = () => reject(reader.error || new Error("blobToBase64 failed"));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // Normalize a path: drop leading slashes, resolve "." and ".." segments.
+  function normalizeAssetPath(path) {
+    const out = [];
+    for (const seg of String(path || "").split("/")) {
+      if (seg === "" || seg === ".") continue;
+      if (seg === "..") { if (out.length) out.pop(); continue; }
+      out.push(seg);
+    }
+    return out.join("/");
+  }
+
+  // Strip URL fragment, query, and percent-encoding so we can compare a
+  // markdown reference to a vault-relative file path.
+  function decodeRefPath(ref) {
+    let s = String(ref || "").trim();
+    s = s.split("#")[0].split("?")[0];
+    if (!s) return "";
+    try { return decodeURIComponent(s); } catch { return s; }
+  }
+
+  function isExternalUrl(ref) {
+    return /^(https?:|data:|mailto:|file:)/i.test(String(ref || "").trim());
+  }
+
+  // Pick the imported image that a markdown reference points at. Tries
+  // path-aware candidates first (vault root, sibling folder, the common
+  // `attachments/` `assets/` `images/` siblings), falling back to a
+  // basename-only match if none of the candidates landed.
+  function resolveAssetRef(ref, mdRelativePath, assetIndex, basenameIndex) {
+    if (!ref || isExternalUrl(ref)) return null;
+    const decoded = decodeRefPath(ref);
+    if (!decoded) return null;
+
+    const mdDir = mdRelativePath.includes("/")
+      ? mdRelativePath.substring(0, mdRelativePath.lastIndexOf("/"))
+      : "";
+    const base = decoded.split("/").pop();
+
+    const candidates = [];
+    if (decoded.startsWith("/")) {
+      candidates.push(normalizeAssetPath(decoded));
+    } else {
+      candidates.push(normalizeAssetPath(mdDir ? `${mdDir}/${decoded}` : decoded));
+      if (base) {
+        if (mdDir) {
+          candidates.push(normalizeAssetPath(`${mdDir}/attachments/${base}`));
+          candidates.push(normalizeAssetPath(`${mdDir}/assets/${base}`));
+          candidates.push(normalizeAssetPath(`${mdDir}/images/${base}`));
+        }
+        candidates.push(`attachments/${base}`);
+        candidates.push(`assets/${base}`);
+        candidates.push(`images/${base}`);
+      }
+    }
+    for (const candidate of candidates) {
+      const slug = assetIndex.get(candidate.toLowerCase());
+      if (slug) return slug;
+    }
+    if (base) {
+      const slug = basenameIndex.get(base.toLowerCase());
+      if (slug) return slug;
+    }
+    return null;
+  }
+
+  // Rewrite both standard `![alt](url)` and Obsidian `![[file]]` image
+  // references in a markdown body. Skips fenced code blocks and inline code
+  // spans so embedded refs there stay literal.
+  function rewriteImageRefs(content, mdRelativePath, assetIndex, basenameIndex, attachmentsUrl) {
+    if (!content) return content;
+    const fenceRe = /^(```[\s\S]*?^```$|~~~[\s\S]*?^~~~$)/gm;
+    const out = [];
+    let last = 0;
+    let m;
+    while ((m = fenceRe.exec(content)) !== null) {
+      if (m.index > last) out.push(transformOutsideCode(content.slice(last, m.index)));
+      out.push(m[0]);
+      last = m.index + m[0].length;
+    }
+    if (last < content.length) out.push(transformOutsideCode(content.slice(last)));
+    return out.join("");
+
+    function transformOutsideCode(text) {
+      const codeRe = /(`+)([^`\n]+?)\1/g;
+      let result = "";
+      let l = 0;
+      let cm;
+      while ((cm = codeRe.exec(text)) !== null) {
+        result += transform(text.slice(l, cm.index));
+        result += cm[0];
+        l = cm.index + cm[0].length;
+      }
+      result += transform(text.slice(l));
+      return result;
+    }
+
+    function transform(text) {
+      // Standard markdown: ![alt](url "optional title")
+      text = text.replace(
+        /!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"([^"]*)")?\s*\)/g,
+        function (whole, alt, url, title) {
+          const slug = resolveAssetRef(url, mdRelativePath, assetIndex, basenameIndex);
+          if (!slug) return whole;
+          const newUrl = `${attachmentsUrl}/${slug}`;
+          return title ? `![${alt}](${newUrl} "${title}")` : `![${alt}](${newUrl})`;
+        }
+      );
+      // Obsidian image embed: ![[file]] or ![[file|alias]]
+      text = text.replace(
+        /!\[\[([^|\]\n]+?)(?:\|([^\]\n]*))?\]\]/g,
+        function (whole, ref, alias) {
+          const slug = resolveAssetRef(ref, mdRelativePath, assetIndex, basenameIndex);
+          if (!slug) return whole;
+          const cleanAlias = (alias || "").trim();
+          const altBase = ref.split("/").pop().replace(/\.[^.]+$/, "");
+          const alt = cleanAlias || altBase || "";
+          return `![${alt}](${attachmentsUrl}/${slug})`;
+        }
+      );
+      return text;
+    }
+  }
+
   // Public entry point. Accepts either a DataTransfer (drag) or a FileList
   // (input[type=file] webkitdirectory). Returns:
-  //   { pages, skipped, errors }
+  //   { pages, assets, skipped, errors }
   // where:
   //   pages   = array of page objects ready for site creation
-  //   skipped = count of non-markdown files silently ignored
-  //   errors  = per-file errors collected during read/parse
-  async function importFromDataTransfer(dataTransferOrFileList) {
+  //   assets  = array of { filename, base64, contentType } for R2 upload
+  //   skipped = count of non-markdown / non-image files silently ignored
+  //   errors  = per-file errors collected during read/parse/encode
+  //
+  // Options:
+  //   attachmentsUrl  Absolute URL prefix used in rewritten image refs.
+  //                   Defaults to "attachments" (vault-relative); pass
+  //                   "/s/owner/site/attachments" to match the editor's
+  //                   absolute-URL convention.
+  async function importFromDataTransfer(dataTransferOrFileList, options) {
+    options = options || {};
+    const attachmentsUrl = options.attachmentsUrl || "attachments";
+
     let entries = [];
     const errors = [];
 
@@ -192,23 +385,60 @@
 
     entries = stripCommonRoot(entries);
 
+    // Bucket entries: markdown, raster image, svg, ignored.
     let skipped = 0;
+    const mdEntries = [];
+    const imageEntries = [];
+
+    for (const entry of entries) {
+      const baseName = entry.relativePath.split("/").pop() || entry.file.name;
+      const parents = entry.relativePath.split("/").slice(0, -1);
+      if (parents.some(shouldIgnoreDir)) { skipped++; continue; }
+      if (isMarkdownFile(baseName)) mdEntries.push(entry);
+      else if (isRasterImageFile(baseName) || isSvgFile(baseName)) imageEntries.push(entry);
+      else skipped++;
+    }
+
+    // Process images first so the markdown pass can rewrite refs to point
+    // at the new attachment slugs.
+    const assets = [];
+    const slugByOriginalPath = new Map();   // vaultPathLower -> slug
+    const slugByBasename = new Map();       // basenameLower  -> slug
+    const usedSlugs = new Set();
+
+    for (const { relativePath, file } of imageEntries) {
+      try {
+        let blob;
+        let contentType;
+        let ext;
+        if (isSvgFile(relativePath)) {
+          blob = file;
+          contentType = "image/svg+xml";
+          ext = ".svg";
+        } else {
+          blob = await processImageBlob(file);
+          contentType = "image/webp";
+          ext = ".webp";
+        }
+        const filename = attachmentSlug(relativePath, ext, usedSlugs);
+        const base64 = await blobToBase64(blob);
+        assets.push({ filename, base64, contentType });
+        slugByOriginalPath.set(relativePath.toLowerCase(), filename);
+        const baseLower = (relativePath.split("/").pop() || "").toLowerCase();
+        if (baseLower && !slugByBasename.has(baseLower)) {
+          slugByBasename.set(baseLower, filename);
+        }
+      } catch (e) {
+        errors.push({ path: relativePath, message: String(e) });
+      }
+    }
+
+    // Process markdown.
     const pages = [];
     const seenSlugs = new Map(); // slug -> count, for de-duplicating collisions
 
-    for (const { relativePath, file } of entries) {
+    for (const { relativePath, file } of mdEntries) {
       const baseName = relativePath.split("/").pop() || file.name;
-      if (!isMarkdownFile(baseName)) {
-        skipped++;
-        continue;
-      }
-      // Skip files inside ignored dirs that slipped through (input[type=file]
-      // doesn't let us pre-filter directories).
-      const parts = relativePath.split("/");
-      if (parts.slice(0, -1).some(shouldIgnoreDir)) {
-        skipped++;
-        continue;
-      }
 
       let text;
       try {
@@ -217,6 +447,16 @@
         errors.push({ path: relativePath, message: String(e) });
         continue;
       }
+
+      // Rewrite image refs against the imported asset set BEFORE stripping
+      // frontmatter, so refs inside YAML are still seen if relevant.
+      text = rewriteImageRefs(
+        text,
+        relativePath,
+        slugByOriginalPath,
+        slugByBasename,
+        attachmentsUrl
+      );
 
       const { content, title } = extractFrontmatter(text);
       const displayName = title || fileNameToDisplayName(baseName);
@@ -256,7 +496,7 @@
       pages.unshift(home);
     }
 
-    return { pages, skipped, errors };
+    return { pages, assets, skipped, errors };
   }
 
   root.AgoraFolderImport = {
@@ -266,6 +506,8 @@
     extractFrontmatter,
     fileNameToDisplayName,
     isMarkdownFile,
+    isRasterImageFile,
+    isSvgFile,
     shouldIgnoreDir,
   };
 })(typeof window !== "undefined" ? window : globalThis);

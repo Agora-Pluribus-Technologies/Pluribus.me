@@ -331,8 +331,12 @@ function guessContentType(filename) {
 
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
-  const { siteName, repo, owner, siteType, importedPages } = siteSettings;
+  const { siteName, repo, owner, siteType, importedPages, importedAssets } = siteSettings;
   const isBlog = siteType === "blog";
+  const assets = Array.isArray(importedAssets) ? importedAssets : [];
+  // Manifest of attachment basenames so the editor's image gallery picks
+  // up imported images on first load.
+  const imagesManifest = JSON.stringify(assets.map(a => a.filename));
 
   const siteJson = {
     siteName: siteName || repo || "Untitled Site",
@@ -394,7 +398,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   // Initialize git repository and create initial commit with content
   await gitInit(siteId);
   await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pagesJson));
-  await gitWriteFile(siteId, "public/images.json", "[]");
+  await gitWriteFile(siteId, "public/images.json", imagesManifest);
   if (hasImport) {
     for (const page of pagesToWrite) {
       await gitWriteFile(siteId, `public/${page.fileName}.md`, page.content);
@@ -448,7 +452,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     },
     {
       filePath: "public/images.json",
-      content: "[]",
+      content: imagesManifest,
       contentType: "application/json",
     },
     {
@@ -505,6 +509,17 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
         contentType: "text/html",
       });
     }
+  }
+
+  // Imported image attachments (already WebP-encoded by folder-import.js).
+  // Each asset carries pre-base64-encoded binary content.
+  for (const asset of assets) {
+    files.push({
+      filePath: attachmentR2Path(asset.filename),
+      content: asset.base64,
+      contentType: asset.contentType || "image/webp",
+      encoding: "base64",
+    });
   }
 
   const result = await saveFilesToR2(siteId, files);
