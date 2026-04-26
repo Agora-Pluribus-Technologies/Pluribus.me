@@ -810,10 +810,14 @@ function createFooter(origin, basePath, siteName) {
 
 }
 
-// Theme toggle functionality
+// Theme toggle functionality. Default to the OS color-scheme preference
+// when the visitor hasn't explicitly chosen a theme yet.
 function initTheme() {
-  const savedTheme = localStorage.getItem("pluribus-site-theme") || "dark";
-  if (savedTheme === "light") {
+  const stored = localStorage.getItem("pluribus-site-theme");
+  const prefersLight = window.matchMedia
+    && window.matchMedia("(prefers-color-scheme: light)").matches;
+  const isLight = stored ? stored === "light" : prefersLight;
+  if (isLight) {
     document.body.classList.add("light-mode");
     updateThemeIcon(true);
   }
