@@ -811,30 +811,41 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
   const dir = getRepoDir(siteId);
 
   try {
-    // Find existing tracked files in git and delete ones no longer backed by
-    // an entry in the cache. This handles BOTH the .md source files AND the
-    // .html shells generated for them — otherwise renaming or moving a page
-    // (especially nested folder renames) leaves stale .html files behind in
-    // the git tree at the old path.
-    const statusMatrix = await git.statusMatrix({ fs, dir });
+    // Find every tracked file (in HEAD AND in the current index) and delete
+    // the ones no longer backed by a cache entry. This handles both .md
+    // sources and the .html shells generated alongside them — otherwise a
+    // nested-folder rename leaves stale .html files behind, and any file
+    // staged in the index this session (head=0, stage=2) wouldn't be picked
+    // up by a HEAD-only check. Unlink the file first, then remove it from
+    // the index, so a stale index entry can't outlive the working tree.
+    let tracked;
+    try {
+      const [headFiles, indexFiles] = await Promise.all([
+        git.listFiles({ fs, dir, ref: "HEAD" }).catch(() => []),
+        git.listFiles({ fs, dir }).catch(() => []),
+      ]);
+      tracked = new Set([...headFiles, ...indexFiles]);
+    } catch (e) {
+      tracked = new Set();
+    }
     const cacheFileNames = new Set(markdownCache.map(item => item.fileName));
     const cacheBaseNames = new Set(
       markdownCache.map(item => item.fileName.replace(/\.md$/, ""))
     );
-    for (const [filepath, head] of statusMatrix) {
-      if (head !== 1) continue;
+    for (const filepath of tracked) {
       if (!filepath.startsWith("public/")) continue;
 
+      let isOrphan = false;
       if (filepath.endsWith(".md")) {
-        if (!cacheFileNames.has(filepath)) {
-          await gitDeleteFile(siteId, filepath);
-        }
+        isOrphan = !cacheFileNames.has(filepath);
       } else if (filepath.endsWith(".html") && filepath !== "public/index.html") {
-        const base = filepath.replace(/\.html$/, "");
-        if (!cacheBaseNames.has(base)) {
-          await gitDeleteFile(siteId, filepath);
-        }
+        isOrphan = !cacheBaseNames.has(filepath.replace(/\.html$/, ""));
       }
+      if (!isOrphan) continue;
+
+      const fullPath = `${dir}/${filepath}`;
+      try { await pfs.unlink(fullPath); } catch (_) { /* may already be gone */ }
+      try { await git.remove({ fs, dir, filepath }); } catch (_) { /* may not be staged */ }
     }
 
     // Write all markdown files
