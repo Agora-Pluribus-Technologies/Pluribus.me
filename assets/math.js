@@ -291,7 +291,7 @@
     if (!markdown || typeof markdown !== "string") return markdown;
     if (markdown.indexOf("$") < 0) return markdown;
     return walkMathRegions(markdown, body => {
-      const oneLine = body.replace(/[ \t]*\n[ \t]*/g, " ");
+      const oneLine = body.replace(/\s+/g, " ");
       return oneLine.replace(/\\/g, "\\\\");
     });
   }
@@ -303,7 +303,7 @@
   // The two-pass approach keeps `\\` from being mistaken for `\X`.
   function unescapeMathRoundTrip(markdown) {
     if (!markdown || typeof markdown !== "string") return markdown;
-    if (markdown.indexOf("\\") < 0) return markdown;
+    if (markdown.indexOf("$") < 0) return markdown;
     return walkMathRegions(markdown, unescapeBody);
   }
 

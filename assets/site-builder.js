@@ -438,7 +438,13 @@ function renderPanelPreview(markdown) {
 function readMarkdownFromEditor(editor) {
   if (!editor) return '';
   let md = editor.getMarkdown();
-  if (typeof AgoraMath !== "undefined") {
+  // Only undo the WYSIWYG-round-trip escapes when the editor is actually in
+  // WYSIWYG mode. In markdown mode the user is typing raw text, so escape
+  // sequences like `\{` in their LaTeX are literal and must be preserved.
+  const inWysiwyg = typeof editor.isWysiwygMode === "function"
+    ? editor.isWysiwygMode()
+    : true;
+  if (inWysiwyg && typeof AgoraMath !== "undefined") {
     md = AgoraMath.unescapeMathRoundTrip(md);
   }
   return md.replace(/<br\s*\/?>/gi, '').trim();
@@ -866,14 +872,26 @@ function startInlineEdit(index, clickEvent) {
 
   const editorEl = preview.querySelector('.inline-panel-editor');
 
+  // Force markdown mode for math content. Toast UI's WYSIWYG parser/serializer
+  // mangles LaTeX in non-recoverable ways (consumes `\\` line breaks as
+  // markdown hard breaks, collapses multi-line `\begin{aligned}` blocks into
+  // a single row, drops markdown-spec backslash escapes inside math, etc.).
+  // Editing math as raw markdown sidesteps all of that and is the natural
+  // workflow for LaTeX anyway.
+  const hasMath = typeof AgoraMath !== "undefined" && AgoraMath.containsMath(block.content);
+  const initialEditType = hasMath ? 'markdown' : 'wysiwyg';
+  // Pre-escape only matters for WYSIWYG mode — markdown mode shows the source
+  // verbatim, so we hand it the original block content unchanged.
+  const initialValue = hasMath ? block.content : escapeMathForEditor(block.content);
+
   // Initialize ToastUI editor inline
   panelEditor = new toastui.Editor({
     el: editorEl,
-    initialEditType: 'wysiwyg',
+    initialEditType: initialEditType,
     previewStyle: 'vertical',
     theme: 'dark',
     height: '300px',
-    initialValue: escapeMathForEditor(block.content),
+    initialValue: initialValue,
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
