@@ -704,9 +704,11 @@ async function deployChanges(siteId) {
           c.content,
         ])
       );
+      const folders = typeof folderMeta !== "undefined" ? folderMeta : null;
       const backlinks = AgoraWikilinks.buildBacklinkIndex(
         indexablePages,
-        (fileName) => contentByFileName.get(fileName)
+        (fileName) => contentByFileName.get(fileName),
+        folders
       );
       files.push({
         filePath: "public/wikilinks.json",

@@ -2616,7 +2616,7 @@ function renameFolder(folderPath, newDisplayName) {
   // references continue to point at the renamed pages.
   if (typeof AgoraWikilinks !== "undefined" && renameMap.size > 0) {
     const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
-    AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+    AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList, folderMeta);
   }
 
   // Re-key folderMeta entries (the folder itself + any nested subfolders).
@@ -3064,7 +3064,7 @@ function startRenameInSidebar(fileEl, node, siteId) {
     if (typeof AgoraWikilinks !== "undefined" && oldKey !== newKey) {
       const renameMap = new Map([[oldKey, newKey]]);
       const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
-      AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+      AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList, folderMeta);
     }
 
     if (currentSitePath === oldFilePath) {
@@ -3187,7 +3187,7 @@ async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
     if (typeof AgoraWikilinks !== "undefined" && oldKey !== newKey) {
       const renameMap = new Map([[oldKey, newKey]]);
       const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
-      AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+      AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList, folderMeta);
     }
   }
 
@@ -3251,7 +3251,7 @@ async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
   if (typeof AgoraWikilinks !== "undefined" && oldKey !== newKey) {
     const renameMap = new Map([[oldKey, newKey]]);
     const newPagesList = AgoraWikilinks.pagesFromCache(markdownCache);
-    AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList);
+    AgoraWikilinks.rewriteWikilinkTargets(markdownCache, renameMap, oldPagesList, newPagesList, folderMeta);
   }
 
   // Reassign sort orders in the old folder

@@ -399,7 +399,8 @@ function renderPanelPreview(markdown) {
   let source = markdown;
   if (typeof AgoraWikilinks !== "undefined") {
     const pages = AgoraWikilinks.pagesFromCache(typeof markdownCache !== "undefined" ? markdownCache : []);
-    source = AgoraWikilinks.preprocessWikilinks(markdown, pages, "");
+    const folders = typeof folderMeta !== "undefined" ? folderMeta : null;
+    source = AgoraWikilinks.preprocessWikilinks(markdown, pages, "", folders);
   }
 
   // If math is present, lazy-load KaTeX. If it's not loaded yet, preview
@@ -1164,7 +1165,9 @@ function updateWikilinkAutocomplete(editor) {
     liveSel.removeAllRanges();
     liveSel.addRange(replaceRange);
 
-    const replacement = `[[${chosen.fileName}]]`;
+    const target = shortestWikilinkTarget(chosen, pages,
+      typeof folderMeta !== "undefined" ? folderMeta : null);
+    const replacement = `[[${target}]]`;
     let inserted = false;
     try {
       inserted = document.execCommand('insertText', false, replacement);
@@ -1249,6 +1252,49 @@ function hideWikilinkAutocomplete() {
   if (wikilinkAutocomplete && wikilinkAutocomplete.visible) {
     wikilinkAutocomplete.hide();
   }
+}
+
+// Pick the shortest wikilink target text that still resolves uniquely to
+// `chosen`. Tries the displayName alone first; if that's ambiguous (or the
+// page has no displayName), prepends folder display names one segment at a
+// time from the immediate parent outward; falls back to the full slug if
+// nothing shorter resolves uniquely.
+function shortestWikilinkTarget(chosen, pages, folders) {
+  if (!chosen) return "";
+  if (typeof AgoraWikilinks === "undefined") return chosen.fileName || "";
+
+  const slug = chosen.fileName || "";
+  const display = chosen.displayName || slug;
+  const slugParts = slug.split("/");
+  const folderSlugs = slugParts.slice(0, -1);
+
+  function folderDisplayAt(idx) {
+    const path = folderSlugs.slice(0, idx + 1).join("/");
+    const meta = folders && folders[path];
+    if (meta && meta.displayName) return meta.displayName;
+    // Humanize the slug as a last resort so the user-visible target reads
+    // naturally even when no folder metadata exists.
+    return folderSlugs[idx].replace(/[-_]+/g, " ");
+  }
+
+  function resolvesToChosen(target) {
+    const r = AgoraWikilinks.resolveWikilink(target, pages, folders);
+    return !!r && r.fileName === chosen.fileName;
+  }
+
+  // Try the displayName alone.
+  if (display && resolvesToChosen(display)) return display;
+
+  // Then prepend folder display names from the immediate parent outward.
+  for (let i = folderSlugs.length - 1; i >= 0; i--) {
+    const segs = [];
+    for (let j = i; j < folderSlugs.length; j++) segs.push(folderDisplayAt(j));
+    const candidate = segs.join("/") + "/" + display;
+    if (resolvesToChosen(candidate)) return candidate;
+  }
+
+  // Last resort — slugs are guaranteed unique by construction.
+  return slug;
 }
 
 // ============================================

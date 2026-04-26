@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
   document.body.appendChild(backdrop);
 
-  await fetchPageContent(origin, basePath, siteName, pagesJson, mainContent);
+  await fetchPageContent(origin, basePath, siteName, pagesJson, mainContent, foldersJson);
   decodeEmbeds(basePath);
   decodeImages(basePath);
   createFooter(origin, basePath, showHistory);
@@ -522,7 +522,7 @@ function createSidebar(origin, basePath, pagesJson, foldersJson) {
   return sidebar;
 }
 
-async function fetchPageContent(origin, basePath, siteName, pagesJson, mainContent) {
+async function fetchPageContent(origin, basePath, siteName, pagesJson, mainContent, foldersJson) {
   marked.setOptions({
     gfm: true,
     breaks: true,
@@ -603,7 +603,7 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
           fileName: p.fileName,
           displayName: p.displayName,
         }));
-        text = AgoraWikilinks.preprocessWikilinks(text, pages, basePath);
+        text = AgoraWikilinks.preprocessWikilinks(text, pages, basePath, foldersJson);
       }
 
       // Lazy-load KaTeX only if the page actually contains math, then

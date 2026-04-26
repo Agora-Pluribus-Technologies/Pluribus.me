@@ -38,7 +38,23 @@
       .replace(/\s+/g, "-");
   }
 
-  function resolveWikilink(target, pages) {
+  // Return the page object that `target` resolves to, or null if it doesn't
+  // resolve (or is ambiguous). Resolution order:
+  //
+  //   1. Exact fileName slug, case-insensitive (`[[research/transformers]]`).
+  //   2. Unique basename slug (`[[transformers]]` when only one page has that
+  //      basename).
+  //   3. Display-name path with folder prefix (`[[Research/Transformers]]`):
+  //      the trailing segment matches a page's displayName and each leading
+  //      segment matches the corresponding folder's displayName (or its slug,
+  //      or the slug humanized as "research" -> "research").
+  //   4. Unique displayName, case-insensitive (`[[Transformers Are Cool]]`
+  //      resolves to whichever page has that displayName, when unique).
+  //
+  // Steps 3-4 require pages with displayName populated. `folders` is the
+  // optional folders.json-shape map { folderPath: { displayName, ... } }
+  // that disambiguates folder display names.
+  function resolveWikilink(target, pages, folders) {
     if (!target) return null;
     if (!Array.isArray(pages) || pages.length === 0) return null;
 
@@ -54,7 +70,7 @@
     const exact = pages.find(p => (p.fileName || "").toLowerCase() === lowerTarget);
     if (exact) return exact;
 
-    // 2. Unique basename match — accept omitted folder when unambiguous.
+    // 2. Unique basename slug match — accept omitted folder when unambiguous.
     //    Multiple pages sharing a basename require the folder prefix to
     //    disambiguate (no fallback resolution).
     const basenameMatches = pages.filter(p => {
@@ -63,6 +79,49 @@
       return base === lowerTarget;
     });
     if (basenameMatches.length === 1) return basenameMatches[0];
+
+    // 3. Display-name path — `[[Folder Display/Note Display]]`.
+    //    Only triggers when the target contains a slash and at least one
+    //    leading segment to compare against folder displays.
+    if (normalizedTarget.indexOf("/") >= 0) {
+      const segments = normalizedTarget.split("/").filter(Boolean);
+      if (segments.length >= 2) {
+        const noteSeg = segments[segments.length - 1].toLowerCase();
+        const folderSegs = segments.slice(0, -1).map(s => s.toLowerCase());
+
+        const pathMatches = pages.filter(p => {
+          if ((p.displayName || "").toLowerCase() !== noteSeg) return false;
+          const fn = p.fileName || "";
+          if (fn.indexOf("/") < 0) return false;
+          const folderSlugs = fn.split("/").slice(0, -1);
+          if (folderSlugs.length < folderSegs.length) return false;
+          // Compare the trailing folderSegs.length slug segments against
+          // user-typed folder display names. Each segment matches when the
+          // typed name equals the folder's metadata display, the slug
+          // itself, or the slug humanized (hyphens/underscores -> spaces).
+          const tail = folderSlugs.slice(-folderSegs.length);
+          return folderSegs.every((typed, i) => {
+            const slug = tail[i].toLowerCase();
+            if (slug === typed) return true;
+            const fullPath = folderSlugs
+              .slice(0, folderSlugs.length - folderSegs.length + i + 1)
+              .join("/");
+            const meta = folders && folders[fullPath];
+            const metaDisplay = (meta && meta.displayName) ? meta.displayName.toLowerCase() : "";
+            if (metaDisplay && metaDisplay === typed) return true;
+            const humanized = tail[i].replace(/[-_]+/g, " ").toLowerCase();
+            return humanized === typed;
+          });
+        });
+        if (pathMatches.length === 1) return pathMatches[0];
+      }
+    }
+
+    // 4. Unique displayName match across the whole site.
+    const displayMatches = pages.filter(p =>
+      (p.displayName || "").toLowerCase() === lowerTarget
+    );
+    if (displayMatches.length === 1) return displayMatches[0];
 
     return null;
   }
@@ -86,9 +145,9 @@
       .replace(/'/g, "&#39;");
   }
 
-  function renderWikilinkHtml(rawTarget, alias, pages, basePath) {
+  function renderWikilinkHtml(rawTarget, alias, pages, basePath, folders) {
     const { target, heading } = parseWikilinkBody(rawTarget);
-    const page = resolveWikilink(target, pages);
+    const page = resolveWikilink(target, pages, folders);
     const display = (alias != null && alias !== "")
       ? alias
       : (heading ? `${target} > ${heading}` : target);
@@ -104,7 +163,11 @@
   // Pre-process markdown: split out fenced code blocks and inline code spans,
   // replace [[...]] with HTML <a> tags, then re-stitch. Keeps wikilinks out of
   // code regions where they should be literal text.
-  function preprocessWikilinks(markdown, pages, basePath) {
+  //
+  // `folders` is optional — when provided (folders.json shape), the resolver
+  // can match `[[Folder Display Name/Note Display Name]]` against folder
+  // display names instead of just slug paths.
+  function preprocessWikilinks(markdown, pages, basePath, folders) {
     if (!markdown) return markdown;
     if (!Array.isArray(pages)) pages = [];
 
@@ -126,11 +189,11 @@
     }
 
     return segments
-      .map(seg => (seg.kind === "code" ? seg.text : transformInline(seg.text, pages, basePath)))
+      .map(seg => (seg.kind === "code" ? seg.text : transformInline(seg.text, pages, basePath, folders)))
       .join("");
   }
 
-  function transformInline(text, pages, basePath) {
+  function transformInline(text, pages, basePath, folders) {
     // Carve out inline code spans (`...`) so wikilinks inside them stay literal.
     const codeSpanRegex = /(`+)([^`\n]+?)\1/g;
     let out = "";
@@ -139,14 +202,14 @@
     while ((cm = codeSpanRegex.exec(text)) !== null) {
       const before = text.slice(last, cm.index);
       out += before.replace(WIKILINK_INLINE_REGEX, (_, body, alias) =>
-        renderWikilinkHtml(body, alias, pages, basePath)
+        renderWikilinkHtml(body, alias, pages, basePath, folders)
       );
       out += cm[0];
       last = cm.index + cm[0].length;
     }
     const tail = text.slice(last);
     out += tail.replace(WIKILINK_INLINE_REGEX, (_, body, alias) =>
-      renderWikilinkHtml(body, alias, pages, basePath)
+      renderWikilinkHtml(body, alias, pages, basePath, folders)
     );
     return out;
   }
@@ -241,8 +304,9 @@
   // Build a backlink index: for each page, list pages that link *to* it.
   // pages: [{ fileName, displayName }, ...] — fileName without "public/" or ".md"
   // getContent: (fileName) => markdown string (or null/undefined)
+  // folders: optional folders.json-shape map for display-name resolution
   // returns: { [targetFileName]: [{ fileName, displayName }, ...] }
-  function buildBacklinkIndex(pages, getContent) {
+  function buildBacklinkIndex(pages, getContent, folders) {
     const index = {};
     if (!Array.isArray(pages) || typeof getContent !== "function") return index;
 
@@ -255,7 +319,7 @@
 
       for (const body of bodies) {
         const { target } = parseWikilinkBody(body);
-        const resolved = resolveWikilink(target, pages);
+        const resolved = resolveWikilink(target, pages, folders);
         if (!resolved) continue;
         if (resolved.fileName === source.fileName) continue; // skip self-links
         if (seenTargets.has(resolved.fileName)) continue;
@@ -329,7 +393,7 @@
   // `oldPagesList` and `newPagesList` are the pre/post-rename page arrays in
   // the same shape pagesFromCache returns. Returns the number of items whose
   // content was modified.
-  function rewriteWikilinkTargets(cacheItems, renameMap, oldPagesList, newPagesList) {
+  function rewriteWikilinkTargets(cacheItems, renameMap, oldPagesList, newPagesList, folders) {
     if (!Array.isArray(cacheItems) || !renameMap || renameMap.size === 0) return 0;
     let modified = 0;
 
@@ -379,7 +443,7 @@
       const re = new RegExp(WIKILINK_INLINE_REGEX.source, "g");
       return text.replace(re, (whole, body, alias) => {
         const { target, heading } = parseWikilinkBody(body);
-        const oldResolved = resolveWikilink(target, oldPagesList);
+        const oldResolved = resolveWikilink(target, oldPagesList, folders);
         if (!oldResolved) return whole;
 
         const newFileName = renameMap.get(oldResolved.fileName);
