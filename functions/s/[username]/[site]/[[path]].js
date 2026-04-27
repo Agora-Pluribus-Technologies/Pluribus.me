@@ -91,7 +91,7 @@ export async function onRequest(context) {
   // site-metadata files, an attachment, or an .html/.md whose slug exists
   // in the site's pages.json. Anything else is 404 — no random R2-key
   // probing for files that aren't pages of the site.
-  const allowed = await isAllowedFilePath(filePath, env, siteId);
+  const allowed = await isAllowedFilePath(filePath, env, siteId, url.origin);
   console.log("isAllowedFilePath result:", allowed);
   if (!allowed) {
     return corsResponse("Page not found", 404);
@@ -160,14 +160,18 @@ const PAGES_JSON_VALIDATION_CACHE_TTL = 300;
 // Read + cache pages.json for the validation gate. Tries Cloudflare's
 // edge cache first; on miss, falls through to R2 and stores the response
 // for next time. Returns null if R2 has no file (or the read failed).
-async function readPagesJsonForValidation(env, siteId) {
+// `requestOrigin` scopes the cache key to the deployment's hostname
+// (e.g. agorapages.com vs develop.pluribus-me.pages.dev) so a dev
+// preview can't reuse a stale prod entry and vice versa.
+async function readPagesJsonForValidation(env, siteId, requestOrigin) {
   const cache = caches.default;
   // Cache key matches the public serving URL that purgeCache (in
   // functions/api/files.js) targets when pages.json is republished —
-  // `https://agorapages.com/s/<siteId>/pages.json`. Keeping the keys in
-  // sync means a publish-time purge actually evicts this validation entry.
+  // keeping the keys in sync means a publish-time purge actually evicts
+  // this validation entry.
+  const origin = requestOrigin || "https://agorapages.com";
   const cacheKey = new Request(
-    `https://agorapages.com/s/${siteId}/pages.json`
+    `${origin}/s/${siteId}/pages.json`
   );
 
   const cached = await cache.match(cacheKey);
@@ -231,7 +235,7 @@ function canonicalSlug(value) {
 // HTTPS-back-into-itself, since recursive fetches get intercepted by
 // Cloudflare Access on protected previews. Pages sites store pages.json
 // as a flat array; blog sites use a batched object.
-async function isPagePath(filePath, env, siteId) {
+async function isPagePath(filePath, env, siteId, requestOrigin) {
   const m = filePath.match(/^(.+?)\.(html?|md)$/i);
   if (!m) {
     console.log("isPagePath: filePath did not match extension regex:", filePath);
@@ -244,7 +248,7 @@ async function isPagePath(filePath, env, siteId) {
     slugCodepoints: Array.from(slug).map(c => c.charCodeAt(0).toString(16)).join(" "),
   }));
 
-  const parsed = await readPagesJsonForValidation(env, siteId);
+  const parsed = await readPagesJsonForValidation(env, siteId, requestOrigin);
   if (!parsed) {
     console.log("isPagePath: pages.json was null for", siteId);
     return false;
@@ -291,7 +295,7 @@ async function isPagePath(filePath, env, siteId) {
   return false;
 }
 
-async function isAllowedFilePath(filePath, env, siteId) {
+async function isAllowedFilePath(filePath, env, siteId, requestOrigin) {
   if (isAllowedMetadataPath(filePath)) {
     console.log("isAllowedFilePath: matched metadata path:", filePath);
     return true;
@@ -304,7 +308,7 @@ async function isAllowedFilePath(filePath, env, siteId) {
   // attachments/ migration without weakening the page-probing gate.
   if (/\.(html?|md)$/i.test(filePath)) {
     console.log("isAllowedFilePath: routing to isPagePath:", filePath);
-    return await isPagePath(filePath, env, siteId);
+    return await isPagePath(filePath, env, siteId, requestOrigin);
   }
   console.log("isAllowedFilePath: non-page asset, allowed:", filePath);
   return true;
