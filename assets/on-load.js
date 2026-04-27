@@ -3869,7 +3869,6 @@ document.addEventListener("DOMContentLoaded", function() {
         console.log("Account deleted successfully");
 
         // Clear all session data
-        sessionStorage.removeItem("agorapages.com.gitlab.oauth_token");
         sessionStorage.removeItem("agorapages.com.github.oauth_token");
         sessionStorage.removeItem("agorapages.com.google.oauth_token");
         sessionStorage.removeItem("agorapages.com.username");

@@ -226,7 +226,6 @@ function displayLoginButtons() {
   const providers = [
     { name: "Google", icon: "/assets/Google_G_logo.svg", path: "/api/auth/google/start", style: "" },
     { name: "GitHub", icon: "/assets/Octicons-mark-github.svg", path: "/api/auth/github/start", style: "filter: invert(1);" },
-    { name: "GitLab", icon: "/assets/GitLab_icon.svg", path: "/api/auth/gitlab/start", style: "" },
   ];
 
   for (const p of providers) {

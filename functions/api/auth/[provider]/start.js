@@ -8,13 +8,6 @@ const PROVIDERS = {
     getClientId: (env, isDev) => isDev ? env.GITHUB_DEV_CLIENT_ID : env.GITHUB_CLIENT_ID,
     getRedirectUri: (origin) => `${origin}/github/oauth/callback`,
   },
-  gitlab: {
-    authUrl: "https://gitlab.com/oauth/authorize",
-    scope: "read_user",
-    responseType: "code",
-    getClientId: (env, isDev) => isDev ? env.GITLAB_DEV_CLIENT_ID : env.GITLAB_CLIENT_ID,
-    getRedirectUri: (origin) => `${origin}/gitlab/oauth/callback`,
-  },
   google: {
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     scope: "https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email",
@@ -56,10 +49,8 @@ export async function onRequestGet(context) {
   // victim into the attacker's account (login CSRF).
   const state = await generateOAuthState();
 
-  // Build params with `.set()` in the order GitLab documents:
-  // response_type, client_id, redirect_uri, state, scope. OAuth 2.0
-  // doesn't mandate ordering, but GitLab's parser is finicky and the
-  // previous (constructor-object) ordering tripped its scope validator.
+  // Build params with `.set()` in a deterministic order:
+  // response_type, client_id, redirect_uri, state, scope.
   const params = new URLSearchParams();
   if (config.responseType) {
     params.set("response_type", config.responseType);

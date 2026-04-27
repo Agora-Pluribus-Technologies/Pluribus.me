@@ -1,12 +1,10 @@
 # AgoraPages
 
-Web-based simple all-in-one website building and publishing tool
+Web-based simple all-in-one markdown publishing tool
 
-Let's democratize and de-Googlify the internet!
+Dynamic website generator
 
-Static website generator
-
-Oauth2 login to GitHub or GitLab for cloud storage of generated site source code
+Oauth2 login (GitHub or Google)
 
 This repo is to be deployed on Cloudflare Pages.
 
