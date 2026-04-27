@@ -530,6 +530,136 @@ function buildTagsJsonContent(cacheItems, previous, dirty) {
   });
 }
 
+// Pull the page title (first H1) and every ATX-style heading (`#` ... `######`)
+// out of a markdown body. Used by the Pages-site search index so the published
+// sidebar can search by page title and heading text. Returns
+// { title, headings: [{l, t}, ...] }. Skips fenced code blocks so headings
+// inside ``` fences aren't mistaken for real document headings.
+function extractSearchEntries(markdown) {
+  const out = { title: "", headings: [] };
+  if (!markdown || typeof markdown !== "string") return out;
+
+  // Strip frontmatter so its `---` and any `# ...` lines inside don't pollute.
+  let text = markdown.replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/, "");
+
+  let inFence = false;
+  const lines = text.split(/\r?\n/);
+  for (const raw of lines) {
+    const line = raw.trimStart();
+    if (/^```/.test(line) || /^~~~/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const m = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!m) continue;
+    const level = m[1].length;
+    const txt = m[2].trim();
+    if (!txt) continue;
+    if (level === 1 && !out.title) out.title = txt;
+    out.headings.push({ l: level, t: txt });
+  }
+  return out;
+}
+
+// Parse an existing search-index.json string into the canonical shape.
+// Tolerates missing/malformed input by returning an empty index. Used by
+// the incremental update path so we don't re-parse pages that were already
+// indexed on a previous publish.
+function parseSearchIndexJson(text) {
+  if (!text || typeof text !== "string") return { pages: {} };
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return { pages: {} }; }
+  const pages = (parsed && parsed.pages && typeof parsed.pages === "object")
+    ? parsed.pages
+    : {};
+  return { pages };
+}
+
+// Per-page search index for Pages sites. Schema:
+//
+//   {
+//     "pages": {
+//       "research/transformers": {
+//         "displayName": "Transformers",
+//         "title": "Transformers",
+//         "headings": [{"l": 2, "t": "Architecture"}, ...]
+//       },
+//       ...
+//     }
+//   }
+//
+// Generation strategy mirrors buildTagsJsonContent — INCREMENTAL: a slug
+// already present in `previous.pages` is reused verbatim unless it appears
+// in `dirty` (the set of slugs changed in this commit). This keeps publish
+// fast even when most pages are lazy-loaded metadata-only stubs in the
+// editor's cache. Slugs missing from `cacheItems` are GC'd.
+//
+// `cacheItems`  array of { fileName, displayName, content }; fileName is
+//               the `public/<slug>.md` form used by markdownCache. Items
+//               whose `content` is not a string are skipped on the
+//               re-parse path (they stay on whatever `previous` had).
+// `previous`    optional { pages } from the prior search-index.json
+//               (parse it via parseSearchIndexJson). Defaults to empty.
+// `dirty`       optional Set of bare slugs (no `public/`, no `.md`) that
+//               must be re-parsed even if they were previously indexed.
+function buildSearchIndexContent(cacheItems, previous, dirty) {
+  const prev = previous || { pages: {} };
+  const dirtySet = (dirty instanceof Set) ? dirty : new Set();
+
+  const pages = {};
+  for (const [slug, entry] of Object.entries(prev.pages || {})) {
+    if (entry && typeof entry === "object") pages[slug] = entry;
+  }
+
+  if (!Array.isArray(cacheItems)) {
+    return JSON.stringify({ pages });
+  }
+
+  const liveSlugs = new Set();
+  for (const item of cacheItems) {
+    const fn = (item && item.fileName) || "";
+    if (!fn) continue;
+    const slug = fn.replace(/^public\//, "").replace(/\.md$/, "");
+    if (!slug || slug === "latest") continue;
+    liveSlugs.add(slug);
+
+    const wasKnown = Object.prototype.hasOwnProperty.call(pages, slug);
+    const isDirty = dirtySet.has(slug);
+
+    // Reuse previous classification when the page is unchanged.
+    if (wasKnown && !isDirty) {
+      // Keep displayName fresh in case the page was just renamed in
+      // metadata (the body wouldn't change but the sidebar label might).
+      if (item.displayName) pages[slug].displayName = item.displayName;
+      continue;
+    }
+
+    // Body unavailable (lazy-load stub) and nothing in `previous` to fall
+    // back on — skip; next publish that actually edits this page will fill
+    // it in. Don't index a placeholder.
+    if (typeof item.content !== "string") {
+      if (wasKnown) {
+        // Stale entry might be wrong but we can't re-parse — leave as-is
+        // rather than dropping a real entry.
+        if (item.displayName) pages[slug].displayName = item.displayName;
+      }
+      continue;
+    }
+
+    const extracted = extractSearchEntries(item.content);
+    pages[slug] = {
+      displayName: item.displayName || slug,
+      title: extracted.title,
+      headings: extracted.headings,
+    };
+  }
+
+  // GC: drop slugs that no longer exist in cacheItems.
+  for (const slug of Object.keys(pages)) {
+    if (!liveSlugs.has(slug)) delete pages[slug];
+  }
+
+  return JSON.stringify({ pages });
+}
+
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const { siteName, repo, owner, siteType, importedPages, importedAssets } = siteSettings;
@@ -609,10 +739,24 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
         }))
       )
     : null;
+  // Pages sites also seed search-index.json (per-page title + headings)
+  // so the first publish has a usable sidebar search; blog sites skip it.
+  const searchIndexContent = !isBlog
+    ? buildSearchIndexContent(
+        (Array.isArray(pagesToWrite) ? pagesToWrite : []).map(p => ({
+          fileName: `public/${p.fileName}.md`,
+          displayName: p.displayName,
+          content: p.content,
+        }))
+      )
+    : null;
   await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
   await gitWriteFile(siteId, "public/images.json", imagesManifest);
   if (tagsJsonContent != null) {
     await gitWriteFile(siteId, "public/tags.json", tagsJsonContent);
+  }
+  if (searchIndexContent != null) {
+    await gitWriteFile(siteId, "public/search-index.json", searchIndexContent);
   }
   if (hasImport) {
     for (const page of pagesToWrite) {
@@ -691,6 +835,14 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     files.push({
       filePath: "public/tags.json",
       content: tagsJsonContent,
+      contentType: "application/json",
+    });
+  }
+
+  if (searchIndexContent != null) {
+    files.push({
+      filePath: "public/search-index.json",
+      content: searchIndexContent,
       contentType: "application/json",
     });
   }
@@ -1015,6 +1167,25 @@ async function deployChanges(siteId) {
     content: JSON.stringify(historyJson),
     contentType: "application/json",
   });
+
+  // Pages sites: republish search-index.json (per-page title + headings).
+  // Incremental — slugs already classified in the previous index are reused
+  // verbatim and only slugs in `dirtySlugs` (the ones that actually changed
+  // in this commit) get re-parsed. Stays consistent with the lazy-load
+  // strategy: pages still in metadata-only form keep their previous entry.
+  if (!isBlogSite) {
+    const prevSearchText = await getFileFromR2(siteId, "public/search-index.json");
+    const prevSearch = parseSearchIndexJson(prevSearchText);
+    const dirtySlugs = new Set();
+    for (const fp of changedMd) {
+      dirtySlugs.add(fp.replace(/^public\//, "").replace(/\.md$/, ""));
+    }
+    files.push({
+      filePath: "public/search-index.json",
+      content: buildSearchIndexContent(markdownCache, prevSearch, dirtySlugs),
+      contentType: "application/json",
+    });
+  }
 
   // Generate wikilinks.json (backlink index) for pages sites
   if (!isBlogSite && typeof AgoraWikilinks !== "undefined") {

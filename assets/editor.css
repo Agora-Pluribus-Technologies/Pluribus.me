@@ -674,6 +674,69 @@ nav {
   color: white;
 }
 
+#sidebarSearch {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.sidebar-search-input {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 12px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.sidebar-search-input:focus {
+  border-color: var(--link-color);
+}
+
+.sidebar-search-results {
+  margin-top: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.sidebar-search-result {
+  display: block;
+  padding: 5px 6px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-search-result:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sidebar-search-result-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sidebar-search-result-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-search-empty {
+  padding: 5px 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
 #sidebarTree {
   flex: 1;
   overflow-y: auto;

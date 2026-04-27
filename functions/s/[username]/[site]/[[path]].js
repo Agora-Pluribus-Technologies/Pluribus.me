@@ -129,6 +129,7 @@ const ALLOWED_METADATA_FILES = new Set([
   "wikilinks.json",
   "images.json",
   "tags.json",
+  "search-index.json", // pages-site sidebar search (per-page title + headings)
   "history.json",
   "latest.md",        // blog: most-recent-post snapshot
 ]);

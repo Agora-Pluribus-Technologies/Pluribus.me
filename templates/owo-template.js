@@ -490,6 +490,13 @@ function createSidebar(origin, basePath, pagesJson, foldersJson) {
   const sidebar = document.createElement("aside");
   sidebar.className = "site-sidebar";
 
+  const treeWrap = document.createElement("div");
+  treeWrap.className = "sidebar-tree-wrap";
+
+  const search = createSidebarSearch(origin, basePath, pagesJson, treeWrap);
+  sidebar.appendChild(search);
+  sidebar.appendChild(treeWrap);
+
   const tree = buildTreeFromPages(pagesJson, foldersJson);
 
   let currentPage = "";
@@ -562,8 +569,180 @@ function createSidebar(origin, basePath, pagesJson, foldersJson) {
     container.appendChild(ul);
   }
 
-  renderNodes(sidebar, tree, 0);
+  renderNodes(treeWrap, tree, 0);
   return sidebar;
+}
+
+// Slug used for heading anchors. Matches what we attach as `id` on each
+// rendered heading so search results can deep-link into a page.
+function slugifyHeading(text) {
+  return (text || "")
+    .toLocaleLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+// Sidebar search bar. Lazy-loads search-index.json on first input so the
+// fetch cost only hits readers who actually search. Ranking: title match >
+// H1/H2 match > deeper heading match. Empty query restores the page tree.
+function createSidebarSearch(origin, basePath, pagesJson, treeWrap) {
+  const wrap = document.createElement("div");
+  wrap.className = "sidebar-search";
+
+  const input = document.createElement("input");
+  input.type = "search";
+  input.className = "sidebar-search-input";
+  input.placeholder = "Search pages...";
+  input.setAttribute("aria-label", "Search pages");
+
+  const resultsEl = document.createElement("div");
+  resultsEl.className = "sidebar-search-results";
+  resultsEl.style.display = "none";
+
+  wrap.appendChild(input);
+  wrap.appendChild(resultsEl);
+
+  // Display-name lookup so results can show "Folder/Subfolder/Page" instead
+  // of the raw slug for hits that come from search-index.json.
+  const displayBySlug = new Map();
+  for (const p of (pagesJson || [])) {
+    if (p && p.fileName) displayBySlug.set(p.fileName, p.displayName || p.fileName);
+  }
+
+  let indexPromise = null;
+  function getIndex() {
+    if (!indexPromise) {
+      indexPromise = fetch(`${origin}${basePath}/search-index.json`, {
+        method: "GET",
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-cache, must-revalidate",
+        },
+      }).then(r => r.ok ? r.json() : { pages: {} })
+        .catch(() => ({ pages: {} }));
+    }
+    return indexPromise;
+  }
+
+  function setHidden(hidden) {
+    resultsEl.style.display = hidden ? "none" : "block";
+    treeWrap.style.display = hidden ? "" : "none";
+  }
+
+  async function runSearch(qRaw) {
+    const q = (qRaw || "").trim().toLocaleLowerCase();
+    if (!q) {
+      resultsEl.innerHTML = "";
+      setHidden(true);
+      return;
+    }
+    const index = await getIndex();
+    const matches = scoreSearchHits(index, q, displayBySlug);
+    renderResults(resultsEl, matches, basePath, q);
+    setHidden(false);
+  }
+
+  input.addEventListener("input", () => runSearch(input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      runSearch("");
+      input.blur();
+    }
+  });
+
+  return wrap;
+}
+
+// Score every entry in the search index against the query and return the
+// top hits (max 25). Each match is one of:
+//   { kind: "title",   slug, displayName, score }
+//   { kind: "heading", slug, displayName, level, text, score }
+// Ranking: lower score wins. title beats H1 beats H2 ... and prefix matches
+// beat substring matches at the same level.
+function scoreSearchHits(index, q, displayBySlug) {
+  const pages = (index && index.pages) || {};
+  const hits = [];
+  for (const [slug, entry] of Object.entries(pages)) {
+    if (!entry) continue;
+    const display = displayBySlug.get(slug) || entry.displayName || slug;
+
+    // Title match: page title (first H1) OR sidebar display name. We treat
+    // both as "title" so renamed pages still surface even if their body
+    // doesn't repeat the new name as an H1.
+    const titleHay = ((entry.title || "") + " " + display).toLocaleLowerCase();
+    const titleIdx = titleHay.indexOf(q);
+    if (titleIdx >= 0) {
+      hits.push({
+        kind: "title",
+        slug,
+        displayName: display,
+        score: titleIdx === 0 ? 0 : 1,
+      });
+      // Don't also surface heading hits when the title already matched —
+      // keeps results compact.
+      continue;
+    }
+
+    if (Array.isArray(entry.headings)) {
+      for (const h of entry.headings) {
+        const text = (h && h.t) || "";
+        if (!text) continue;
+        const hay = text.toLocaleLowerCase();
+        const idx = hay.indexOf(q);
+        if (idx < 0) continue;
+        const level = (h && h.l) || 6;
+        // 2 = H1 best heading score; H2 = 3, ... H6 = 7. Prefix matches
+        // shave 0.5 over substring matches at the same level.
+        const score = (level + 1) + (idx === 0 ? 0 : 0.5);
+        hits.push({
+          kind: "heading",
+          slug,
+          displayName: display,
+          level,
+          text,
+          score,
+        });
+      }
+    }
+  }
+  hits.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
+    return a.displayName.localeCompare(b.displayName);
+  });
+  return hits.slice(0, 25);
+}
+
+function renderResults(container, hits, basePath, q) {
+  container.innerHTML = "";
+  if (!hits.length) {
+    const empty = document.createElement("div");
+    empty.className = "sidebar-search-empty";
+    empty.textContent = "No matches";
+    container.appendChild(empty);
+    return;
+  }
+  for (const hit of hits) {
+    const a = document.createElement("a");
+    a.className = "sidebar-search-result";
+    a.href = `${basePath}/${hit.slug}.html` +
+      (hit.kind === "heading" ? `#${slugifyHeading(hit.text)}` : "");
+
+    const title = document.createElement("div");
+    title.className = "sidebar-search-result-title";
+    title.textContent = hit.displayName;
+    a.appendChild(title);
+
+    if (hit.kind === "heading") {
+      const sub = document.createElement("div");
+      sub.className = "sidebar-search-result-sub";
+      sub.textContent = "› " + hit.text;
+      a.appendChild(sub);
+    }
+    container.appendChild(a);
+  }
 }
 
 async function fetchPageContent(origin, basePath, siteName, pagesJson, mainContent, foldersJson) {
@@ -713,6 +892,25 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
   }
 
   mainContent.appendChild(panel);
+
+  // Slugified IDs on every heading so sidebar-search results (which carry
+  // a `#heading-anchor`) deep-link to the right spot. Marked doesn't add
+  // ids to headings by default; we attach them here once the panel is
+  // assembled. If the URL already has a hash, scroll to it now since the
+  // browser's native auto-scroll happened before the DOM was built.
+  const usedIds = new Set();
+  panel.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(h => {
+    let base = slugifyHeading(h.textContent || "");
+    if (!base) return;
+    let id = base, n = 2;
+    while (usedIds.has(id)) { id = `${base}-${n}`; n++; }
+    usedIds.add(id);
+    if (!h.id) h.id = id;
+  });
+  if (window.location.hash && window.location.hash.length > 1) {
+    const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+    if (target) target.scrollIntoView({ behavior: "instant", block: "start" });
+  }
 
   // Append "Links to this page" section if there are any backlinks for this page
   try {

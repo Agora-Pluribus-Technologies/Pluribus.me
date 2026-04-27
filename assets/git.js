@@ -901,6 +901,25 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       );
     }
 
+    // Pages sites: keep search-index.json in sync with the cache. Same
+    // incremental pattern as tags.json above — reuse the previous index
+    // from the git working tree so we don't reparse pages whose body
+    // hasn't changed (and don't penalise lazy-loaded metadata-only stubs).
+    if (!isBlog && typeof buildSearchIndexContent === "function") {
+      let prevSearch = { pages: {} };
+      if (typeof parseSearchIndexJson === "function") {
+        try {
+          const prevText = await gitReadFile(siteId, "public/search-index.json");
+          prevSearch = parseSearchIndexJson(prevText);
+        } catch (_) { /* file not in tree yet */ }
+      }
+      await gitWriteFile(
+        siteId,
+        "public/search-index.json",
+        buildSearchIndexContent(markdownCache, prevSearch)
+      );
+    }
+
     // Write images.json
     await gitWriteFile(siteId, "public/images.json", JSON.stringify(imageCache));
 

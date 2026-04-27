@@ -715,6 +715,8 @@ async function openSiteInEditor(site, initialPage = "index") {
     }
     // Populate sidebar from cache
     await populateSidebar(site.siteId);
+    // Wire the sidebar search bar to this site's published search index.
+    setupEditorSidebarSearch(site.siteId);
     // Load the block editor
     initBlockEditor();
   }
@@ -3167,6 +3169,188 @@ async function ensurePagesWithWikilinksLoaded(siteId, changedMd) {
   );
   if (toLoad.length === 0) return;
   await Promise.all(toLoad.map(item => ensurePageContentLoaded(item)));
+}
+
+// Editor-side sidebar search. Combines two sources:
+//   (1) Live markdownCache displayName — always fresh, covers brand-new
+//       and renamed pages even before the next publish.
+//   (2) Lazily-fetched published /s/<siteId>/search-index.json — adds
+//       heading-level matches; only fetched on first input so opening a
+//       site doesn't pay the cost when the user never searches.
+// Selecting a result calls selectSidebarPage (no anchors — the editor
+// doesn't render heading IDs). Per-site: state is reset every time
+// setupEditorSidebarSearch runs, so switching sites doesn't bleed indexes.
+let editorSearchIndexPromise = null;
+let editorSearchSiteId = null;
+
+function setupEditorSidebarSearch(siteId) {
+  const input = document.getElementById("sidebarSearchInput");
+  const resultsEl = document.getElementById("sidebarSearchResults");
+  const tree = document.getElementById("sidebarTree");
+  if (!input || !resultsEl || !tree) return;
+
+  // Reset cached fetch when the editor switches sites.
+  if (editorSearchSiteId !== siteId) {
+    editorSearchSiteId = siteId;
+    editorSearchIndexPromise = null;
+    input.value = "";
+    resultsEl.style.display = "none";
+    resultsEl.innerHTML = "";
+    tree.style.display = "";
+  }
+
+  // Idempotent listener wiring — bind once, reuse across site switches.
+  if (input.dataset.searchBound === "1") return;
+  input.dataset.searchBound = "1";
+
+  function getIndex() {
+    if (!editorSearchIndexPromise) {
+      const id = editorSearchSiteId;
+      editorSearchIndexPromise = fetch(`/s/${id}/search-index.json`, {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache, must-revalidate" },
+      }).then(r => r.ok ? r.json() : { pages: {} })
+        .catch(() => ({ pages: {} }));
+    }
+    return editorSearchIndexPromise;
+  }
+
+  function setHidden(hidden) {
+    resultsEl.style.display = hidden ? "none" : "block";
+    tree.style.display = hidden ? "" : "none";
+  }
+
+  async function runSearch(qRaw) {
+    const q = (qRaw || "").trim().toLocaleLowerCase();
+    if (!q) {
+      resultsEl.innerHTML = "";
+      setHidden(true);
+      return;
+    }
+    const publishedIndex = await getIndex();
+    const hits = scoreEditorSearchHits(publishedIndex, q);
+    renderEditorSearchResults(resultsEl, hits);
+    setHidden(false);
+  }
+
+  input.addEventListener("input", () => runSearch(input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      runSearch("");
+      input.blur();
+    }
+  });
+}
+
+// Same ranking as the published-site search: title beats H1 beats H2 ...
+// Title hits come from in-memory cache (fresh), heading hits come from
+// the published search-index.json (stale until next publish but useful).
+function scoreEditorSearchHits(publishedIndex, q) {
+  const hits = [];
+  const seenTitles = new Set();
+
+  // (1) In-memory titles — markdownCache is the source of truth for the
+  // current editing session, including unpublished renames/new pages.
+  for (const item of (markdownCache || [])) {
+    const fn = item && item.fileName;
+    if (!fn || fn === "public/latest.md") continue;
+    const slug = fn.replace(/^public\//, "").replace(/\.md$/, "");
+    const display = item.displayName || slug;
+    const hay = display.toLocaleLowerCase();
+    const idx = hay.indexOf(q);
+    if (idx >= 0) {
+      hits.push({
+        kind: "title",
+        slug,
+        fileName: fn,
+        displayName: display,
+        score: idx === 0 ? 0 : 1,
+      });
+      seenTitles.add(slug);
+    }
+  }
+
+  // (2) Headings from the last-published search-index.json. Skip slugs
+  // already surfaced as title hits to keep the result list compact.
+  const pages = (publishedIndex && publishedIndex.pages) || {};
+  for (const [slug, entry] of Object.entries(pages)) {
+    if (!entry || seenTitles.has(slug)) continue;
+    const fileName = `public/${slug}.md`;
+    // Don't surface pages that have since been deleted from the cache.
+    if (!getCacheByFileName(fileName)) continue;
+    const cacheItem = getCacheByFileName(fileName);
+    const display = (cacheItem && cacheItem.displayName) || entry.displayName || slug;
+
+    if (Array.isArray(entry.headings)) {
+      for (const h of entry.headings) {
+        const text = (h && h.t) || "";
+        if (!text) continue;
+        const hay = text.toLocaleLowerCase();
+        const idx = hay.indexOf(q);
+        if (idx < 0) continue;
+        const level = (h && h.l) || 6;
+        const score = (level + 1) + (idx === 0 ? 0 : 0.5);
+        hits.push({
+          kind: "heading",
+          slug,
+          fileName,
+          displayName: display,
+          level,
+          text,
+          score,
+        });
+      }
+    }
+  }
+  hits.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
+    return a.displayName.localeCompare(b.displayName);
+  });
+  return hits.slice(0, 25);
+}
+
+function renderEditorSearchResults(container, hits) {
+  container.innerHTML = "";
+  if (!hits.length) {
+    const empty = document.createElement("div");
+    empty.className = "sidebar-search-empty";
+    empty.textContent = "No matches";
+    container.appendChild(empty);
+    return;
+  }
+  for (const hit of hits) {
+    const row = document.createElement("div");
+    row.className = "sidebar-search-result";
+
+    const title = document.createElement("div");
+    title.className = "sidebar-search-result-title";
+    title.textContent = hit.displayName;
+    row.appendChild(title);
+
+    if (hit.kind === "heading") {
+      const sub = document.createElement("div");
+      sub.className = "sidebar-search-result-sub";
+      sub.textContent = "› " + hit.text;
+      row.appendChild(sub);
+    }
+
+    row.addEventListener("click", async () => {
+      // Reset the search bar back to the tree view, then open the page.
+      const input = document.getElementById("sidebarSearchInput");
+      const resultsEl = document.getElementById("sidebarSearchResults");
+      const tree = document.getElementById("sidebarTree");
+      if (input) input.value = "";
+      if (resultsEl) {
+        resultsEl.style.display = "none";
+        resultsEl.innerHTML = "";
+      }
+      if (tree) tree.style.display = "";
+      await selectSidebarPage(hit.fileName);
+    });
+
+    container.appendChild(row);
+  }
 }
 
 // True for whichever cache entry sits at position 0 of pages.json — that's
