@@ -2228,6 +2228,13 @@ function updateDeployButtonState() {
   const deployButton = document.getElementById("deployButton");
   const publishStatus = document.getElementById("publishStatus");
 
+  // Don't make the user wait for the next interval poll to learn that
+  // upstream advanced — fire one now. pollHistoryForConflicts is itself
+  // idempotent (no-ops when SHA matches or already in flight).
+  if (modified && currentSiteId && typeof pollHistoryForConflicts === "function") {
+    pollHistoryForConflicts(currentSiteId).catch(err => console.error("Eager conflict poll failed:", err));
+  }
+
   if (typeof hasUnresolvedConflicts !== "undefined" && hasUnresolvedConflicts) {
     deployButton.disabled = true;
     deployButton.style.opacity = "0.5";

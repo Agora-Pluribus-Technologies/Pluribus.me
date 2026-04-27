@@ -72,6 +72,26 @@ async function saveFileToR2(siteId, filePath, content, options = {}) {
   return true;
 }
 
+// Persist the latest published commit's short SHA to D1 so other open
+// editor sessions can detect the divergence on their next conflict
+// poll. Best-effort — failure is logged but never blocks the publish
+// flow (the worst case is a 30 s slower conflict detection).
+async function recordLastCommitShortSha(siteId, shortSha) {
+  if (!shortSha) return;
+  try {
+    const resp = await fetch("/api/sites/last-commit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId, shortSha }),
+    });
+    if (!resp.ok) {
+      console.warn("recordLastCommitShortSha failed:", resp.status, await resp.text());
+    }
+  } catch (e) {
+    console.warn("recordLastCommitShortSha error:", e);
+  }
+}
+
 // Save multiple files to R2 in a batch
 async function saveFilesToR2(siteId, files) {
   const response = await fetch("/api/files", {
@@ -957,6 +977,10 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const result = await saveFilesToR2(siteId, files);
   if (result) {
     console.log("Initial commit with full deploy completed successfully");
+    // Mirror the initial-commit marker into D1 so a freshly created
+    // site has a non-null lastCommitShortSha — matches the literal
+    // "initial" sha that history.json carries for the seed commit.
+    await recordLastCommitShortSha(siteId, "initial");
   }
   return result;
 }
@@ -1032,9 +1056,11 @@ async function deployChanges(siteId) {
   // Determine which markdown files actually changed in the latest commit
   const changedMd = new Set();
   const deletedMd = new Set();
+  let latestCommitOid = null;
   try {
     const recent = await gitLog(siteId, 1);
     if (recent.length > 0) {
+      latestCommitOid = recent[0].oid;
       const commitChanges = await getCommitChanges(siteId, recent[0].oid);
       for (const change of commitChanges) {
         if (!change.filepath.startsWith("public/") || !change.filepath.endsWith(".md")) continue;
@@ -1271,6 +1297,11 @@ async function deployChanges(siteId) {
     const result = await saveFilesToR2(siteId, files);
     if (result) {
       console.log("Deployed changes to R2");
+      // Record the new HEAD SHA in D1 so the conflict-resolution poll
+      // in other open editor sessions sees the divergence.
+      if (latestCommitOid) {
+        await recordLastCommitShortSha(siteId, latestCommitOid.substring(0, 7));
+      }
     } else {
       modified = true;
       console.error("Failed to deploy changes to R2");
@@ -1421,6 +1452,15 @@ async function deployBlogPost(siteId, changedPost) {
   const result = await saveFilesToR2(siteId, files);
   if (result) {
     console.log("Blog post deployed to R2");
+    // Mirror the new HEAD SHA into D1 for conflict-resolution polling.
+    try {
+      const recent = await gitLog(siteId, 1);
+      if (recent.length > 0) {
+        await recordLastCommitShortSha(siteId, recent[0].oid.substring(0, 7));
+      }
+    } catch (e) {
+      console.warn("Couldn't record lastCommitShortSha after blog publish:", e);
+    }
   } else {
     modified = true;
     console.error("Failed to deploy blog post to R2");

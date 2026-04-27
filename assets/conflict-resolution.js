@@ -10,7 +10,7 @@ let hasUnresolvedConflicts = false;
 let conflictedFiles = new Set();
 let conflictResolutionInFlight = false;
 
-const CONFLICT_POLL_INTERVAL_MS = 30000;
+const CONFLICT_POLL_INTERVAL_MS = 60000;
 const CONFLICT_MARKER_REGEX = /^<{7} |^={7}\s*$|^>{7} /m;
 
 function lastSeenStorageKey(siteId) {
@@ -58,6 +58,30 @@ async function fetchUpstreamHead(siteId) {
     const history = await resp.json();
     if (!Array.isArray(history) || history.length === 0) return null;
     return { shortSha: history[0].shortSha, author: history[0].author };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Cheap "did upstream advance?" check that hits D1 (Sites.lastCommitShortSha)
+// instead of the R2-served history.json. Polled every 30 s on every open
+// editor session, so the savings vs. history.json (a full R2 GET + parse)
+// add up. Returns the SHA string or null when no commit has been recorded
+// yet for this site.
+async function fetchUpstreamShortSha(siteId) {
+  try {
+    const resp = await fetch(
+      `/api/sites/last-commit?siteId=${encodeURIComponent(siteId)}`,
+      {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache, must-revalidate" },
+      }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return (data && typeof data.lastCommitShortSha === "string")
+      ? data.lastCommitShortSha
+      : null;
   } catch (e) {
     return null;
   }
@@ -114,10 +138,20 @@ function stopConflictPolling() {
 async function pollHistoryForConflicts(siteId) {
   if (siteId !== currentSiteId) return;
   if (conflictResolutionInFlight) return;
-  
+
+  // Cheap D1 lookup of Sites.lastCommitShortSha — replaces the prior
+  // history.json poll. Only when this changes do we go to history.json
+  // for the author info needed to route same-author vs different-author
+  // divergence handling.
+  const upstreamShortSha = await fetchUpstreamShortSha(siteId);
+  if (!upstreamShortSha) return;
+  if (!lastSeenShortSha) return;
+  if (upstreamShortSha === lastSeenShortSha) return;
+
+  // SHA differs — fetch the full head record (including author) from
+  // history.json so we can route to the right divergence handler.
   const head = await fetchUpstreamHead(siteId);
-  if (!head || !lastSeenShortSha) return;
-  if (head.shortSha === lastSeenShortSha) return;
+  if (!head) return;
 
   console.log(`Upstream commit changed: ${lastSeenShortSha} -> ${head.shortSha} (author: ${head.author})`);
 
