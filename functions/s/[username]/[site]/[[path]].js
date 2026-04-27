@@ -66,6 +66,19 @@ export async function onRequest(context) {
   let filePath = restSegments.join("/");
   console.log("filePath after join:", filePath);
 
+  // Canonicalize the site-root URL to always have a trailing slash. The
+  // SPA shell (owo-template.js / blog-template.js) detects the published
+  // site via a regex that requires the trailing slash; without it the
+  // shell mistakes the path for a root marketing page and fetches
+  // `/s/<user>/<site>/s/<user>/<site>.md` (404). 302 redirect so the
+  // browser's URL bar ends up on the canonical form before any JS runs.
+  if (restSegments.length === 0 && !url.pathname.endsWith("/")) {
+    const target = new URL(request.url);
+    target.pathname = url.pathname + "/";
+    console.log("Redirecting to canonical site root:", target.toString());
+    return Response.redirect(target.toString(), 302);
+  }
+
   // Default to index.html if no specific file
   if (!filePath) {
     filePath = "index.html";
