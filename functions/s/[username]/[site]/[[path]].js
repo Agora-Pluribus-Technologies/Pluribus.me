@@ -141,26 +141,68 @@ function isAllowedMetadataPath(filePath) {
   return false;
 }
 
+// TTL for cached pages.json validation copies in seconds. pages.json only
+// changes at publish time, so this trades a short delay for newly-added
+// pages becoming visible against many fewer R2 reads. Tune as desired.
+const PAGES_JSON_VALIDATION_CACHE_TTL = 300;
+
+// Read + cache pages.json for the validation gate. Tries Cloudflare's
+// edge cache first; on miss, falls through to R2 and stores the response
+// for next time. Returns null if R2 has no file (or the read failed).
+async function readPagesJsonForValidation(env, siteId) {
+  const cache = caches.default;
+  // Cache key is just an identifier — host is synthetic, but using the
+  // siteId in the path keeps each site's manifest separate in cache.
+  const cacheKey = new Request(
+    `https://internal-pages-validation/${encodeURIComponent(siteId)}/pages.json`
+  );
+
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    try { return await cached.json(); } catch (_) { /* fall through to R2 */ }
+  }
+
+  let text;
+  try {
+    const obj = await env.PLURIBUS_BUCKET.get(`${siteId}/public/pages.json`);
+    if (!obj) return null;
+    text = await obj.text();
+  } catch (e) {
+    console.error("Failed to read pages.json from R2 for validation:", e);
+    return null;
+  }
+
+  // Stash for next time. cache.put is fire-and-forget — don't block the
+  // request on it. Errors are non-fatal (worst case: next request also misses).
+  try {
+    await cache.put(
+      cacheKey,
+      new Response(text, {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": `public, max-age=${PAGES_JSON_VALIDATION_CACHE_TTL}`,
+        },
+      })
+    );
+  } catch (e) {
+    console.warn("Cache put for pages.json validation failed:", e);
+  }
+
+  try { return JSON.parse(text); } catch (_) { return null; }
+}
+
 // Verify that a non-metadata file path corresponds to a real page of the
-// site. Reads pages.json directly from R2 (NOT via HTTPS) — a recursive
-// fetch back into this same Pages Function gets intercepted by Cloudflare
-// Access on protected previews and returns an HTML challenge page instead
-// of JSON. Pages sites store pages.json as a flat array; blog sites use a
-// batched object.
+// site. Goes through Cloudflare's edge cache first, then R2 — never
+// HTTPS-back-into-itself, since recursive fetches get intercepted by
+// Cloudflare Access on protected previews. Pages sites store pages.json
+// as a flat array; blog sites use a batched object.
 async function isPagePath(filePath, env, siteId) {
   const m = filePath.match(/^(.+?)\.(html?|md)$/i);
   if (!m) return false;
   const slug = m[1];
 
-  let parsed;
-  try {
-    const obj = await env.PLURIBUS_BUCKET.get(`${siteId}/public/pages.json`);
-    if (!obj) return false;
-    parsed = JSON.parse(await obj.text());
-  } catch (e) {
-    console.error("Failed to read pages.json from R2 for validation:", e);
-    return false;
-  }
+  const parsed = await readPagesJsonForValidation(env, siteId);
+  if (!parsed) return false;
 
   let pages;
   if (Array.isArray(parsed)) {
