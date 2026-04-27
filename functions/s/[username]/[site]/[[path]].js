@@ -59,8 +59,15 @@ export async function onRequest(context) {
   console.log("URL pathname:", url.pathname);
 
   // Compute the path inside the site, after /s/:username/:site/
-  // e.g. /s/alice/myblog/about/team.html -> "about/team.html"
-  const segments = url.pathname.split("/").filter(Boolean); // ["s","alice","myblog","about","team.html"]
+  // e.g. /s/alice/myblog/about/team.html -> "about/team.html".
+  // `URL.pathname` does NOT percent-decode, so a CJK page like
+  // `中文笔记.html` arrives here as `%E4%B8%AD%E6%96%87%E7%AC%94%E8%AE%B0.html`.
+  // Decode each segment so the downstream slug comparison and R2 key
+  // see real UTF-8 chars; NFC-normalize while we're here so a URL
+  // pasted from a macOS NFD source matches our NFC pages.json entries.
+  const segments = url.pathname.split("/").filter(Boolean).map((seg) => {
+    try { return decodeURIComponent(seg).normalize("NFC"); } catch { return seg; }
+  });
   console.log("Path segments:", JSON.stringify(segments));
   const restSegments = segments.slice(3); // skip "s", username, and site
   let filePath = restSegments.join("/");
