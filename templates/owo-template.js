@@ -2,6 +2,16 @@ document.addEventListener("DOMContentLoaded", async function () {
   // https://agorapages.com
   const origin = document.location.origin;
 
+  // Pull in the renderer's optional modules dynamically (in parallel),
+  // rather than baking <script> tags into owo-template.html. The HTML is
+  // snapshotted into each site's R2 at create time, so a static script
+  // list would freeze the module set per site. Loading from this script
+  // lets every existing site pick up new modules on the next page load.
+  await Promise.all([
+    ensureModuleLoaded("AgoraWikilinks", "/assets/wikilinks.js"),
+    ensureModuleLoaded("AgoraMath", "/assets/math.js"),
+  ]);
+
   // Published user sites live at /s/<owner>/<site>/...; everything else
   // (root marketing pages like /about.html, the dev server) is treated as
   // basePath = "". Detect by checking the actual path, not the host —
@@ -264,6 +274,40 @@ function decodeEmbeds(basePath) {
       pre.parentElement.parentElement.replaceWith(newDiv);
     }
   }
+}
+
+// Resolve once `globalName` is defined on `window`, loading `src` via a
+// dynamically-injected <script> tag if needed. Idempotent — repeat calls
+// return immediately if the global already exists; skip the inject step
+// if a matching <script> is already in the document (e.g. from older
+// owo-template.html snapshots that included static <script> tags). On
+// network failure the helper logs and resolves anyway, so renderer code
+// can degrade gracefully (the optional module just won't be available).
+function ensureModuleLoaded(globalName, src) {
+  if (window[globalName]) return Promise.resolve();
+  return new Promise(resolve => {
+    const existing = Array.from(document.scripts).find(s => {
+      const u = s.getAttribute("src");
+      return u && u.endsWith(src);
+    });
+    if (existing) {
+      if (window[globalName]) { resolve(); return; }
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => {
+        console.warn("Module script failed to load:", src);
+        resolve();
+      });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      console.warn("Module script failed to load:", src);
+      resolve();
+    };
+    document.head.appendChild(script);
+  });
 }
 
 // Remove a leading YAML frontmatter block (`---\n...\n---\n`) if present.
