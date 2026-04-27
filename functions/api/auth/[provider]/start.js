@@ -38,6 +38,17 @@ export async function onRequestGet(context) {
   const clientId = config.getClientId(env, isDev);
   const redirectUri = config.getRedirectUri(url.origin);
 
+  // Catch a missing OAuth credential early — otherwise URLSearchParams
+  // will happily stringify `undefined` into the query (`client_id=undefined`)
+  // and the provider returns a misleading error like "scope is invalid"
+  // because it stops parsing once it sees the bad client_id.
+  if (!clientId) {
+    return new Response(
+      `OAuth not configured for provider "${provider}" (missing client id).`,
+      { status: 500 }
+    );
+  }
+
   // Per-flow random state — round-tripped through the provider and
   // verified by the callback against the value pinned in the user's
   // browser via an HttpOnly cookie. Without this an attacker can deliver
@@ -45,16 +56,18 @@ export async function onRequestGet(context) {
   // victim into the attacker's account (login CSRF).
   const state = await generateOAuthState();
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope: config.scope,
-    state,
-  });
-
+  // Build params with `.set()` in the order GitLab documents:
+  // response_type, client_id, redirect_uri, state, scope. OAuth 2.0
+  // doesn't mandate ordering, but GitLab's parser is finicky and the
+  // previous (constructor-object) ordering tripped its scope validator.
+  const params = new URLSearchParams();
   if (config.responseType) {
     params.set("response_type", config.responseType);
   }
+  params.set("client_id", clientId);
+  params.set("redirect_uri", redirectUri);
+  params.set("state", state);
+  params.set("scope", config.scope);
 
   if (provider === "google") {
     params.set("access_type", "offline");
