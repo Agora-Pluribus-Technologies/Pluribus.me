@@ -1844,10 +1844,12 @@ function showBlogPostEditModal(content, displayName, callback) {
     return true;
   });
 
-  // Image select button
+  // Image select button — store the path with the `attachments/` prefix
+  // so the published blog template (`${basePath}/${post.image}`) resolves
+  // to the file's actual location in R2.
   modal.querySelector('#blogPostImageSelect').addEventListener('click', () => {
     showImageUploadPopup(({ filename }) => {
-      document.getElementById('blogPostImage').value = filename;
+      document.getElementById('blogPostImage').value = `attachments/${filename}`;
       // Clear embed if image is selected
       document.getElementById('blogPostEmbed').value = '';
     });

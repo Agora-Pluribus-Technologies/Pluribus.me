@@ -343,9 +343,12 @@ function buildPagesJsonContent(pages, isBlog) {
   if (!Array.isArray(pages)) return JSON.stringify(pages || []);
   if (!isBlog) return JSON.stringify(pages);
 
+  // Sort by frontmatter date (author-supplied) so the published blog feed
+  // doesn't reshuffle when an old post is edited. Falls back to modifiedAt
+  // and createdAt when an entry has no parsed date.
   const sorted = pages.slice().sort((a, b) => {
-    const ad = new Date(a.modifiedAt || a.createdAt || 0).getTime();
-    const bd = new Date(b.modifiedAt || b.createdAt || 0).getTime();
+    const ad = new Date(a.date || a.modifiedAt || a.createdAt || 0).getTime();
+    const bd = new Date(b.date || b.modifiedAt || b.createdAt || 0).getTime();
     return bd - ad; // newest first
   });
   const batches = [];
@@ -373,6 +376,21 @@ function flattenPagesJson(parsed) {
     return out;
   }
   return [];
+}
+
+// Pull out the post-date from a blog post's YAML frontmatter (`date: ...`).
+// Returns null when no frontmatter or no date field. Used by the publish
+// flow so blog posts in pages.json are sorted by author-supplied date
+// instead of by file modifiedAt — editing an old post shouldn't reorder
+// the blog feed.
+function extractFrontmatterDate(markdown) {
+  if (!markdown || typeof markdown !== "string") return null;
+  const fm = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return null;
+  const dateLine = fm[1].match(/^date:[ \t]*(.+?)[ \t]*$/m);
+  if (!dateLine) return null;
+  const raw = dateLine[1].replace(/^['"]|['"]$/g, "").trim();
+  return raw || null;
 }
 
 // Pull out the tag list from a post's YAML frontmatter. Accepts both the
@@ -893,6 +911,12 @@ async function deployChanges(siteId) {
         modifiedAt: item.modifiedAt || new Date().toISOString(),
       };
       if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
+      // Blog posts: surface the author-supplied date so the publish-time
+      // sort orders the feed by post date instead of file modifiedAt.
+      if (isBlogSite) {
+        const d = extractFrontmatterDate(item.content || "");
+        if (d) entry.date = d;
+      }
       return entry;
     });
   files.push({
@@ -1073,7 +1097,8 @@ async function deployBlogPost(siteId, changedPost) {
   }
 
   // Always update pages.json (exclude latest.md). deployBlogPost is only
-  // called for blog sites, so always emit the batched shape.
+  // called for blog sites, so always emit the batched shape and surface
+  // the frontmatter `date` so feed order tracks post date, not modifiedAt.
   const pages = markdownCache
     .filter(item => item.fileName !== "public/latest.md")
     .map(item => {
@@ -1085,6 +1110,8 @@ async function deployBlogPost(siteId, changedPost) {
         modifiedAt: item.modifiedAt || new Date().toISOString(),
       };
       if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
+      const d = extractFrontmatterDate(item.content || "");
+      if (d) entry.date = d;
       return entry;
     });
   files.push({

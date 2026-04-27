@@ -221,7 +221,16 @@ async function isPagePath(filePath, env, siteId) {
 
 async function isAllowedFilePath(filePath, env, siteId) {
   if (isAllowedMetadataPath(filePath)) return true;
-  return await isPagePath(filePath, env, siteId);
+  // Only .html/.md requests need to correspond to a real entry in
+  // pages.json — those represent pages of the site. Everything else
+  // (images, fonts, CSS, JS, JSON, PDFs, etc.) is a static asset; we
+  // let the R2 lookup decide whether it actually exists. This keeps
+  // legacy root-level images working on sites that pre-date the
+  // attachments/ migration without weakening the page-probing gate.
+  if (/\.(html?|md)$/i.test(filePath)) {
+    return await isPagePath(filePath, env, siteId);
+  }
+  return true;
 }
 
 // Helper function to guess content type from file extension
