@@ -801,13 +801,16 @@ function renderEmbed(embedContent) {
 }
 
 function extractYouTubeVideoId(url) {
+  // Constrain the capture to YouTube's canonical 11-char id format
+  // ([A-Za-z0-9_-]{11}) so a malicious "URL" can't escape the iframe
+  // src attribute when interpolated into HTML.
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?.*&v=)([^&\n?#]+)/,
-    /^([a-zA-Z0-9_-]{11})$/,
+    /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?[^#]*&v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/,
+    /^([A-Za-z0-9_-]{11})$/,
   ];
   for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
+    const match = (url || "").match(pattern);
+    if (match && /^[A-Za-z0-9_-]{11}$/.test(match[1])) return match[1];
   }
   return null;
 }
@@ -840,13 +843,16 @@ function processEmbeds(container, basePath) {
       const parts = linkButtonContent.split("|");
       const url = parts[0] || "";
       const label = parts[1] || "Link";
-      const isExternal = url.startsWith("https://");
+      // Reject any URL whose scheme isn't on the allowlist — see
+      // isSafeButtonUrl below for the rationale.
+      const safeUrl = isSafeButtonUrl(url) ? url : "#";
+      const isExternal = safeUrl.startsWith("https://");
       const icon = isExternal ? "&#x1F310;" : "&#x1F517;";
 
       const buttonContainer = document.createElement("div");
       buttonContainer.className = "link-button-container";
       const linkButton = document.createElement("a");
-      linkButton.href = url;
+      linkButton.href = safeUrl;
       linkButton.className = "link-button";
       if (isExternal) {
         linkButton.setAttribute("target", "_blank");
@@ -890,6 +896,23 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+// URL-scheme allowlist for the link-button code-block. Markdown links
+// in the body are sanitized by DOMPurify (which strips javascript: by
+// default), but link buttons are constructed via direct property
+// assignment (linkButton.href = url) which bypasses that — so we
+// validate the scheme here instead. Permitted: absolute http(s),
+// mailto:, fragment-only (#), and relative paths (/, ./, ../).
+function isSafeButtonUrl(url) {
+  if (typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^mailto:/i.test(trimmed)) return true;
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) return true;
+  if (trimmed.startsWith("./") || trimmed.startsWith("../")) return true;
+  return false;
 }
 
 function createFooter(origin, basePath, siteName) {

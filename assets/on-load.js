@@ -560,7 +560,7 @@ async function openSiteInEditor(site, initialPage = "index") {
       let fileName = markdownCache[i].fileName;
       // Migrate old index.md files to use displayName-based filename
       if (fileName === "index") {
-        const newFileName = markdownCache[i].displayName.toLowerCase().replace(/\s+/g, "-");
+        const newFileName = sanitizeSlug(markdownCache[i].displayName) || "home";
         console.log(`Migrating index.md to ${newFileName}.md`);
         fileName = newFileName;
       }
@@ -2104,7 +2104,15 @@ async function createNewPage(displayName) {
     alert(`Page name must be ${MAX_NAME_LENGTH} characters or fewer.`);
     return;
   }
-  const sanitizedFileName = trimmedDisplayName.toLowerCase().replace(/\s+/g, "-");
+  // Strict slug allowlist — same rule createNewFolder applies. Without
+  // this an attacker can name a page `<img src=x onerror=...>`, which
+  // becomes the slug and the filepath, then renders unescaped wherever
+  // the filepath flows into HTML (commit modal, history, sidebar, etc.).
+  const sanitizedFileName = sanitizeSlug(trimmedDisplayName);
+  if (!sanitizedFileName) {
+    alert("Page name must contain at least one letter, number, dash, underscore, or dot.");
+    return;
+  }
   const folder = getSelectedFolder();
   const folderPrefix = folder ? `${folder}/` : "";
   const relativePath = `${folderPrefix}${sanitizedFileName}.md`;
@@ -2132,6 +2140,25 @@ async function createNewPage(displayName) {
   selectSidebarPage(fileName);
 }
 
+// Slug allowlist applied to every page and folder name. Lowercase,
+// spaces -> dashes, strip anything outside [a-zA-Z0-9-_.], collapse
+// repeated dashes, trim leading/trailing separators. Returns "" when
+// nothing usable remains — callers must check and reject.
+//
+// SECURITY: this is the LAST chance to keep `<>"'&` etc. out of slugs.
+// Slugs flow into filepaths, which flow into HTML sinks (commit modal,
+// history view, sidebar). HTML sinks must also escape (defense in
+// depth), but stopping unsafe chars at the source means even legacy
+// renders that forgot to escape can't be exploited via new content.
+function sanitizeSlug(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9\-_.]+/g, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_.]+|[-_.]+$/g, "");
+}
+
 async function createNewFolder(folderName) {
   const trimmedName = (folderName || "").trim();
   if (!trimmedName) return;
@@ -2139,14 +2166,7 @@ async function createNewFolder(folderName) {
     alert(`Folder name must be ${MAX_NAME_LENGTH} characters or fewer.`);
     return;
   }
-  // Slugify: lowercase, spaces -> dashes, then strip anything outside [a-zA-Z0-9-_.],
-  // collapse repeats, and trim leading/trailing separator chars.
-  const sanitizedName = trimmedName
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9\-_.]+/g, "")
-    .replace(/-{2,}/g, "-")
-    .replace(/^[-_.]+|[-_.]+$/g, "");
+  const sanitizedName = sanitizeSlug(trimmedName);
   if (!sanitizedName) {
     alert("Folder name must contain at least one letter, number, dash, underscore, or dot.");
     return;
@@ -2557,12 +2577,7 @@ function renameFolderDisplayName(folderPath, newDisplayName) {
 }
 
 function slugifyFolderName(name) {
-  return (name || "")
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9\-_.]+/g, "")
-    .replace(/-{2,}/g, "-")
-    .replace(/^[-_.]+|[-_.]+$/g, "");
+  return sanitizeSlug(name);
 }
 
 // Returns true if `filePath` (a "public/..." markdown path) lives inside the
@@ -3421,7 +3436,12 @@ function startRenameInSidebar(fileEl, node, siteId) {
     }
 
     const oldFilePath = cacheItem.fileName;
-    const sanitized = newName.toLowerCase().replace(/\s+/g, "-");
+    // Strict slug allowlist — see createNewPage for the rationale.
+    const sanitized = sanitizeSlug(newName);
+    if (!sanitized) {
+      alert("Page name must contain at least one letter, number, dash, underscore, or dot.");
+      return;
+    }
 
     // Preserve the folder prefix
     const pathParts = oldFilePath.replace("public/", "").split("/");

@@ -450,7 +450,12 @@ async function formatCommitChanges(siteId, commitOid) {
     }
 
     html += `<div style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;">`;
-    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${displayPath}</strong></div>`;
+    // displayPath comes from a page filename, which is built from the
+    // user-supplied page name. Always escape — even with the tightened
+    // slug allowlist in on-load.js, a legacy site may have looser slugs
+    // already committed, and "trust the slug sanitizer" is the wrong
+    // last-line defence for an HTML sink.
+    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${escapeHtml(displayPath)}</strong></div>`;
 
     try {
       if (change.status === "added" && change.newOid) {
@@ -733,7 +738,12 @@ async function formatChangesForDisplay(siteId) {
     }
 
     html += `<div style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;">`;
-    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${displayPath}</strong></div>`;
+    // displayPath comes from a page filename, which is built from the
+    // user-supplied page name. Always escape — even with the tightened
+    // slug allowlist in on-load.js, a legacy site may have looser slugs
+    // already committed, and "trust the slug sanitizer" is the wrong
+    // last-line defence for an HTML sink.
+    html += `<div style="color: ${statusColor}; margin-bottom: 5px;"><strong>[${statusSymbol}] ${escapeHtml(displayPath)}</strong></div>`;
 
     // Show diff for modified files
     if (change.status === "modified") {

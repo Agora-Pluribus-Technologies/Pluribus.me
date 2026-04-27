@@ -526,20 +526,43 @@ function renderLinkButtonPreview(content) {
   const parts = content.split('|');
   const url = parts[0] || '';
   const label = parts[1] || 'Link';
-  const isExternal = url.startsWith('https://');
+  // Same scheme allowlist as the published-site renderers — blocks
+  // javascript:/data:/vbscript: so the preview matches what readers
+  // will actually get and the author can't accidentally click their
+  // own malformed URL during editing either.
+  const safeUrl = isSafeButtonUrl(url) ? url : '#';
+  const isExternal = safeUrl.startsWith('https://');
   const icon = isExternal ? '&#x1F310;' : '&#x1F517;'; // Globe for external, link for local
   const target = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-  return `<div class="link-button-container"><a href="${escapeHtml(url)}" class="link-button"${target}><span class="link-icon">${icon}</span> ${escapeHtml(label)}</a></div>`;
+  return `<div class="link-button-container"><a href="${escapeHtml(safeUrl)}" class="link-button"${target}><span class="link-icon">${icon}</span> ${escapeHtml(label)}</a></div>`;
+}
+
+// URL-scheme allowlist for link buttons. Permitted: absolute http(s),
+// mailto:, fragment-only (#), and relative paths (/, ./, ../).
+function isSafeButtonUrl(url) {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^mailto:/i.test(trimmed)) return true;
+  if (trimmed.startsWith('/') || trimmed.startsWith('#')) return true;
+  if (trimmed.startsWith('./') || trimmed.startsWith('../')) return true;
+  return false;
 }
 
 function extractYouTubeVideoId(url) {
+  // Constrain the capture to YouTube's canonical 11-char id format
+  // ([A-Za-z0-9_-]{11}) so a malicious "URL" like
+  // `youtu.be/X"></iframe><script>...` can't escape the iframe src
+  // attribute when the result is interpolated into HTML. The loose
+  // `[^&\n?#]+` capture this replaces accepted `<>"` etc. verbatim.
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?.*&v=)([^&\n?#]+)/,
-    /^([a-zA-Z0-9_-]{11})$/
+    /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/v\/|youtube\.com\/watch\?[^#]*&v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/,
+    /^([A-Za-z0-9_-]{11})$/
   ];
   for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
+    const match = (url || '').match(pattern);
+    if (match && /^[A-Za-z0-9_-]{11}$/.test(match[1])) return match[1];
   }
   return null;
 }
