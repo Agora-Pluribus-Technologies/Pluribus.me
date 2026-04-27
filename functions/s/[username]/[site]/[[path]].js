@@ -82,7 +82,11 @@ export async function onRequest(context) {
   // site-metadata files, an attachment, or an .html/.md whose slug exists
   // in the site's pages.json. Anything else is 404 — no random R2-key
   // probing for files that aren't pages of the site.
-  const allowed = await isAllowedFilePath(filePath, env, siteId);
+  // `from-agorapages=true` is appended by the editor's "View Live Site"
+  // button so a renamed/added page resolves on the first click even when
+  // the publish-time cache purge hasn't propagated yet.
+  const bypassCache = url.searchParams.get("from-agorapages") === "true";
+  const allowed = await isAllowedFilePath(filePath, env, siteId, bypassCache);
   if (!allowed) {
     return corsResponse("Page not found", 404);
   }
@@ -150,7 +154,11 @@ const PAGES_JSON_VALIDATION_CACHE_TTL = 300;
 // Read + cache pages.json for the validation gate. Tries Cloudflare's
 // edge cache first; on miss, falls through to R2 and stores the response
 // for next time. Returns null if R2 has no file (or the read failed).
-async function readPagesJsonForValidation(env, siteId) {
+// `bypassCache` skips the cache.match step and re-reads R2 directly,
+// then refreshes the cache — used by editor "View Live Site" requests
+// (?from-agorapages=true) so a freshly renamed/added page resolves on
+// the first click before the zone-wide purge propagates.
+async function readPagesJsonForValidation(env, siteId, bypassCache) {
   const cache = caches.default;
   // Cache key matches the public serving URL that purgeCache (in
   // functions/api/files.js) targets when pages.json is republished —
@@ -160,9 +168,11 @@ async function readPagesJsonForValidation(env, siteId) {
     `https://agorapages.com/s/${siteId}/pages.json`
   );
 
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    try { return await cached.json(); } catch (_) { /* fall through to R2 */ }
+  if (!bypassCache) {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      try { return await cached.json(); } catch (_) { /* fall through to R2 */ }
+    }
   }
 
   let text;
@@ -199,12 +209,12 @@ async function readPagesJsonForValidation(env, siteId) {
 // HTTPS-back-into-itself, since recursive fetches get intercepted by
 // Cloudflare Access on protected previews. Pages sites store pages.json
 // as a flat array; blog sites use a batched object.
-async function isPagePath(filePath, env, siteId) {
+async function isPagePath(filePath, env, siteId, bypassCache) {
   const m = filePath.match(/^(.+?)\.(html?|md)$/i);
   if (!m) return false;
   const slug = m[1];
 
-  const parsed = await readPagesJsonForValidation(env, siteId);
+  const parsed = await readPagesJsonForValidation(env, siteId, bypassCache);
   if (!parsed) return false;
 
   let pages;
@@ -222,7 +232,7 @@ async function isPagePath(filePath, env, siteId) {
   return pages.some(p => p && p.fileName === slug);
 }
 
-async function isAllowedFilePath(filePath, env, siteId) {
+async function isAllowedFilePath(filePath, env, siteId, bypassCache) {
   if (isAllowedMetadataPath(filePath)) return true;
   // Only .html/.md requests need to correspond to a real entry in
   // pages.json — those represent pages of the site. Everything else
@@ -231,7 +241,7 @@ async function isAllowedFilePath(filePath, env, siteId) {
   // legacy root-level images working on sites that pre-date the
   // attachments/ migration without weakening the page-probing gate.
   if (/\.(html?|md)$/i.test(filePath)) {
-    return await isPagePath(filePath, env, siteId);
+    return await isPagePath(filePath, env, siteId, bypassCache);
   }
   return true;
 }
