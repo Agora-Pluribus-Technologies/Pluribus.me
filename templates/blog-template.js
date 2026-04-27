@@ -12,6 +12,9 @@ let postBatches = [];
 let batchLoadPromises = [];
 // Loaded post objects, indexed parallel to postBatches.
 let loadedBatches = [];
+// Per-post cache shared by every load path (batch loads on default browse,
+// individual fetches on title search). Lookup key is the page fileName.
+let loadedPosts = new Map();
 // Stashed at first loadBlogPosts call so pagination/filter handlers can
 // trigger additional batch loads without re-threading through events.
 let blogOrigin = "";
@@ -240,24 +243,40 @@ async function loadBatch(batchIndex, origin, basePath) {
   batchLoadPromises[batchIndex] = (async () => {
     const out = [];
     for (const page of batch) {
-      try {
-        const mdUrl = `${origin}${basePath}/${page.fileName}.md`;
-        const response = await fetch(mdUrl, {
-          method: "GET",
-          headers: { "Cache-Control": "no-cache, must-revalidate" },
-        });
-        if (response.ok) {
-          const markdown = await response.text();
-          out.push(parsePostMarkdown(markdown, page, basePath));
-        }
-      } catch (e) {
-        console.warn("Failed to load post:", page.fileName, e);
-      }
+      // Search may have already loaded this individual post — reuse it
+      // instead of refetching.
+      const post = await loadSinglePost(page, origin, basePath);
+      if (post) out.push(post);
     }
     loadedBatches[batchIndex] = out;
     return out;
   })();
   return batchLoadPromises[batchIndex];
+}
+
+// Fetch one post's markdown and parse it into the cache. Idempotent: if
+// the post is already in `loadedPosts`, returns the cached version. Used
+// by both batch loading (default browse) and per-post search loading.
+async function loadSinglePost(page, origin, basePath) {
+  if (!page || !page.fileName) return null;
+  const cached = loadedPosts.get(page.fileName);
+  if (cached) return cached;
+  try {
+    const mdUrl = `${origin}${basePath}/${page.fileName}.md`;
+    const response = await fetch(mdUrl, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache, must-revalidate" },
+    });
+    if (response.ok) {
+      const markdown = await response.text();
+      const post = parsePostMarkdown(markdown, page, basePath);
+      loadedPosts.set(page.fileName, post);
+      return post;
+    }
+  } catch (e) {
+    console.warn("Failed to load post:", page.fileName, e);
+  }
+  return null;
 }
 
 // Rebuild allPosts from loadedBatches in batch order. Posts already arrive
@@ -529,28 +548,25 @@ async function renderCurrentPage() {
       .map(m => byFileName.get(m.page.fileName))
       .filter(Boolean);
   } else if (currentSearchQuery) {
-    // Title-only search via pages.json metadata. We only fetch the
-    // batches containing the matches on the current page — usually just
-    // one batch per page of results.
+    // Title-only search via pages.json metadata. We fetch only the
+    // matching posts themselves (one .md request each), not their whole
+    // batch — keeps memory usage proportional to result count, not to
+    // the size of any batch a result happens to live in.
     const matches = getMetadataSearchMatches();
     totalPages = Math.max(1, Math.ceil(matches.length / POSTS_PER_PAGE));
     if (currentPage > totalPages) currentPage = totalPages;
     const start = (currentPage - 1) * POSTS_PER_PAGE;
     const pageMatches = matches.slice(start, start + POSTS_PER_PAGE);
 
-    const neededBatches = Array.from(new Set(
-      pageMatches.map(m => m.batchIdx).filter(idx => !loadedBatches[idx])
-    ));
-    if (neededBatches.length > 0) {
+    const needLoad = pageMatches.filter(m => !loadedPosts.has(m.page.fileName));
+    if (needLoad.length > 0) {
       feedContainer.innerHTML = '<div class="loading-posts">Loading posts...</div>';
-      for (const idx of neededBatches) {
-        await loadBatch(idx, blogOrigin, blogBasePath);
+      for (const m of needLoad) {
+        await loadSinglePost(m.page, blogOrigin, blogBasePath);
       }
-      rebuildAllPostsFromLoadedBatches();
     }
-    const byFileName = new Map(allPosts.map(p => [p.fileName, p]));
     pagePosts = pageMatches
-      .map(m => byFileName.get(m.page.fileName))
+      .map(m => loadedPosts.get(m.page.fileName))
       .filter(Boolean);
   } else {
     // Default browse: pagination follows on-disk batch order, so loading
