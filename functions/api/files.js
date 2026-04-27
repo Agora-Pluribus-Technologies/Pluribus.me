@@ -3,16 +3,44 @@ import { canAccess, forbidden } from "./auth/_authorize.js";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const PURGE_BATCH_SIZE = 30;
 
-async function purgeCache(env, siteId, filePaths) {
-  if (!env.CF_ZONE_ID || !env.CF_API_TOKEN) return;
-  const urls = [];
+async function purgeCache(env, siteId, filePaths, requestOrigin) {
+  // Build the serving paths for every changed file (skipping .html which
+  // is regenerated from the .md and would just duplicate the .md purge).
+  const servingPaths = [];
   for (const fp of filePaths) {
     if (!fp.startsWith("public/")) continue;
     if (fp.endsWith(".html")) continue;
-    const servingPath = fp.slice("public/".length);
-    urls.push(`https://agorapages.com/s/${siteId}/${servingPath}`);
+    servingPaths.push(fp.slice("public/".length));
   }
-  if (urls.length === 0) return;
+  if (servingPaths.length === 0) return;
+
+  // Always evict the local colo's `caches.default` for both the prod
+  // hostname (the validation cache key in [[path]].js when running on
+  // prod) and the request's own origin (the validation cache key when
+  // running on a Pages preview deployment). This works without any
+  // Cloudflare API credentials and guarantees that the colo serving
+  // this publish doesn't continue handing out a stale pages.json/etc.
+  // immediately after the write.
+  try {
+    const cache = caches.default;
+    const origins = new Set(["https://agorapages.com"]);
+    if (requestOrigin) origins.add(requestOrigin);
+    for (const origin of origins) {
+      for (const sp of servingPaths) {
+        const key = new Request(`${origin}/s/${siteId}/${sp}`);
+        await cache.delete(key);
+      }
+    }
+  } catch (e) {
+    console.warn("Local cache.delete failed:", e);
+  }
+
+  // Cross-colo eviction via Cloudflare's zone purge API. Requires creds;
+  // when they're absent (e.g. a dev preview without API tokens set) the
+  // local cache.delete above is the only invalidation that happens —
+  // other colos will refresh on TTL.
+  if (!env.CF_ZONE_ID || !env.CF_API_TOKEN) return;
+  const urls = servingPaths.map(sp => `https://agorapages.com/s/${siteId}/${sp}`);
   for (let i = 0; i < urls.length; i += PURGE_BATCH_SIZE) {
     const batch = urls.slice(i, i + PURGE_BATCH_SIZE);
     const resp = await fetch(
@@ -99,7 +127,7 @@ export async function onRequestPut(context) {
       },
     });
 
-    context.waitUntil(purgeCache(env, siteId, [normalizedPath]));
+    context.waitUntil(purgeCache(env, siteId, [normalizedPath], new URL(request.url).origin));
 
     return new Response(JSON.stringify({ success: true, key: r2Key }), {
       status: 200,
@@ -215,7 +243,7 @@ export async function onRequestPost(context) {
 
   const changedPaths = results.map(r => r.filePath);
   if (changedPaths.length > 0) {
-    context.waitUntil(purgeCache(env, siteId, changedPaths));
+    context.waitUntil(purgeCache(env, siteId, changedPaths, new URL(request.url).origin));
   }
 
   return new Response(JSON.stringify({ success: errors.length === 0, results, errors }), {
@@ -334,7 +362,7 @@ export async function onRequestDelete(context) {
           await env.PLURIBUS_BUCKET.delete(key);
         }
         const deletedPaths = keysToDelete.map(k => k.replace(`${siteId}/`, ""));
-        context.waitUntil(purgeCache(env, siteId, deletedPaths));
+        context.waitUntil(purgeCache(env, siteId, deletedPaths, new URL(request.url).origin));
       }
 
       return new Response(JSON.stringify({ success: true, deleted: listed.objects.length }), {
@@ -352,7 +380,7 @@ export async function onRequestDelete(context) {
 
       await env.PLURIBUS_BUCKET.delete(r2Key);
 
-      context.waitUntil(purgeCache(env, siteId, [normalizedPath]));
+      context.waitUntil(purgeCache(env, siteId, [normalizedPath], new URL(request.url).origin));
 
       return new Response(JSON.stringify({ success: true, key: r2Key }), {
         status: 200,
