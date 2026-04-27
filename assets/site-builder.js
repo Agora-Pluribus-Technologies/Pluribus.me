@@ -95,13 +95,19 @@ function blobToBase64(blob) {
 async function processAndUploadImage(file) {
   try {
     const processedBlob = await processImage(file);
-    let originalName = file.name.replace(/\.[^/.]+$/, '');
+    // NFC normalize at the upload boundary — see folder-import.js for
+    // the full rationale (macOS NFD bytes vs everywhere-else NFC bytes
+    // for the same visible character break Map/key comparisons).
+    const rawName = (file.name || "").normalize("NFC");
+    let originalName = rawName.replace(/\.[^/.]+$/, '');
     if (originalName === "image") {
       originalName = `uploaded-image-${Date.now()}`;
     }
+    // Unicode allowlist: \p{L} = letter, \p{N} = number. CJK / Cyrillic /
+    // accented Latin survive instead of being collapsed to a single dash.
     const sanitizedName = originalName
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
       .replace(/^-+|-+$/g, '')
       .replace(/-+/g, '-');
     const filename = `${sanitizedName}.webp`;

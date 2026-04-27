@@ -235,9 +235,13 @@ async function readPagesJsonForValidation(env, siteId, requestOrigin) {
 // slug regardless of which writer last touched the file. Without this,
 // nested-folder pages 404 because the stored value and the URL-derived
 // slug differ by one of these decorations.
+//
+// NFC-normalize so a URL pasted from a macOS NFD source matches the NFC
+// form that the editor / importer now writes everywhere.
 function canonicalSlug(value) {
   if (typeof value !== "string") return "";
   return value
+    .normalize("NFC")
     .replace(/^\/+/, "")
     .replace(/^public\//, "")
     .replace(/\.md$/i, "");

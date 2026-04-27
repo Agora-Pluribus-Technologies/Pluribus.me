@@ -2141,9 +2141,18 @@ async function createNewPage(displayName) {
 }
 
 // Slug allowlist applied to every page and folder name. Lowercase,
-// spaces -> dashes, strip anything outside [a-zA-Z0-9-_.], collapse
-// repeated dashes, trim leading/trailing separators. Returns "" when
-// nothing usable remains — callers must check and reject.
+// spaces -> dashes, strip anything outside the Unicode-letter /
+// Unicode-number / `-_.` set, collapse repeated dashes, trim
+// leading/trailing separators. Returns "" when nothing usable remains —
+// callers must check and reject.
+//
+// NFC normalize first so the same visible CJK / accented character
+// always lands on the same byte sequence, regardless of whether the
+// caller passed input from a macOS-NFD source.
+//
+// Unicode allowlist (\p{L} letter + \p{N} number, with the `u` flag)
+// preserves CJK, Cyrillic, Greek, accented Latin etc. so non-ASCII
+// page names produce real slugs instead of collapsing to "".
 //
 // SECURITY: this is the LAST chance to keep `<>"'&` etc. out of slugs.
 // Slugs flow into filepaths, which flow into HTML sinks (commit modal,
@@ -2152,9 +2161,10 @@ async function createNewPage(displayName) {
 // renders that forgot to escape can't be exploited via new content.
 function sanitizeSlug(name) {
   return (name || "")
+    .normalize("NFC")
     .toLowerCase()
     .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9\-_.]+/g, "")
+    .replace(/[^\p{L}\p{N}\-_.]+/gu, "")
     .replace(/-{2,}/g, "-")
     .replace(/^[-_.]+|[-_.]+$/g, "");
 }

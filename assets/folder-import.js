@@ -64,15 +64,29 @@
     return IGNORED_DIR_NAMES.has(name.toLowerCase());
   }
 
+  // NFC-normalize every filename string the moment it enters the system.
+  // macOS (especially old HFS+ vaults) hands us NFD bytes for the same
+  // visible character that other systems supply as NFC — `Café` arrives
+  // as either C-a-f-é or C-a-f-e-´ depending on origin, and string
+  // equality fails between the two. Normalizing once at the boundary
+  // means every Map/Set lookup, slug derivation, and R2 key downstream
+  // sees the canonical form.
+  function nfc(s) {
+    return typeof s === "string" ? s.normalize("NFC") : s;
+  }
+
   // Slugify a single path segment: lowercase, spaces/underscores -> hyphens,
-  // drop characters that aren't safe in URLs.
+  // drop characters that aren't safe in URLs. The Unicode allowlist
+  // (\p{L} = letter, \p{N} = number) preserves CJK / Cyrillic / Greek /
+  // accented Latin etc. so non-ASCII filenames don't slug to "" or
+  // collide on emptiness.
   function slugifySegment(name) {
-    return name
+    return nfc(name)
       .toLowerCase()
       .replace(/\.(md|markdown)$/i, "")
       .replace(/['"`]/g, "")
       .replace(/[\s_]+/g, "-")
-      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/[^\p{L}\p{N}-]+/gu, "-")
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "");
   }
@@ -133,7 +147,9 @@
       const file = await new Promise((resolve, reject) =>
         entry.file(resolve, reject)
       );
-      out.push({ relativePath: prefix + entry.name, file });
+      // NFC normalize at the boundary so downstream comparisons with
+      // markdown-referenced filenames (which are usually NFC) succeed.
+      out.push({ relativePath: nfc(prefix + entry.name), file });
       return out;
     }
 
@@ -149,7 +165,7 @@
         entries.push(...batch);
       }
       for (const child of entries) {
-        if (child.isDirectory && shouldIgnoreDir(child.name)) continue;
+        if (child.isDirectory && shouldIgnoreDir(nfc(child.name))) continue;
         const sub = await walkDirectoryEntry(child, prefix + entry.name + "/");
         out.push(...sub);
       }
@@ -176,12 +192,12 @@
   // Asset helpers — image ingestion + path-aware reference resolution.
 
   function attachmentSlug(relativePath, ext, seen) {
-    const base = relativePath.split("/").pop() || "image";
+    const base = nfc(relativePath.split("/").pop() || "image");
     const stem = base.replace(/\.[^.]+$/, "");
     let slug = stem
       .toLowerCase()
       .replace(/['"`]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
       .replace(/^-+|-+$/g, "");
     if (!slug) slug = "image";
     let candidate = `${slug}${ext}`;
@@ -228,12 +244,14 @@
   }
 
   // Strip URL fragment, query, and percent-encoding so we can compare a
-  // markdown reference to a vault-relative file path.
+  // markdown reference to a vault-relative file path. NFC normalize so a
+  // CJK / accented reference written in NFC (the typical editor output)
+  // matches an NFD filename arriving from an old macOS vault.
   function decodeRefPath(ref) {
     let s = String(ref || "").trim();
     s = s.split("#")[0].split("?")[0];
     if (!s) return "";
-    try { return decodeURIComponent(s); } catch { return s; }
+    try { return nfc(decodeURIComponent(s)); } catch { return nfc(s); }
   }
 
   function isExternalUrl(ref) {
@@ -366,19 +384,20 @@
       for (const item of items) {
         const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
         if (!entry) continue;
-        if (entry.isDirectory && shouldIgnoreDir(entry.name)) continue;
+        if (entry.isDirectory && shouldIgnoreDir(nfc(entry.name))) continue;
         try {
           const sub = await walkDirectoryEntry(entry);
           entries.push(...sub);
         } catch (e) {
-          errors.push({ path: entry.name, message: String(e) });
+          errors.push({ path: nfc(entry.name), message: String(e) });
         }
       }
     } else if (dataTransferOrFileList && dataTransferOrFileList.length != null) {
       // FileList from <input type="file" webkitdirectory>.
       // Each File has a webkitRelativePath like "vault/notes/index.md".
+      // NFC normalize at the boundary — see walkDirectoryEntry comment.
       entries = Array.from(dataTransferOrFileList).map(file => ({
-        relativePath: file.webkitRelativePath || file.name,
+        relativePath: nfc(file.webkitRelativePath || file.name),
         file,
       }));
     }
