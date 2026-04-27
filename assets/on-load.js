@@ -502,7 +502,13 @@ async function openSiteInEditor(site, initialPage = "index") {
   if (pagesJsonText) {
     try {
       pagesJsonData = JSON.parse(pagesJsonText);
-      markdownFiles = pagesJsonData.map(page => `public/${page.fileName}.md`);
+      // Blog sites store pages.json as a batched object — flatten before
+      // deriving the list of markdown files to load. Pages sites still
+      // arrive as a flat array; flattenPagesJson is a no-op for those.
+      const pagesArray = (typeof flattenPagesJson === "function")
+        ? flattenPagesJson(pagesJsonData)
+        : (Array.isArray(pagesJsonData) ? pagesJsonData : []);
+      markdownFiles = pagesArray.map(page => `public/${page.fileName}.md`);
     } catch {
       pagesJsonData = null;
       markdownFiles = [];
