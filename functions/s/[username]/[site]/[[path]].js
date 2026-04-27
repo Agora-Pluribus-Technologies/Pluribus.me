@@ -82,7 +82,7 @@ export async function onRequest(context) {
   // site-metadata files, an attachment, or an .html/.md whose slug exists
   // in the site's pages.json. Anything else is 404 — no random R2-key
   // probing for files that aren't pages of the site.
-  const allowed = await isAllowedFilePath(filePath, url.origin, siteId);
+  const allowed = await isAllowedFilePath(filePath, env, siteId);
   if (!allowed) {
     return corsResponse("Page not found", 404);
   }
@@ -142,25 +142,23 @@ function isAllowedMetadataPath(filePath) {
 }
 
 // Verify that a non-metadata file path corresponds to a real page of the
-// site. Pulls pages.json over HTTPS from the site's own public URL (which
-// re-enters this same function — pages.json is whitelisted above so the
-// recursive call serves directly from R2 without re-validating). Pages
-// sites store pages.json as a flat array; blog sites use a batched object.
-async function isPagePath(filePath, originUrl, siteId) {
+// site. Reads pages.json directly from R2 (NOT via HTTPS) — a recursive
+// fetch back into this same Pages Function gets intercepted by Cloudflare
+// Access on protected previews and returns an HTML challenge page instead
+// of JSON. Pages sites store pages.json as a flat array; blog sites use a
+// batched object.
+async function isPagePath(filePath, env, siteId) {
   const m = filePath.match(/^(.+?)\.(html?|md)$/i);
   if (!m) return false;
   const slug = m[1];
 
   let parsed;
   try {
-    // Default cache headers: pages.json changes only at publish time, so
-    // letting Cloudflare's edge cache reuse it across page-validation
-    // requests dramatically cuts the latency of every site request.
-    const resp = await fetch(`${originUrl}/s/${siteId}/pages.json`);
-    if (!resp.ok) return false;
-    parsed = await resp.json();
+    const obj = await env.PLURIBUS_BUCKET.get(`${siteId}/public/pages.json`);
+    if (!obj) return false;
+    parsed = JSON.parse(await obj.text());
   } catch (e) {
-    console.error("Failed to fetch pages.json for validation:", e);
+    console.error("Failed to read pages.json from R2 for validation:", e);
     return false;
   }
 
@@ -179,9 +177,9 @@ async function isPagePath(filePath, originUrl, siteId) {
   return pages.some(p => p && p.fileName === slug);
 }
 
-async function isAllowedFilePath(filePath, originUrl, siteId) {
+async function isAllowedFilePath(filePath, env, siteId) {
   if (isAllowedMetadataPath(filePath)) return true;
-  return await isPagePath(filePath, originUrl, siteId);
+  return await isPagePath(filePath, env, siteId);
 }
 
 // Helper function to guess content type from file extension
