@@ -32,29 +32,58 @@ export async function hashToken(token) {
   return Array.from(hashArray).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Stable identity across pending_username AND active phases, since both
+// carry provider + providerId from the OAuth callback unchanged. Used
+// as the UNIQUE column so re-issuing for the same user replaces in place.
+function userKeyFromSession(sessionData) {
+  return `${sessionData.provider}:${sessionData.providerId}`;
+}
+
 export async function createSession(env, sessionData) {
   const token = await generateSessionToken();
   const hash = await hashToken(token);
+  const userKey = userKeyFromSession(sessionData);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const nowIso = new Date(nowSec * 1000).toISOString();
 
   const session = {
     ...sessionData,
-    createdAt: new Date().toISOString(),
-    lastAccess: new Date().toISOString(),
+    createdAt: nowIso,
+    lastAccess: nowIso,
   };
 
-  await env.SESSIONS.put(`session:${hash}`, JSON.stringify(session), {
-    expirationTtl: SESSION_TTL,
-  });
+  // INSERT OR REPLACE keyed on userKey: a fresh login from the same
+  // provider+providerId silently invalidates any prior session for that
+  // user. Other devices holding the old token will see getSession return
+  // null on their next request — accepted trade-off for one-session-per-user.
+  await env.USERS_DB.prepare(
+    "INSERT OR REPLACE INTO Sessions (tokenHash, userKey, data, createdAt, lastAccess) VALUES (?, ?, ?, ?, ?)"
+  ).bind(hash, userKey, JSON.stringify(session), nowSec, nowSec).run();
 
   return token;
 }
 
 export async function getSession(env, token) {
   const hash = await hashToken(token);
-  const data = await env.SESSIONS.get(`session:${hash}`, { cacheTtl: 600 });
-  if (!data) return null;
+  const row = await env.USERS_DB.prepare(
+    "SELECT data, lastAccess FROM Sessions WHERE tokenHash = ?"
+  ).bind(hash).first();
+  if (!row) return null;
+
+  // Lazy expiry: D1 has no TTL, so any read that hits an expired row
+  // also evicts it. Combined with the UNIQUE userKey replacing rows on
+  // re-login, the table never accumulates dead state.
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (row.lastAccess + SESSION_TTL < nowSec) {
+    try {
+      await env.USERS_DB.prepare("DELETE FROM Sessions WHERE tokenHash = ?")
+        .bind(hash).run();
+    } catch (_) { /* best-effort */ }
+    return null;
+  }
+
   try {
-    return JSON.parse(data);
+    return JSON.parse(row.data);
   } catch {
     return null;
   }
@@ -62,22 +91,31 @@ export async function getSession(env, token) {
 
 export async function updateSession(env, token, updates) {
   const hash = await hashToken(token);
-  const data = await env.SESSIONS.get(`session:${hash}`, { cacheTtl: 600 });
-  if (!data) return null;
+  const row = await env.USERS_DB.prepare(
+    "SELECT data, lastAccess FROM Sessions WHERE tokenHash = ?"
+  ).bind(hash).first();
+  if (!row) return null;
 
-  const session = JSON.parse(data);
-  const updated = { ...session, ...updates, lastAccess: new Date().toISOString() };
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (row.lastAccess + SESSION_TTL < nowSec) return null;
 
-  await env.SESSIONS.put(`session:${hash}`, JSON.stringify(updated), {
-    expirationTtl: SESSION_TTL,
-  });
+  let session;
+  try { session = JSON.parse(row.data); } catch { return null; }
+
+  const nowIso = new Date(nowSec * 1000).toISOString();
+  const updated = { ...session, ...updates, lastAccess: nowIso };
+
+  await env.USERS_DB.prepare(
+    "UPDATE Sessions SET data = ?, lastAccess = ? WHERE tokenHash = ?"
+  ).bind(JSON.stringify(updated), nowSec, hash).run();
 
   return updated;
 }
 
 export async function deleteSession(env, token) {
   const hash = await hashToken(token);
-  await env.SESSIONS.delete(`session:${hash}`);
+  await env.USERS_DB.prepare("DELETE FROM Sessions WHERE tokenHash = ?")
+    .bind(hash).run();
 }
 
 export async function refreshSession(env, token, session) {
