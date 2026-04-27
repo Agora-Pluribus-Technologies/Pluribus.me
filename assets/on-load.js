@@ -452,14 +452,10 @@ async function openSiteInEditor(site, initialPage = "index") {
   currentSitePathFull = site.siteId;
   console.log("Current site path full:", currentSitePathFull);
 
-  // Update Visit Site button URL. The `from-agorapages=true` query tells
-  // the worker (functions/s/[username]/[site]/[[path]].js) to bypass the
-  // cached pages.json validation copy and re-read it straight from R2 —
-  // so a freshly renamed/added page resolves on the very first click,
-  // even when the publish-time cache purge hasn't propagated yet.
+  // Update Visit Site button URL
   const visitSiteButton = document.getElementById("visitSiteButton");
   if (visitSiteButton && currentSitePathFull) {
-    const pluribusSiteUrl = `/s/${currentSitePathFull}/?from-agorapages=true`;
+    const pluribusSiteUrl = `/s/${currentSitePathFull}/`;
     visitSiteButton.onclick = function () {
       window.open(pluribusSiteUrl, "_blank");
     };
