@@ -875,6 +875,27 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       : JSON.stringify(pages);
     await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
 
+    // Blog sites: also keep the tags.json inverted index in sync. Pages
+    // sites have no tag concept and skip this file entirely. Incremental:
+    // we read the previous tags.json from the git working tree and reuse
+    // its classifications so we don't reparse every post on every save.
+    // (The published copy is authoritative — deployChanges/deployBlogPost
+    // pass a `dirty` set there to catch tag edits.)
+    if (isBlog && typeof buildTagsJsonContent === "function") {
+      let prevTags = { tags: {}, noTags: [] };
+      if (typeof parseTagsJson === "function") {
+        try {
+          const prevText = await gitReadFile(siteId, "public/tags.json");
+          prevTags = parseTagsJson(prevText);
+        } catch (_) { /* file not in tree yet */ }
+      }
+      await gitWriteFile(
+        siteId,
+        "public/tags.json",
+        buildTagsJsonContent(markdownCache, prevTags)
+      );
+    }
+
     // Write images.json
     await gitWriteFile(siteId, "public/images.json", JSON.stringify(imageCache));
 

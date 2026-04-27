@@ -375,6 +375,143 @@ function flattenPagesJson(parsed) {
   return [];
 }
 
+// Pull out the tag list from a post's YAML frontmatter. Accepts both the
+// hashtag form (`tags: #obsidian #ml`) and the legacy comma form
+// (`tags: obsidian, ml`). Returns [] when no frontmatter or no tags field.
+function extractFrontmatterTags(markdown) {
+  if (!markdown || typeof markdown !== "string") return [];
+  const fm = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return [];
+  const tagsLine = fm[1].match(/^tags:[ \t]*(.+)$/m);
+  if (!tagsLine) return [];
+  const raw = tagsLine[1].trim();
+  let tags;
+  if (raw.indexOf("#") >= 0) {
+    tags = raw.split(/\s+/).map(t => t.replace(/^#/, "").trim());
+  } else {
+    tags = raw.split(",").map(t => t.trim());
+  }
+  return tags.filter(Boolean);
+}
+
+// Parse an existing tags.json string into the canonical shape. Tolerates
+// missing/malformed input by returning an empty index. Used by the
+// incremental update path so we don't have to re-parse posts that were
+// already classified on a previous publish.
+function parseTagsJson(text) {
+  if (!text || typeof text !== "string") return { tags: {}, noTags: [] };
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return { tags: {}, noTags: [] }; }
+  const tags = (parsed && parsed.tags && typeof parsed.tags === "object") ? parsed.tags : {};
+  const noTags = Array.isArray(parsed && parsed.noTags) ? parsed.noTags : [];
+  return { tags, noTags };
+}
+
+// Inverted-index of tag -> [post slug, ...] for blog sites, plus a
+// no-tags list of slugs known to have no tags at all. Schema:
+//
+//   {
+//     "tags":   { "obsidian": ["vault-thoughts", ...], ... },
+//     "noTags": ["welcome", "about-me", ...]
+//   }
+//
+// Generation strategy is INCREMENTAL: posts already classified on a
+// previous publish (either in some tag bucket or in noTags) are reused
+// verbatim and their frontmatter is NOT re-parsed. Only:
+//   - Slugs not previously classified, AND
+//   - Slugs explicitly marked dirty (via the `dirty` Set of bare slugs)
+// get their frontmatter walked. Slugs that no longer appear in
+// `cacheItems` are garbage-collected from both the index and noTags.
+//
+// `cacheItems`  array of { fileName, content }; fileName is the
+//               `public/<slug>.md` form used by markdownCache.
+// `previous`    optional { tags, noTags } from the prior tags.json
+//               (parse it via parseTagsJson). Defaults to empty, which
+//               means a full rebuild — used by the initial-commit path.
+// `dirty`       optional Set of bare slugs (no `public/`, no `.md`) that
+//               must be re-parsed even if they were previously classified.
+//               Used by deploy paths so a post whose tags just changed
+//               gets reflected in the index.
+function buildTagsJsonContent(cacheItems, previous, dirty) {
+  const prev = previous || { tags: {}, noTags: [] };
+  const dirtySet = (dirty instanceof Set) ? dirty : new Set();
+
+  // Seed from the previous index — copy so we don't mutate the caller's data.
+  const index = {};
+  for (const [tag, slugs] of Object.entries(prev.tags || {})) {
+    index[tag] = Array.isArray(slugs) ? slugs.slice() : [];
+  }
+  const noTags = new Set(Array.isArray(prev.noTags) ? prev.noTags : []);
+
+  // Build a "we already know about this slug" lookup.
+  const knownSlugs = new Set(noTags);
+  for (const slugs of Object.values(index)) {
+    for (const slug of slugs) knownSlugs.add(slug);
+  }
+
+  if (!Array.isArray(cacheItems)) {
+    return JSON.stringify({ tags: index, noTags: Array.from(noTags).sort() });
+  }
+
+  // Track every slug that's still alive in this cache so we can GC removed
+  // posts at the end.
+  const liveSlugs = new Set();
+
+  for (const item of cacheItems) {
+    const fn = (item && item.fileName) || "";
+    if (!fn) continue;
+    const slug = fn.replace(/^public\//, "").replace(/\.md$/, "");
+    if (!slug || slug === "latest") continue;
+    liveSlugs.add(slug);
+
+    const isKnown = knownSlugs.has(slug);
+    const isDirty = dirtySet.has(slug);
+    if (isKnown && !isDirty) continue; // already classified, skip parse
+
+    // Re-parse: drop any prior classification before re-adding under the
+    // current tags.
+    if (isKnown) {
+      for (const tag of Object.keys(index)) {
+        const i = index[tag].indexOf(slug);
+        if (i >= 0) index[tag].splice(i, 1);
+      }
+      noTags.delete(slug);
+    }
+
+    const tags = extractFrontmatterTags(item.content || "");
+    if (tags.length === 0) {
+      noTags.add(slug);
+    } else {
+      for (const tag of tags) {
+        if (!tag) continue;
+        if (!index[tag]) index[tag] = [];
+        if (index[tag].indexOf(slug) < 0) index[tag].push(slug);
+      }
+    }
+  }
+
+  // GC: drop slugs that no longer exist in cacheItems.
+  for (const tag of Object.keys(index)) {
+    index[tag] = index[tag].filter(slug => liveSlugs.has(slug));
+    if (index[tag].length === 0) {
+      delete index[tag];
+    } else {
+      // Stable alphabetical order so git diffs stay readable; the blog
+      // template re-sorts newest-first using pages.json modifiedAt at
+      // render time.
+      index[tag].sort();
+    }
+  }
+  for (const slug of Array.from(noTags)) {
+    if (!liveSlugs.has(slug)) noTags.delete(slug);
+  }
+
+  return JSON.stringify({
+    tags: index,
+    noTags: Array.from(noTags).sort(),
+  });
+}
+
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const { siteName, repo, owner, siteType, importedPages, importedAssets } = siteSettings;
@@ -444,8 +581,21 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   // Initialize git repository and create initial commit with content
   await gitInit(siteId);
   const pagesJsonContent = buildPagesJsonContent(pagesJson, isBlog);
+  // Blog sites also seed a tags.json inverted index. Pages sites have no
+  // tag concept, so this stays null and the file is never written.
+  const tagsJsonContent = isBlog
+    ? buildTagsJsonContent(
+        (Array.isArray(importedPages) ? importedPages : []).map(p => ({
+          fileName: `public/${p.fileName}.md`,
+          content: p.content,
+        }))
+      )
+    : null;
   await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
   await gitWriteFile(siteId, "public/images.json", imagesManifest);
+  if (tagsJsonContent != null) {
+    await gitWriteFile(siteId, "public/tags.json", tagsJsonContent);
+  }
   if (hasImport) {
     for (const page of pagesToWrite) {
       await gitWriteFile(siteId, `public/${page.fileName}.md`, page.content);
@@ -518,6 +668,14 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
       contentType: "application/json",
     },
   ];
+
+  if (tagsJsonContent != null) {
+    files.push({
+      filePath: "public/tags.json",
+      content: tagsJsonContent,
+      contentType: "application/json",
+    });
+  }
 
   // Add template and home page content for pages sites
   if (templateHtml) {
@@ -743,6 +901,26 @@ async function deployChanges(siteId) {
     contentType: "application/json",
   });
 
+  // Blog sites also republish tags.json (inverted index of tag -> posts)
+  // alongside pages.json so the published blog template can tag-filter
+  // without loading every post body. Updates incrementally: posts already
+  // classified in the previous tags.json are reused verbatim, and only
+  // posts in `dirtyTagSlugs` (the slugs that actually changed in this
+  // commit) get re-parsed.
+  if (isBlogSite) {
+    const prevTagsText = await getFileFromR2(siteId, "public/tags.json");
+    const prevTags = parseTagsJson(prevTagsText);
+    const dirtyTagSlugs = new Set();
+    for (const fp of changedMd) {
+      dirtyTagSlugs.add(fp.replace(/^public\//, "").replace(/\.md$/, ""));
+    }
+    files.push({
+      filePath: "public/tags.json",
+      content: buildTagsJsonContent(markdownCache, prevTags, dirtyTagSlugs),
+      contentType: "application/json",
+    });
+  }
+
   // Generate latest.md for blog sites (the most recent post by date)
   if (isBlogSite && markdownCache.length > 0) {
     let latestItem = null;
@@ -912,6 +1090,27 @@ async function deployBlogPost(siteId, changedPost) {
   files.push({
     filePath: "public/pages.json",
     content: buildPagesJsonContent(pages, true),
+    contentType: "application/json",
+  });
+
+  // Republish tags.json (inverted index) so the tag-filter UI in the
+  // published blog template stays in sync with the post's frontmatter.
+  // Incremental: reuse the previous tags.json verbatim and only re-parse
+  // the post(s) actually touched in this deploy.
+  const prevTagsText = await getFileFromR2(siteId, "public/tags.json");
+  const prevTags = parseTagsJson(prevTagsText);
+  const dirtyTagSlugs = new Set();
+  if (changedPost && changedPost.fileName) {
+    dirtyTagSlugs.add(changedPost.fileName.replace(/^public\//, "").replace(/\.md$/, ""));
+  }
+  if (changedPost && changedPost.oldFileName) {
+    // The rename source is now gone — adding it to dirty so the GC step
+    // sees it as not-live and removes any stale classification.
+    dirtyTagSlugs.add(changedPost.oldFileName.replace(/^public\//, "").replace(/\.md$/, ""));
+  }
+  files.push({
+    filePath: "public/tags.json",
+    content: buildTagsJsonContent(markdownCache, prevTags, dirtyTagSlugs),
     contentType: "application/json",
   });
 

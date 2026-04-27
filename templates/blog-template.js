@@ -16,6 +16,11 @@ let loadedBatches = [];
 // trigger additional batch loads without re-threading through events.
 let blogOrigin = "";
 let blogBasePath = "";
+// Tag inverted index loaded from public/tags.json: { tag: [postFileName, ...] }
+let tagsIndex = {};
+// Map<postFileName, batchIdx> built once from postBatches so tag-click can
+// look up which batch each result lives in without rescanning.
+let postBatchByFileName = new Map();
 
 document.addEventListener("DOMContentLoaded", async function () {
   const origin = document.location.origin;
@@ -33,14 +38,32 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   const pagesJson = await fetchPagesJson(origin, basePath);
   const siteJson = await fetchSiteJson(origin, basePath);
+  const tagsJson = await fetchTagsJson(origin, basePath);
   const siteName = siteJson ? (siteJson.displayName || siteJson.siteName) : "Blog";
 
   document.title = siteName + " \u2022 AgoraPages";
+
+  tagsIndex = (tagsJson && tagsJson.tags && typeof tagsJson.tags === "object")
+    ? tagsJson.tags
+    : {};
 
   createBlogHeader(siteName);
   await loadBlogPosts(origin, basePath, pagesJson);
   createFooter(origin, basePath, siteName);
 });
+
+async function fetchTagsJson(origin, basePath) {
+  try {
+    const response = await fetch(`${origin}${basePath}/tags.json`, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache, must-revalidate" },
+    });
+    if (response.ok) return await response.json();
+  } catch (e) {
+    // tags.json is optional \u2014 older blog sites may not have one yet.
+  }
+  return null;
+}
 
 async function fetchSiteJson(origin, basePath) {
   const siteJsonLink = `${origin}${basePath}/site.json`;
@@ -186,17 +209,21 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
   postBatches = normalizePagesJsonToBatches(pagesJson);
   batchLoadPromises = new Array(postBatches.length).fill(null);
   loadedBatches = new Array(postBatches.length).fill(null);
+  rebuildPostBatchByFileName();
 
   if (postBatches.length === 0) {
     feedContainer.innerHTML = '<div class="no-posts">No posts yet.</div>';
     return;
   }
 
+  // Tag filter bar is populated from tags.json (already fetched), not from
+  // post bodies — so we can render it BEFORE any batches are loaded.
+  refreshTagFilterBar(tagFilterContainer);
+
   // Load only the first batch on initial render — cheaper page weight,
   // faster time-to-first-paint, and lazy-loads more as the reader paginates.
   await loadBatch(0, origin, basePath);
   rebuildAllPostsFromLoadedBatches();
-  refreshTagFilterBar(tagFilterContainer);
 
   currentPage = 1;
   renderCurrentPage();
@@ -246,16 +273,28 @@ function rebuildAllPostsFromLoadedBatches() {
 function refreshTagFilterBar(container) {
   const target = container || document.getElementById("tagFilterContainer");
   if (!target) return;
-  const allTags = new Set();
-  allPosts.forEach(post => {
-    if (post.tags) post.tags.forEach(tag => allTags.add(tag));
-  });
+  // Source of truth is tags.json (the inverted index). It enumerates every
+  // tag in the site without requiring any post bodies to be loaded.
+  const allTags = new Set(Object.keys(tagsIndex || {}));
   createTagFilterBar(allTags, target);
   // Restore active state if the user already picked a tag.
   if (currentTagFilter) {
     target.querySelectorAll(".tag-filter").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.tag === currentTagFilter);
     });
+  }
+}
+
+// Build a fileName -> batchIdx lookup once postBatches is known. Used by
+// the tag-filter render path to figure out which batch holds each match
+// without rescanning postBatches per tag click.
+function rebuildPostBatchByFileName() {
+  postBatchByFileName = new Map();
+  for (let bi = 0; bi < postBatches.length; bi++) {
+    const batch = postBatches[bi];
+    for (const page of batch) {
+      postBatchByFileName.set(page.fileName, { page, batchIdx: bi });
+    }
   }
 }
 
@@ -376,24 +415,30 @@ function handleTagClick(tag) {
 
 async function applyFilters() {
   currentPage = 1;
-  // Tag filter inspects post bodies (tags live in frontmatter), so it
-  // requires every batch to be loaded. Title-only search is satisfied by
-  // pages.json metadata alone — no batch loads happen until the user
-  // paginates to a search-result page that needs unloaded post bodies.
-  if (currentTagFilter) {
-    await loadAllBatches();
-    refreshTagFilterBar();
-  }
+  // Both filters now consult metadata (tags.json + pages.json) and trigger
+  // no upfront batch loads. The render path lazy-loads only the batches
+  // containing the visible page of results.
   renderCurrentPage();
 }
 
-async function loadAllBatches() {
-  for (let i = 0; i < postBatches.length; i++) {
-    if (!loadedBatches[i]) {
-      await loadBatch(i, blogOrigin, blogBasePath);
-    }
+// Resolve a tag to { page, batchIdx } entries via tags.json + the
+// pages.json fileName lookup. Returns matches in newest-first order
+// (postBatches is already sorted by modifiedAt desc; we preserve that).
+function getTagMatches(tag) {
+  const fileNames = (tagsIndex && tagsIndex[tag]) || [];
+  const matches = [];
+  for (const fn of fileNames) {
+    const entry = postBatchByFileName.get(fn);
+    if (entry) matches.push(entry);
   }
-  rebuildAllPostsFromLoadedBatches();
+  // tagsIndex stores fileNames alphabetically for git readability; sort
+  // here by date so the rendered tag page reads newest-first.
+  matches.sort((a, b) => {
+    const ad = new Date(a.page.modifiedAt || a.page.createdAt || 0).getTime();
+    const bd = new Date(b.page.modifiedAt || b.page.createdAt || 0).getTime();
+    return bd - ad;
+  });
+  return matches;
 }
 
 // Walk pages.json metadata for posts whose displayName (the title) matches
@@ -415,24 +460,9 @@ function getMetadataSearchMatches() {
   return matches;
 }
 
-// Filter the already-loaded posts. Used in the tag-filter path (with or
-// without a combined search). Search alone goes through the metadata path
-// in renderCurrentPage instead — no body inspection needed.
-function getFilteredPosts() {
-  let filteredPosts = allPosts;
-  if (currentTagFilter) {
-    filteredPosts = filteredPosts.filter(post =>
-      post.tags && post.tags.includes(currentTagFilter)
-    );
-  }
-  // Title-only search inside the tag-filtered set.
-  if (currentSearchQuery) {
-    filteredPosts = filteredPosts.filter(post =>
-      post.title.toLowerCase().includes(currentSearchQuery)
-    );
-  }
-  return filteredPosts;
-}
+// (Body-level filtering removed: tag filter now uses tags.json + lazy
+// batch loads, and search is title-only via pages.json metadata. Neither
+// path needs to inspect post bodies, so getFilteredPosts is gone.)
 
 async function renderCurrentPage() {
   const feedContainer = document.getElementById("blogFeed");
@@ -445,14 +475,35 @@ async function renderCurrentPage() {
   let totalPages;
 
   if (currentTagFilter) {
-    // Tag filter (with or without a combined title search) operates on
-    // already-loaded post bodies — applyFilters loaded every batch when
-    // the filter was applied.
-    const filteredPosts = getFilteredPosts();
-    totalPages = Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
+    // Tag filter is backed by tags.json (the inverted index) so we can
+    // figure out which posts match without loading any bodies. We then
+    // fetch only the batches that hold the current page of matches —
+    // narrowing further by title if a search query is also active.
+    let matches = getTagMatches(currentTagFilter);
+    if (currentSearchQuery) {
+      matches = matches.filter(m =>
+        ((m.page.displayName || "").toLowerCase().includes(currentSearchQuery))
+      );
+    }
+    totalPages = Math.max(1, Math.ceil(matches.length / POSTS_PER_PAGE));
     if (currentPage > totalPages) currentPage = totalPages;
     const start = (currentPage - 1) * POSTS_PER_PAGE;
-    pagePosts = filteredPosts.slice(start, start + POSTS_PER_PAGE);
+    const pageMatches = matches.slice(start, start + POSTS_PER_PAGE);
+
+    const neededBatches = Array.from(new Set(
+      pageMatches.map(m => m.batchIdx).filter(idx => !loadedBatches[idx])
+    ));
+    if (neededBatches.length > 0) {
+      feedContainer.innerHTML = '<div class="loading-posts">Loading posts...</div>';
+      for (const idx of neededBatches) {
+        await loadBatch(idx, blogOrigin, blogBasePath);
+      }
+      rebuildAllPostsFromLoadedBatches();
+    }
+    const byFileName = new Map(allPosts.map(p => [p.fileName, p]));
+    pagePosts = pageMatches
+      .map(m => byFileName.get(m.page.fileName))
+      .filter(Boolean);
   } else if (currentSearchQuery) {
     // Title-only search via pages.json metadata. We only fetch the
     // batches containing the matches on the current page — usually just
