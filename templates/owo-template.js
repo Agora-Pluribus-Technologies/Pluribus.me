@@ -493,7 +493,7 @@ function createSidebar(origin, basePath, pagesJson, foldersJson) {
   const treeWrap = document.createElement("div");
   treeWrap.className = "sidebar-tree-wrap";
 
-  const search = createSidebarSearch(origin, basePath, pagesJson, treeWrap);
+  const search = createSidebarSearch(origin, basePath, pagesJson, foldersJson, treeWrap);
   sidebar.appendChild(search);
   sidebar.appendChild(treeWrap);
 
@@ -587,7 +587,7 @@ function slugifyHeading(text) {
 // Sidebar search bar. Lazy-loads search-index.json on first input so the
 // fetch cost only hits readers who actually search. Ranking: title match >
 // H1/H2 match > deeper heading match. Empty query restores the page tree.
-function createSidebarSearch(origin, basePath, pagesJson, treeWrap) {
+function createSidebarSearch(origin, basePath, pagesJson, foldersJson, treeWrap) {
   const wrap = document.createElement("div");
   wrap.className = "sidebar-search";
 
@@ -609,6 +609,27 @@ function createSidebarSearch(origin, basePath, pagesJson, treeWrap) {
   const displayBySlug = new Map();
   for (const p of (pagesJson || [])) {
     if (p && p.fileName) displayBySlug.set(p.fileName, p.displayName || p.fileName);
+  }
+
+  // Folder display-name lookup, with the same fallback rules buildTreeFromPages
+  // uses — prefer `folders.json` displayName, otherwise convert dashes /
+  // underscores in the path segment to spaces.
+  function folderSegmentName(folderPath, segment) {
+    var info = (typeof foldersJson === "object" && foldersJson) ? foldersJson[folderPath] : null;
+    if (info && info.displayName) return info.displayName;
+    return (segment || "").replace(/[-_]+/g, " ");
+  }
+
+  // "Folder / Subfolder / Page" breadcrumb for a slug. Root-level pages
+  // just return their display name.
+  function breadcrumbForSlug(slug, pageDisplayName) {
+    const parts = slug.split("/");
+    if (parts.length === 1) return pageDisplayName || parts[0];
+    const folderParts = parts.slice(0, -1);
+    const folderNames = folderParts.map((seg, i) =>
+      folderSegmentName(folderParts.slice(0, i + 1).join("/"), seg)
+    );
+    return folderNames.join(" / ") + " / " + (pageDisplayName || parts[parts.length - 1]);
   }
 
   let indexPromise = null;
@@ -640,6 +661,11 @@ function createSidebarSearch(origin, basePath, pagesJson, treeWrap) {
     }
     const index = await getIndex();
     const matches = scoreSearchHits(index, q, displayBySlug);
+    // Decorate each hit with a folder-prefixed label before rendering so
+    // results read as "Research / ML / Transformers" instead of just
+    // "Transformers" — important when the same page name lives in
+    // multiple folders.
+    for (const m of matches) m.label = breadcrumbForSlug(m.slug, m.displayName);
     renderResults(resultsEl, matches, basePath, q);
     setHidden(false);
   }
@@ -732,7 +758,7 @@ function renderResults(container, hits, basePath, q) {
 
     const title = document.createElement("div");
     title.className = "sidebar-search-result-title";
-    title.textContent = hit.displayName;
+    title.textContent = hit.label || hit.displayName;
     a.appendChild(title);
 
     if (hit.kind === "heading") {

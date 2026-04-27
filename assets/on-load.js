@@ -3310,6 +3310,19 @@ function scoreEditorSearchHits(publishedIndex, q) {
   return hits.slice(0, 25);
 }
 
+// Build "Folder/Subfolder/Page" breadcrumb for a slug, using the editor's
+// folderMeta for friendly folder names. Returns just the page display name
+// for root-level pages.
+function editorBreadcrumbForSlug(slug, pageDisplayName) {
+  const parts = slug.split("/");
+  if (parts.length === 1) return pageDisplayName || parts[0];
+  const folderPath = parts.slice(0, -1);
+  const folderNames = folderPath.map((_, i) =>
+    getFolderDisplayName(folderPath.slice(0, i + 1).join("/"))
+  );
+  return folderNames.join(" / ") + " / " + (pageDisplayName || parts[parts.length - 1]);
+}
+
 function renderEditorSearchResults(container, hits) {
   container.innerHTML = "";
   if (!hits.length) {
@@ -3325,7 +3338,7 @@ function renderEditorSearchResults(container, hits) {
 
     const title = document.createElement("div");
     title.className = "sidebar-search-result-title";
-    title.textContent = hit.displayName;
+    title.textContent = editorBreadcrumbForSlug(hit.slug, hit.displayName);
     row.appendChild(title);
 
     if (hit.kind === "heading") {
@@ -3346,6 +3359,15 @@ function renderEditorSearchResults(container, hits) {
         resultsEl.innerHTML = "";
       }
       if (tree) tree.style.display = "";
+
+      // Expand every ancestor folder of the target page so the sidebar
+      // actually shows the file when we re-render. Walking the slug path
+      // builds "a", "a/b", "a/b/c"... and adds each to expandedFolders.
+      const slugParts = hit.slug.split("/");
+      for (let i = 1; i < slugParts.length; i++) {
+        expandedFolders.add(slugParts.slice(0, i).join("/"));
+      }
+      await populateSidebar(currentSiteId);
       await selectSidebarPage(hit.fileName);
     });
 
