@@ -570,9 +570,24 @@ async function openSiteInEditor(site, initialPage = "index") {
       }
     }
 
-    // Load all markdown files, images.json, documents.json, and folders.json in parallel via public URLs
+    // Page-load strategy:
+    //   - Blog sites: render the post list from cache content, so we still
+    //     bulk-load every .md upfront.
+    //   - Pages sites: load only the homepage's .md (markdownCache[0]).
+    //     Other pages stay in the cache as metadata-only entries with no
+    //     `content` field; selectSidebarPage fetches them on demand the
+    //     first time the user opens them.
+    const isBlogSite = site.siteType === "blog";
+    const homePageFile = (!isBlogSite && markdownCache.length > 0)
+      ? markdownCache[0].fileName
+      : null;
+
+    const filesToFetch = isBlogSite
+      ? markdownFiles
+      : (homePageFile ? [homePageFile] : []);
+
     const [mdResults, imagesJsonContent, documentsJsonContent, foldersJsonContent] = await Promise.all([
-      Promise.all(markdownFiles.map(async (file) => {
+      Promise.all(filesToFetch.map(async (file) => {
         console.log("Loading file into cache:", file);
         const content = await fetchPublicFileContent(file);
         return { file, content };
@@ -3032,7 +3047,7 @@ function renderFileNode(container, node, depth, siteId) {
   container.appendChild(fileEl);
 }
 
-function selectSidebarPage(fileName) {
+async function selectSidebarPage(fileName) {
   const cacheItem = getCacheByFileName(fileName);
   if (!cacheItem) return;
 
@@ -3054,9 +3069,104 @@ function selectSidebarPage(fileName) {
     selectedSidebarFolder = "";
   }
 
+  // Pages-site lazy load: most cache entries arrive metadata-only, so the
+  // first time the user opens a page we fetch its .md from the published
+  // site and stash it in the cache. Subsequent navigations are instant.
+  await ensurePageContentLoaded(cacheItem);
+
   // Load content into block editor
-  loadPageIntoBlockEditor(cacheItem.content);
+  loadPageIntoBlockEditor(cacheItem.content || "");
   updateDeployButtonState();
+}
+
+// Fetch a single page's markdown body into the cache if it isn't loaded
+// yet. Idempotent — if `content` is already a string (even an empty one),
+// returns immediately.
+async function ensurePageContentLoaded(cacheItem) {
+  if (!cacheItem) return;
+  if (typeof cacheItem.content === "string") return;
+  try {
+    const servingPath = cacheItem.fileName.replace(/^public\//, "");
+    const resp = await fetch(`/s/${currentSiteId}/${servingPath}`, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache, must-revalidate" },
+    });
+    if (resp.ok) {
+      cacheItem.content = await resp.text();
+    } else {
+      console.warn("Lazy load returned", resp.status, "for", cacheItem.fileName);
+      cacheItem.content = "";
+    }
+  } catch (e) {
+    console.error("Lazy load failed for", cacheItem.fileName, e);
+    // Leave content unset so the next attempt retries.
+  }
+}
+
+// Pull every metadata-only cache entry's .md into memory. Heavy hammer —
+// most callers should prefer ensurePagesWithWikilinksLoaded, which only
+// loads the subset that could contribute to the backlink index.
+async function ensureAllPagesLoaded() {
+  if (!Array.isArray(markdownCache) || markdownCache.length === 0) return;
+  const missing = markdownCache.filter(c => typeof c.content !== "string");
+  if (missing.length === 0) return;
+  await Promise.all(missing.map(item => ensurePageContentLoaded(item)));
+}
+
+// Targeted load: only pull the cache entries that could affect the
+// backlink index (wikilinks.json) on the next publish. The set is:
+//   1. Every source page named in the existing wikilinks.json — those
+//      pages are known to contain `[[...]]` references and may still
+//      contribute even if their content is unchanged.
+//   2. Every page changed in the latest commit (`changedMd`) — its
+//      wikilinks may have just been added or removed.
+// Pages outside both sets had no wikilinks last publish and weren't
+// touched this publish, so they can't possibly affect the new index and
+// stay metadata-only. `siteId` defaults to currentSiteId.
+async function ensurePagesWithWikilinksLoaded(siteId, changedMd) {
+  if (!Array.isArray(markdownCache) || markdownCache.length === 0) return;
+  const id = siteId || currentSiteId;
+  if (!id) return;
+
+  const wantedCacheKeys = new Set();
+
+  // (1) Pages that contained wikilinks at the last publish.
+  try {
+    const resp = await fetch(`/s/${id}/wikilinks.json`, {
+      method: "GET",
+      headers: { "Cache-Control": "no-cache, must-revalidate" },
+    });
+    if (resp.ok) {
+      const prevIndex = await resp.json();
+      if (prevIndex && typeof prevIndex === "object") {
+        for (const sources of Object.values(prevIndex)) {
+          if (!Array.isArray(sources)) continue;
+          for (const src of sources) {
+            if (src && src.fileName) {
+              wantedCacheKeys.add(`public/${src.fileName}.md`);
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // First-publish sites won't have wikilinks.json yet; just fall back
+    // to the changed-this-commit set below.
+    console.warn("Couldn't read existing wikilinks.json for incremental load:", e);
+  }
+
+  // (2) Pages changed in this commit.
+  if (changedMd instanceof Set) {
+    for (const fp of changedMd) wantedCacheKeys.add(fp);
+  }
+
+  if (wantedCacheKeys.size === 0) return;
+
+  const toLoad = markdownCache.filter(item =>
+    wantedCacheKeys.has(item.fileName) && typeof item.content !== "string"
+  );
+  if (toLoad.length === 0) return;
+  await Promise.all(toLoad.map(item => ensurePageContentLoaded(item)));
 }
 
 // True for whichever cache entry sits at position 0 of pages.json — that's

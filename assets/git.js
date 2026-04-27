@@ -848,8 +848,13 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       try { await git.remove({ fs, dir, filepath }); } catch (_) { /* may not be staged */ }
     }
 
-    // Write all markdown files
+    // Write all markdown files. Pages-site cache entries are metadata-only
+    // until the user opens them (lazy load), so skip any item whose body
+    // hasn't been fetched — the loadR2ToGit pass already wrote the
+    // current R2 copy into the working tree, which is the right state for
+    // an unedited page.
     for (const item of markdownCache) {
+      if (typeof item.content !== "string") continue;
       await gitWriteFile(siteId, item.fileName, item.content);
     }
 

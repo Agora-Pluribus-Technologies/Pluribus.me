@@ -871,6 +871,17 @@ async function deployChanges(siteId) {
     for (const cacheItem of markdownCache) changedMd.add(cacheItem.fileName);
   }
 
+  // Pages sites lazy-load post bodies into markdownCache as the user
+  // browses. Before deploy we only need to fetch the subset that could
+  // affect the wikilinks.json backlink index — sources from the previous
+  // index plus anything changed in this commit. Pages with no wikilinks
+  // last publish and no edits this publish stay metadata-only.
+  // (The per-file write loop below only writes pages in changedMd, which
+  // are loaded by this call too, so the write step also has what it needs.)
+  if (!isBlogSite && typeof ensurePagesWithWikilinksLoaded === "function") {
+    await ensurePagesWithWikilinksLoaded(siteId, changedMd);
+  }
+
   // Handle deletions: markdown files removed in this commit
   for (const deletedFile of deletedMd) {
     console.log("Preparing to delete file:", deletedFile);
