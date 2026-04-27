@@ -194,6 +194,20 @@ async function readPagesJsonForValidation(env, siteId) {
   try { return JSON.parse(text); } catch (_) { return null; }
 }
 
+// Strip every shape pages.json's `fileName` field has historically taken
+// (with/without `public/` prefix, with/without `.md` suffix, with a stray
+// leading slash) so the comparison in isPagePath sees the same canonical
+// slug regardless of which writer last touched the file. Without this,
+// nested-folder pages 404 because the stored value and the URL-derived
+// slug differ by one of these decorations.
+function canonicalSlug(value) {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/^\/+/, "")
+    .replace(/^public\//, "")
+    .replace(/\.md$/i, "");
+}
+
 // Verify that a non-metadata file path corresponds to a real page of the
 // site. Goes through Cloudflare's edge cache first, then R2 — never
 // HTTPS-back-into-itself, since recursive fetches get intercepted by
@@ -202,7 +216,7 @@ async function readPagesJsonForValidation(env, siteId) {
 async function isPagePath(filePath, env, siteId) {
   const m = filePath.match(/^(.+?)\.(html?|md)$/i);
   if (!m) return false;
-  const slug = m[1];
+  const slug = canonicalSlug(m[1]);
 
   const parsed = await readPagesJsonForValidation(env, siteId);
   if (!parsed) return false;
@@ -219,7 +233,7 @@ async function isPagePath(filePath, env, siteId) {
     pages = [];
   }
 
-  return pages.some(p => p && p.fileName === slug);
+  return pages.some(p => p && canonicalSlug(p.fileName) === slug);
 }
 
 async function isAllowedFilePath(filePath, env, siteId) {
