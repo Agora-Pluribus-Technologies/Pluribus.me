@@ -714,24 +714,33 @@ async function openSiteInEditor(site, initialPage = "index") {
   setTimeout(() => {
     // Position the editor body below the topbar
     positionEditorBody();
-    const fileName = `public/${initialPage}.md`;
-    const cacheItem = markdownCache.find(c =>
-      c.fileName === fileName ||
-      c.displayName.toLowerCase() === initialPage.toLowerCase()
-    );
 
-    if (cacheItem) {
-      console.log("Opening page:", cacheItem.displayName);
-      selectSidebarPage(cacheItem.fileName);
-      if (!wasRestoredFromAutoSave) {
-        modified = false;
+    // Blog sites don't use the sidebar/page-selection model — initBlogEditor
+    // already rendered the post-list UI. Calling selectSidebarPage here
+    // would invoke loadPageIntoBlockEditor and clobber the blog editor with
+    // the block (pages) editor.
+    if (currentSiteType !== "blog") {
+      const fileName = `public/${initialPage}.md`;
+      const cacheItem = markdownCache.find(c =>
+        c.fileName === fileName ||
+        c.displayName.toLowerCase() === initialPage.toLowerCase()
+      );
+
+      if (cacheItem) {
+        console.log("Opening page:", cacheItem.displayName);
+        selectSidebarPage(cacheItem.fileName);
+        if (!wasRestoredFromAutoSave) {
+          modified = false;
+        }
+      } else if (markdownCache.length > 0) {
+        console.log("Page not found:", initialPage, "- opening first page");
+        selectSidebarPage(markdownCache[0].fileName);
+        if (!wasRestoredFromAutoSave) {
+          modified = false;
+        }
       }
-    } else if (markdownCache.length > 0) {
-      console.log("Page not found:", initialPage, "- opening first page");
-      selectSidebarPage(markdownCache[0].fileName);
-      if (!wasRestoredFromAutoSave) {
-        modified = false;
-      }
+    } else if (!wasRestoredFromAutoSave) {
+      modified = false;
     }
 
     // After initial load, sync the deploy button state

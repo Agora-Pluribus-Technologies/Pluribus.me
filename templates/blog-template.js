@@ -376,10 +376,11 @@ function handleTagClick(tag) {
 
 async function applyFilters() {
   currentPage = 1;
-  // Search and tag filters need to consider every post, not just the
-  // currently-loaded batches — load any remaining batches sequentially
-  // so the result set is comprehensive. No-op when nothing's filtered.
-  if (currentSearchQuery || currentTagFilter) {
+  // Tag filter inspects post bodies (tags live in frontmatter), so it
+  // requires every batch to be loaded. Title-only search is satisfied by
+  // pages.json metadata alone — no batch loads happen until the user
+  // paginates to a search-result page that needs unloaded post bodies.
+  if (currentTagFilter) {
     await loadAllBatches();
     refreshTagFilterBar();
   }
@@ -395,28 +396,41 @@ async function loadAllBatches() {
   rebuildAllPostsFromLoadedBatches();
 }
 
+// Walk pages.json metadata for posts whose displayName (the title) matches
+// the search query. Returns { page, batchIdx } pairs in newest-first order.
+// Doesn't trigger any batch loads — that's the whole point of metadata search.
+function getMetadataSearchMatches() {
+  if (!currentSearchQuery) return [];
+  const matches = [];
+  for (let bi = 0; bi < postBatches.length; bi++) {
+    const batch = postBatches[bi];
+    for (let pi = 0; pi < batch.length; pi++) {
+      const page = batch[pi];
+      const title = (page.displayName || "").toLowerCase();
+      if (title.includes(currentSearchQuery)) {
+        matches.push({ page, batchIdx: bi });
+      }
+    }
+  }
+  return matches;
+}
+
+// Filter the already-loaded posts. Used in the tag-filter path (with or
+// without a combined search). Search alone goes through the metadata path
+// in renderCurrentPage instead — no body inspection needed.
 function getFilteredPosts() {
   let filteredPosts = allPosts;
-
-  // Apply tag filter
   if (currentTagFilter) {
     filteredPosts = filteredPosts.filter(post =>
       post.tags && post.tags.includes(currentTagFilter)
     );
   }
-
-  // Apply search filter
+  // Title-only search inside the tag-filtered set.
   if (currentSearchQuery) {
-    filteredPosts = filteredPosts.filter(post => {
-      const titleMatch = post.title.toLowerCase().includes(currentSearchQuery);
-      const bodyMatch = post.body.toLowerCase().includes(currentSearchQuery);
-      const tagMatch = post.tags && post.tags.some(tag =>
-        tag.toLowerCase().includes(currentSearchQuery)
-      );
-      return titleMatch || bodyMatch || tagMatch;
-    });
+    filteredPosts = filteredPosts.filter(post =>
+      post.title.toLowerCase().includes(currentSearchQuery)
+    );
   }
-
   return filteredPosts;
 }
 
@@ -424,11 +438,48 @@ async function renderCurrentPage() {
   const feedContainer = document.getElementById("blogFeed");
   if (!feedContainer) return;
 
-  // No active search/filter: pagination follows the on-disk batch order,
-  // so loading "page N" only requires loading batch N-1. (Batches and
-  // pages are both POSTS_PER_PAGE = 10 wide and identically sorted by
-  // modifiedAt desc.)
-  if (!currentSearchQuery && !currentTagFilter) {
+  // Three modes share the same paginated render at the bottom; the
+  // difference is how `pagePosts` and `totalPages` are computed and which
+  // batches need to be fetched first.
+  let pagePosts;
+  let totalPages;
+
+  if (currentTagFilter) {
+    // Tag filter (with or without a combined title search) operates on
+    // already-loaded post bodies — applyFilters loaded every batch when
+    // the filter was applied.
+    const filteredPosts = getFilteredPosts();
+    totalPages = Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * POSTS_PER_PAGE;
+    pagePosts = filteredPosts.slice(start, start + POSTS_PER_PAGE);
+  } else if (currentSearchQuery) {
+    // Title-only search via pages.json metadata. We only fetch the
+    // batches containing the matches on the current page — usually just
+    // one batch per page of results.
+    const matches = getMetadataSearchMatches();
+    totalPages = Math.max(1, Math.ceil(matches.length / POSTS_PER_PAGE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * POSTS_PER_PAGE;
+    const pageMatches = matches.slice(start, start + POSTS_PER_PAGE);
+
+    const neededBatches = Array.from(new Set(
+      pageMatches.map(m => m.batchIdx).filter(idx => !loadedBatches[idx])
+    ));
+    if (neededBatches.length > 0) {
+      feedContainer.innerHTML = '<div class="loading-posts">Loading posts...</div>';
+      for (const idx of neededBatches) {
+        await loadBatch(idx, blogOrigin, blogBasePath);
+      }
+      rebuildAllPostsFromLoadedBatches();
+    }
+    const byFileName = new Map(allPosts.map(p => [p.fileName, p]));
+    pagePosts = pageMatches
+      .map(m => byFileName.get(m.page.fileName))
+      .filter(Boolean);
+  } else {
+    // Default browse: pagination follows on-disk batch order, so loading
+    // "page N" only requires loading batch N-1.
     const targetBatch = currentPage - 1;
     if (targetBatch >= 0 && targetBatch < postBatches.length && !loadedBatches[targetBatch]) {
       feedContainer.innerHTML = '<div class="loading-posts">Loading posts...</div>';
@@ -436,19 +487,11 @@ async function renderCurrentPage() {
       rebuildAllPostsFromLoadedBatches();
       refreshTagFilterBar();
     }
+    totalPages = Math.max(1, postBatches.length);
+    if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * POSTS_PER_PAGE;
+    pagePosts = allPosts.slice(start, start + POSTS_PER_PAGE);
   }
-
-  const filteredPosts = getFilteredPosts();
-  // When filtered, total pages reflect filtered subset; when unfiltered,
-  // it's the total number of batches (so the Next button stays enabled
-  // even though only batch 0 is loaded yet).
-  const totalPages = (!currentSearchQuery && !currentTagFilter)
-    ? Math.max(1, postBatches.length)
-    : Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
-  if (currentPage > totalPages) currentPage = totalPages;
-
-  const start = (currentPage - 1) * POSTS_PER_PAGE;
-  const pagePosts = filteredPosts.slice(start, start + POSTS_PER_PAGE);
 
   feedContainer.innerHTML = "";
   renderPosts(feedContainer, pagePosts);
