@@ -920,9 +920,10 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
   mainContent.appendChild(panel);
 
   // Slugified IDs on every heading so sidebar-search results (which carry
-  // a `#heading-anchor`) deep-link to the right spot. Marked doesn't add
-  // ids to headings by default; we attach them here once the panel is
-  // assembled. If the URL already has a hash, scroll to it now since the
+  // a `#heading-anchor`) deep-link to the right spot. Always overwrite —
+  // some marked builds auto-assign their own ids using a different slug
+  // algorithm, which would break the link from search-results that use
+  // ours. If the URL already has a hash, scroll to it now since the
   // browser's native auto-scroll happened before the DOM was built.
   const usedIds = new Set();
   panel.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(h => {
@@ -931,7 +932,7 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
     let id = base, n = 2;
     while (usedIds.has(id)) { id = `${base}-${n}`; n++; }
     usedIds.add(id);
-    if (!h.id) h.id = id;
+    h.id = id;
   });
   if (window.location.hash && window.location.hash.length > 1) {
     const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));

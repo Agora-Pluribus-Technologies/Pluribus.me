@@ -530,11 +530,40 @@ function buildTagsJsonContent(cacheItems, previous, dirty) {
   });
 }
 
+// Strip common inline markdown so the stored heading text matches what
+// the rendered DOM's textContent will end up showing. Critical for
+// keeping search-result anchor slugs aligned with the auto-assigned
+// heading ids on the published site — otherwise headings containing
+// links/emphasis/code render with a different textContent than the raw
+// markdown, and the slugs diverge.
+function cleanHeadingText(text) {
+  if (!text) return "";
+  return text
+    // image: ![alt](url) → alt
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    // link: [text](url) → text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    // wikilink with alias: [[name|alias]] → alias
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    // wikilink: [[name]] → name
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    // emphasis: **bold**, __bold__, *italic*, _italic_
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/(\*|_)(.+?)\1/g, "$2")
+    // strikethrough
+    .replace(/~~(.+?)~~/g, "$1")
+    // inline code
+    .replace(/`+([^`]+?)`+/g, "$1")
+    .trim();
+}
+
 // Pull the page title (first H1) and every ATX-style heading (`#` ... `######`)
 // out of a markdown body. Used by the Pages-site search index so the published
 // sidebar can search by page title and heading text. Returns
 // { title, headings: [{l, t}, ...] }. Skips fenced code blocks so headings
-// inside ``` fences aren't mistaken for real document headings.
+// inside ``` fences aren't mistaken for real document headings. Each heading's
+// inline markdown is stripped via cleanHeadingText so the stored text matches
+// the DOM textContent the renderer will produce — slugs stay in sync.
 function extractSearchEntries(markdown) {
   const out = { title: "", headings: [] };
   if (!markdown || typeof markdown !== "string") return out;
@@ -551,7 +580,7 @@ function extractSearchEntries(markdown) {
     const m = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
     if (!m) continue;
     const level = m[1].length;
-    const txt = m[2].trim();
+    const txt = cleanHeadingText(m[2].trim());
     if (!txt) continue;
     if (level === 1 && !out.title) out.title = txt;
     out.headings.push({ l: level, t: txt });
