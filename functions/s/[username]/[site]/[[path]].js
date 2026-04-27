@@ -152,10 +152,12 @@ const PAGES_JSON_VALIDATION_CACHE_TTL = 300;
 // for next time. Returns null if R2 has no file (or the read failed).
 async function readPagesJsonForValidation(env, siteId) {
   const cache = caches.default;
-  // Cache key is just an identifier — host is synthetic, but using the
-  // siteId in the path keeps each site's manifest separate in cache.
+  // Cache key matches the public serving URL that purgeCache (in
+  // functions/api/files.js) targets when pages.json is republished —
+  // `https://agorapages.com/s/<siteId>/pages.json`. Keeping the keys in
+  // sync means a publish-time purge actually evicts this validation entry.
   const cacheKey = new Request(
-    `https://internal-pages-validation/${encodeURIComponent(siteId)}/pages.json`
+    `https://agorapages.com/s/${siteId}/pages.json`
   );
 
   const cached = await cache.match(cacheKey);
