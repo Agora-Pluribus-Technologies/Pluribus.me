@@ -4,8 +4,8 @@ let markdownCache = [];
 let folderMeta = {};
 
 // Naming and path-length limits for folders and pages
-const MAX_NAME_LENGTH = 100;
-const MAX_PATH_LENGTH = 250;
+const MAX_NAME_LENGTH = 64;
+const MAX_PATH_LENGTH = 200;
 const MAX_FOLDER_DEPTH = 5;
 // Max number of characters allowed in a single page's serialized markdown
 // (sum of all blocks on the page).
@@ -542,8 +542,13 @@ async function openSiteInEditor(site, initialPage = "index") {
   } else if (!restoredFromAutoSave) {
     // Site has been published before, enable Visit Site button
     setSiteAvailable(true);
-    // Initialize markdownCache from pages.json (exclude latest.md)
-    markdownCache = (pagesJsonData || []).slice();
+    // Initialize markdownCache from pages.json (exclude latest.md). Blog
+    // sites store pages.json as a batched object on disk — flatten back to
+    // a list here so the editor's cache stays a single flat array.
+    const pagesArray = (typeof flattenPagesJson === "function")
+      ? flattenPagesJson(pagesJsonData)
+      : (Array.isArray(pagesJsonData) ? pagesJsonData : []);
+    markdownCache = pagesArray.slice();
     markdownCache = markdownCache.filter(item => item.fileName !== "latest");
     for (let i=0; i < markdownCache.length; i++) {
       let fileName = markdownCache[i].fileName;

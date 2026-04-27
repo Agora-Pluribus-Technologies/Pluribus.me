@@ -329,6 +329,52 @@ function guessContentType(filename) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
+// Public shape of pages.json for blog sites: posts grouped into batches of
+// PAGES_JSON_BATCH_SIZE (newest first by modifiedAt) so the blog template
+// can lazy-load one batch at a time as the reader paginates rather than
+// fetching every post on first load.
+const PAGES_JSON_BATCH_SIZE = 10;
+
+// Build the JSON string written to public/pages.json. Pages sites stay on
+// the legacy flat-array shape (the editor's pages-side code knows nothing
+// about blogs). Blog sites get the batched object shape; blog templates
+// detect it via `blog: true` and walk batches sequentially.
+function buildPagesJsonContent(pages, isBlog) {
+  if (!Array.isArray(pages)) return JSON.stringify(pages || []);
+  if (!isBlog) return JSON.stringify(pages);
+
+  const sorted = pages.slice().sort((a, b) => {
+    const ad = new Date(a.modifiedAt || a.createdAt || 0).getTime();
+    const bd = new Date(b.modifiedAt || b.createdAt || 0).getTime();
+    return bd - ad; // newest first
+  });
+  const batches = [];
+  for (let i = 0; i < sorted.length; i += PAGES_JSON_BATCH_SIZE) {
+    batches.push(sorted.slice(i, i + PAGES_JSON_BATCH_SIZE));
+  }
+  return JSON.stringify({
+    blog: true,
+    totalPosts: sorted.length,
+    perBatch: PAGES_JSON_BATCH_SIZE,
+    batches,
+  });
+}
+
+// Inverse of buildPagesJsonContent: accept either shape and return a flat
+// array of page entries. Used by the editor on load (markdownCache stays
+// flat regardless of how the on-disk file is structured).
+function flattenPagesJson(parsed) {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && Array.isArray(parsed.batches)) {
+    const out = [];
+    for (const batch of parsed.batches) {
+      if (Array.isArray(batch)) out.push.apply(out, batch);
+    }
+    return out;
+  }
+  return [];
+}
+
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const { siteName, repo, owner, siteType, importedPages, importedAssets } = siteSettings;
@@ -397,7 +443,8 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
 
   // Initialize git repository and create initial commit with content
   await gitInit(siteId);
-  await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pagesJson));
+  const pagesJsonContent = buildPagesJsonContent(pagesJson, isBlog);
+  await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
   await gitWriteFile(siteId, "public/images.json", imagesManifest);
   if (hasImport) {
     for (const page of pagesToWrite) {
@@ -447,7 +494,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   const files = [
     {
       filePath: "public/pages.json",
-      content: JSON.stringify(pagesJson),
+      content: pagesJsonContent,
       contentType: "application/json",
     },
     {
@@ -570,7 +617,7 @@ async function getPublicFiles(siteId) {
   }
 
   try {
-    const pages = JSON.parse(pagesJson);
+    const pages = flattenPagesJson(JSON.parse(pagesJson));
     return pages.map(page => `public/${page.fileName}.md`);
   } catch {
     return [];
@@ -675,7 +722,8 @@ async function deployChanges(siteId) {
     });
   }
 
-  // Update pages.json (exclude latest.md)
+  // Update pages.json (exclude latest.md). Blog sites get the batched
+  // shape so the published blog template can lazy-load post batches.
   const pages = markdownCache
     .filter(item => item.fileName !== "public/latest.md")
     .map(item => {
@@ -691,7 +739,7 @@ async function deployChanges(siteId) {
     });
   files.push({
     filePath: "public/pages.json",
-    content: JSON.stringify(pages),
+    content: buildPagesJsonContent(pages, isBlogSite),
     contentType: "application/json",
   });
 
@@ -846,7 +894,8 @@ async function deployBlogPost(siteId, changedPost) {
     }
   }
 
-  // Always update pages.json (exclude latest.md)
+  // Always update pages.json (exclude latest.md). deployBlogPost is only
+  // called for blog sites, so always emit the batched shape.
   const pages = markdownCache
     .filter(item => item.fileName !== "public/latest.md")
     .map(item => {
@@ -862,7 +911,7 @@ async function deployBlogPost(siteId, changedPost) {
     });
   files.push({
     filePath: "public/pages.json",
-    content: JSON.stringify(pages),
+    content: buildPagesJsonContent(pages, true),
     contentType: "application/json",
   });
 

@@ -4,6 +4,18 @@ let currentSearchQuery = "";
 let currentTagFilter = "";
 let currentPage = 1;
 const POSTS_PER_PAGE = 10;
+// Batched pages.json: per-batch lists of page-info entries. Element 0 is
+// the newest batch (sorted by modifiedAt desc by the publish flow). Posts
+// are fetched lazily, one batch at a time, as the user paginates.
+let postBatches = [];
+// Per-batch loaded markdown promises; reused if the user re-navigates.
+let batchLoadPromises = [];
+// Loaded post objects, indexed parallel to postBatches.
+let loadedBatches = [];
+// Stashed at first loadBlogPosts call so pagination/filter handlers can
+// trigger additional batch loads without re-threading through events.
+let blogOrigin = "";
+let blogBasePath = "";
 
 document.addEventListener("DOMContentLoaded", async function () {
   const origin = document.location.origin;
@@ -126,13 +138,40 @@ function clearSearch() {
   applyFilters();
 }
 
+// Normalize whatever shape pages.json arrives in into a list of batches
+// (each batch is an array of page-info entries). Legacy pages.json files
+// arrive as a flat array; the new blog shape is { blog, batches: [...] }.
+function normalizePagesJsonToBatches(pagesJson) {
+  if (!pagesJson) return [];
+  if (Array.isArray(pagesJson)) {
+    // Legacy flat array — sort by modifiedAt (or createdAt) desc and split
+    // into batches of POSTS_PER_PAGE.
+    const sorted = pagesJson.slice().sort((a, b) => {
+      const ad = new Date(a.modifiedAt || a.createdAt || 0).getTime();
+      const bd = new Date(b.modifiedAt || b.createdAt || 0).getTime();
+      return bd - ad;
+    });
+    const out = [];
+    for (let i = 0; i < sorted.length; i += POSTS_PER_PAGE) {
+      out.push(sorted.slice(i, i + POSTS_PER_PAGE));
+    }
+    return out;
+  }
+  if (Array.isArray(pagesJson.batches)) {
+    return pagesJson.batches;
+  }
+  return [];
+}
+
 async function loadBlogPosts(origin, basePath, pagesJson) {
+  blogOrigin = origin;
+  blogBasePath = basePath;
   marked.setOptions({
     gfm: true,
     breaks: true,
   });
 
-  // Create tag filter bar container (will be populated after loading posts)
+  // Create tag filter bar container (will be populated after first batch loads)
   const tagFilterContainer = document.createElement("div");
   tagFilterContainer.id = "tagFilterContainer";
   document.body.appendChild(tagFilterContainer);
@@ -144,56 +183,80 @@ async function loadBlogPosts(origin, basePath, pagesJson) {
   feedContainer.innerHTML = '<div class="loading-posts">Loading posts...</div>';
   document.body.appendChild(feedContainer);
 
-  if (!pagesJson || pagesJson.length === 0) {
+  postBatches = normalizePagesJsonToBatches(pagesJson);
+  batchLoadPromises = new Array(postBatches.length).fill(null);
+  loadedBatches = new Array(postBatches.length).fill(null);
+
+  if (postBatches.length === 0) {
     feedContainer.innerHTML = '<div class="no-posts">No posts yet.</div>';
     return;
   }
 
-  // Fetch all posts in parallel
-  const postResults = await Promise.allSettled(
-    pagesJson.map(async (page) => {
-      const mdUrl = `${origin}${basePath}/${page.fileName}.md`;
-      const response = await fetch(mdUrl, {
-        method: "GET",
-        headers: {
-          "Cache-Control": "no-cache, must-revalidate",
-        },
-      });
-      if (response.ok) {
-        const markdown = await response.text();
-        return parsePostMarkdown(markdown, page, basePath);
-      }
-      return null;
-    })
-  );
-  const posts = postResults
-    .filter(r => r.status === "fulfilled" && r.value)
-    .map(r => r.value);
+  // Load only the first batch on initial render — cheaper page weight,
+  // faster time-to-first-paint, and lazy-loads more as the reader paginates.
+  await loadBatch(0, origin, basePath);
+  rebuildAllPostsFromLoadedBatches();
+  refreshTagFilterBar(tagFilterContainer);
 
-  // Sort posts by date (newest first)
-  posts.sort((a, b) => {
-    const dateA = a.date ? new Date(a.date) : new Date(0);
-    const dateB = b.date ? new Date(b.date) : new Date(0);
-    return dateB - dateA;
-  });
-
-  // Store posts globally for filtering
-  allPosts = posts;
-
-  // Collect all unique tags
-  const allTags = new Set();
-  posts.forEach(post => {
-    if (post.tags) {
-      post.tags.forEach(tag => allTags.add(tag));
-    }
-  });
-
-  // Create tag filter bar
-  createTagFilterBar(allTags, tagFilterContainer);
-
-  // Render first page of posts
   currentPage = 1;
   renderCurrentPage();
+}
+
+// Fetch every post in a single batch sequentially (one network request at
+// a time). Idempotent: a second call for the same batch reuses the
+// in-flight or completed promise instead of refetching.
+async function loadBatch(batchIndex, origin, basePath) {
+  if (batchIndex < 0 || batchIndex >= postBatches.length) return [];
+  if (batchLoadPromises[batchIndex]) return batchLoadPromises[batchIndex];
+
+  const batch = postBatches[batchIndex];
+  batchLoadPromises[batchIndex] = (async () => {
+    const out = [];
+    for (const page of batch) {
+      try {
+        const mdUrl = `${origin}${basePath}/${page.fileName}.md`;
+        const response = await fetch(mdUrl, {
+          method: "GET",
+          headers: { "Cache-Control": "no-cache, must-revalidate" },
+        });
+        if (response.ok) {
+          const markdown = await response.text();
+          out.push(parsePostMarkdown(markdown, page, basePath));
+        }
+      } catch (e) {
+        console.warn("Failed to load post:", page.fileName, e);
+      }
+    }
+    loadedBatches[batchIndex] = out;
+    return out;
+  })();
+  return batchLoadPromises[batchIndex];
+}
+
+// Rebuild allPosts from loadedBatches in batch order. Posts already arrive
+// sorted (newest first) because the publish flow batches by modifiedAt desc.
+function rebuildAllPostsFromLoadedBatches() {
+  const out = [];
+  for (const batch of loadedBatches) {
+    if (batch) out.push.apply(out, batch);
+  }
+  allPosts = out;
+}
+
+function refreshTagFilterBar(container) {
+  const target = container || document.getElementById("tagFilterContainer");
+  if (!target) return;
+  const allTags = new Set();
+  allPosts.forEach(post => {
+    if (post.tags) post.tags.forEach(tag => allTags.add(tag));
+  });
+  createTagFilterBar(allTags, target);
+  // Restore active state if the user already picked a tag.
+  if (currentTagFilter) {
+    target.querySelectorAll(".tag-filter").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.tag === currentTagFilter);
+    });
+  }
 }
 
 function parsePostMarkdown(markdown, pageInfo, basePath) {
@@ -311,9 +374,25 @@ function handleTagClick(tag) {
   applyFilters();
 }
 
-function applyFilters() {
+async function applyFilters() {
   currentPage = 1;
+  // Search and tag filters need to consider every post, not just the
+  // currently-loaded batches — load any remaining batches sequentially
+  // so the result set is comprehensive. No-op when nothing's filtered.
+  if (currentSearchQuery || currentTagFilter) {
+    await loadAllBatches();
+    refreshTagFilterBar();
+  }
   renderCurrentPage();
+}
+
+async function loadAllBatches() {
+  for (let i = 0; i < postBatches.length; i++) {
+    if (!loadedBatches[i]) {
+      await loadBatch(i, blogOrigin, blogBasePath);
+    }
+  }
+  rebuildAllPostsFromLoadedBatches();
 }
 
 function getFilteredPosts() {
@@ -341,12 +420,31 @@ function getFilteredPosts() {
   return filteredPosts;
 }
 
-function renderCurrentPage() {
+async function renderCurrentPage() {
   const feedContainer = document.getElementById("blogFeed");
   if (!feedContainer) return;
 
+  // No active search/filter: pagination follows the on-disk batch order,
+  // so loading "page N" only requires loading batch N-1. (Batches and
+  // pages are both POSTS_PER_PAGE = 10 wide and identically sorted by
+  // modifiedAt desc.)
+  if (!currentSearchQuery && !currentTagFilter) {
+    const targetBatch = currentPage - 1;
+    if (targetBatch >= 0 && targetBatch < postBatches.length && !loadedBatches[targetBatch]) {
+      feedContainer.innerHTML = '<div class="loading-posts">Loading posts...</div>';
+      await loadBatch(targetBatch, blogOrigin, blogBasePath);
+      rebuildAllPostsFromLoadedBatches();
+      refreshTagFilterBar();
+    }
+  }
+
   const filteredPosts = getFilteredPosts();
-  const totalPages = Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
+  // When filtered, total pages reflect filtered subset; when unfiltered,
+  // it's the total number of batches (so the Next button stays enabled
+  // even though only batch 0 is loaded yet).
+  const totalPages = (!currentSearchQuery && !currentTagFilter)
+    ? Math.max(1, postBatches.length)
+    : Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
   if (currentPage > totalPages) currentPage = totalPages;
 
   const start = (currentPage - 1) * POSTS_PER_PAGE;

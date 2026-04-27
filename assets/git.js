@@ -853,7 +853,9 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       await gitWriteFile(siteId, item.fileName, item.content);
     }
 
-    // Write pages.json (exclude latest.md)
+    // Write pages.json (exclude latest.md). For blog sites use the batched
+    // shape so the git working copy matches what the publish flow uploads
+    // to R2 — keeps git diffs meaningful.
     const pages = markdownCache
       .filter(item => item.fileName !== "public/latest.md")
       .map((item) => {
@@ -861,11 +863,17 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
         const entry = {
           displayName: item.displayName,
           fileName: fileName,
+          createdAt: item.createdAt || new Date().toISOString(),
+          modifiedAt: item.modifiedAt || new Date().toISOString(),
         };
         if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
         return entry;
       });
-    await gitWriteFile(siteId, "public/pages.json", JSON.stringify(pages));
+    const isBlog = typeof currentSiteType !== "undefined" && currentSiteType === "blog";
+    const pagesJsonContent = (typeof buildPagesJsonContent === "function")
+      ? buildPagesJsonContent(pages, isBlog)
+      : JSON.stringify(pages);
+    await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
 
     // Write images.json
     await gitWriteFile(siteId, "public/images.json", JSON.stringify(imageCache));
@@ -951,8 +959,12 @@ async function loadR2ToGit(siteId) {
     if (pagesJson) {
       await gitWriteFile(siteId, "public/pages.json", pagesJson);
 
-      // Load all page files in parallel, then write to git sequentially
-      const pages = JSON.parse(pagesJson);
+      // Load all page files in parallel, then write to git sequentially.
+      // Blog sites store pages.json as a batched object, so flatten first.
+      const parsedPages = JSON.parse(pagesJson);
+      const pages = (typeof flattenPagesJson === "function")
+        ? flattenPagesJson(parsedPages)
+        : (Array.isArray(parsedPages) ? parsedPages : []);
       const pageContents = await Promise.all(
         pages.map(async (page) => ({
           fileName: page.fileName,
