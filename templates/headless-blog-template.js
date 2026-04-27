@@ -376,11 +376,28 @@ function createTagFilterBar(allTags, container) {
   const tagBar = document.createElement("div");
   tagBar.className = "tag-filter-bar collapsed";
 
+  // Outside-click handler installed only while the bar is expanded.
+  // Removed again on collapse so we don't leak listeners.
+  function onOutsideClick(e) {
+    if (!tagBar.contains(e.target)) {
+      tagBar.classList.add("collapsed");
+      document.removeEventListener("mousedown", onOutsideClick);
+    }
+  }
+
   const label = document.createElement("span");
   label.className = "tag-filter-label";
   label.innerHTML = 'Tags: <span class="chevron">&#x25BC;</span>';
-  label.addEventListener("click", () => {
-    tagBar.classList.toggle("collapsed");
+  label.addEventListener("click", (e) => {
+    // Don't let this click bubble to the document handler we're about to
+    // install — otherwise expand-then-collapse would fire in one tick.
+    e.stopPropagation();
+    const wasCollapsed = tagBar.classList.toggle("collapsed");
+    if (!wasCollapsed) {
+      document.addEventListener("mousedown", onOutsideClick);
+    } else {
+      document.removeEventListener("mousedown", onOutsideClick);
+    }
   });
   tagBar.appendChild(label);
 
@@ -406,6 +423,11 @@ function createTagFilterBar(allTags, container) {
 }
 
 function handleTagClick(tag) {
+  // Clicking the currently-active tag clears the filter (back to "All"),
+  // so a second click on the same tag toggles the filter off.
+  if (tag && tag === currentTagFilter) {
+    tag = "";
+  }
   currentTagFilter = tag;
 
   // Update active state on filter buttons
