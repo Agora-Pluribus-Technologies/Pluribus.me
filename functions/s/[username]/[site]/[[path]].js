@@ -78,6 +78,15 @@ export async function onRequest(context) {
 
   console.log("File path:", filePath);
 
+  // Second gate: the requested file must either be one of the well-known
+  // site-metadata files, an attachment, or an .html/.md whose slug exists
+  // in the site's pages.json. Anything else is 404 — no random R2-key
+  // probing for files that aren't pages of the site.
+  const allowed = await isAllowedFilePath(filePath, url.origin, siteId);
+  if (!allowed) {
+    return corsResponse("Page not found", 404);
+  }
+
   // basePath is always "/public"
   let basePath = "/public";
 
@@ -106,6 +115,73 @@ export async function onRequest(context) {
     console.error("R2 get error:", error);
     return corsResponse("Failed to retrieve file", 500);
   }
+}
+
+// Site-wide metadata files that the published-page template fetches by
+// name. They aren't pages of the site, so they wouldn't appear in
+// pages.json — but they're legitimate requests that need to be allowed
+// through the page-validation gate.
+const ALLOWED_METADATA_FILES = new Set([
+  "index.html",       // SPA shell at the site root
+  "pages.json",
+  "site.json",
+  "folders.json",
+  "wikilinks.json",
+  "images.json",
+  "tags.json",
+  "history.json",
+  "latest.md",        // blog: most-recent-post snapshot
+]);
+
+function isAllowedMetadataPath(filePath) {
+  if (ALLOWED_METADATA_FILES.has(filePath)) return true;
+  // Image attachments live under public/attachments/ — the file inside
+  // the folder isn't a "page" but it's a legitimate site asset.
+  if (filePath.startsWith("attachments/")) return true;
+  return false;
+}
+
+// Verify that a non-metadata file path corresponds to a real page of the
+// site. Pulls pages.json over HTTPS from the site's own public URL (which
+// re-enters this same function — pages.json is whitelisted above so the
+// recursive call serves directly from R2 without re-validating). Pages
+// sites store pages.json as a flat array; blog sites use a batched object.
+async function isPagePath(filePath, originUrl, siteId) {
+  const m = filePath.match(/^(.+?)\.(html?|md)$/i);
+  if (!m) return false;
+  const slug = m[1];
+
+  let parsed;
+  try {
+    // Default cache headers: pages.json changes only at publish time, so
+    // letting Cloudflare's edge cache reuse it across page-validation
+    // requests dramatically cuts the latency of every site request.
+    const resp = await fetch(`${originUrl}/s/${siteId}/pages.json`);
+    if (!resp.ok) return false;
+    parsed = await resp.json();
+  } catch (e) {
+    console.error("Failed to fetch pages.json for validation:", e);
+    return false;
+  }
+
+  let pages;
+  if (Array.isArray(parsed)) {
+    pages = parsed;
+  } else if (parsed && Array.isArray(parsed.batches)) {
+    pages = [];
+    for (const batch of parsed.batches) {
+      if (Array.isArray(batch)) pages.push.apply(pages, batch);
+    }
+  } else {
+    pages = [];
+  }
+
+  return pages.some(p => p && p.fileName === slug);
+}
+
+async function isAllowedFilePath(filePath, originUrl, siteId) {
+  if (isAllowedMetadataPath(filePath)) return true;
+  return await isPagePath(filePath, originUrl, siteId);
 }
 
 // Helper function to guess content type from file extension
