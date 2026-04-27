@@ -162,7 +162,11 @@ async function readPagesJsonForValidation(env, siteId) {
 
   const cached = await cache.match(cacheKey);
   if (cached) {
-    try { return await cached.json(); } catch (_) { /* fall through to R2 */ }
+    try {
+      const parsed = await cached.json();
+      console.log("pages.json validation source: cache");
+      return parsed;
+    } catch (_) { /* fall through to R2 */ }
   }
 
   let text;
@@ -191,7 +195,11 @@ async function readPagesJsonForValidation(env, siteId) {
     console.warn("Cache put for pages.json validation failed:", e);
   }
 
-  try { return JSON.parse(text); } catch (_) { return null; }
+  try {
+    const parsed = JSON.parse(text);
+    console.log("pages.json validation source: R2");
+    return parsed;
+  } catch (_) { return null; }
 }
 
 // Strip every shape pages.json's `fileName` field has historically taken
@@ -215,11 +223,17 @@ function canonicalSlug(value) {
 // as a flat array; blog sites use a batched object.
 async function isPagePath(filePath, env, siteId) {
   const m = filePath.match(/^(.+?)\.(html?|md)$/i);
-  if (!m) return false;
+  if (!m) {
+    console.log("isPagePath: filePath did not match extension regex:", filePath);
+    return false;
+  }
   const slug = canonicalSlug(m[1]);
 
   const parsed = await readPagesJsonForValidation(env, siteId);
-  if (!parsed) return false;
+  if (!parsed) {
+    console.log("isPagePath: pages.json was null for", siteId);
+    return false;
+  }
 
   let pages;
   if (Array.isArray(parsed)) {
@@ -233,7 +247,25 @@ async function isPagePath(filePath, env, siteId) {
     pages = [];
   }
 
-  return pages.some(p => p && canonicalSlug(p.fileName) === slug);
+  const found = pages.some(p => p && canonicalSlug(p.fileName) === slug);
+  if (!found) {
+    // Diagnostic: surface what we looked for and a sample of what was
+    // available so the actual cause (stale cache, slug shape mismatch,
+    // missing entry) is visible in worker logs without needing R2 access.
+    const stored = pages
+      .map(p => (p && typeof p.fileName === "string") ? p.fileName : null)
+      .filter(Boolean);
+    console.log(
+      "isPagePath miss",
+      JSON.stringify({
+        slug,
+        rawCapture: m[1],
+        pageCount: pages.length,
+        sampleFileNames: stored.slice(0, 10),
+      })
+    );
+  }
+  return found;
 }
 
 async function isAllowedFilePath(filePath, env, siteId) {
