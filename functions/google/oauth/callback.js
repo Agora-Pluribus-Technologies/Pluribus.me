@@ -1,4 +1,9 @@
-import { createSession, makeSessionCookie } from "../../api/auth/_session.js";
+import {
+  createSession,
+  makeSessionCookie,
+  parseOAuthStateCookie,
+  clearOAuthStateCookie,
+} from "../../api/auth/_session.js";
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -7,6 +12,18 @@ export async function onRequestGet(context) {
 
   if (!code) {
     return new Response("Missing OAuth code.", { status: 400 });
+  }
+
+  // CSRF defence: reject the callback unless the `state` query parameter
+  // matches the value stored in the HttpOnly cookie that /api/auth/google/start
+  // set on this browser.
+  const state = url.searchParams.get("state");
+  const cookieState = parseOAuthStateCookie(request, "google");
+  if (!state || !cookieState || state !== cookieState) {
+    return new Response("Invalid OAuth state.", {
+      status: 400,
+      headers: { "Set-Cookie": clearOAuthStateCookie("google") },
+    });
   }
 
   const clientId = env.GOOGLE_CLIENT_ID;
@@ -80,11 +97,8 @@ export async function onRequestGet(context) {
   const sessionToken = await createSession(env, sessionData);
   const redirectUrl = new URL("/builder.html", url.origin);
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: redirectUrl.toString(),
-      "Set-Cookie": makeSessionCookie(sessionToken),
-    },
-  });
+  const headers = new Headers({ Location: redirectUrl.toString() });
+  headers.append("Set-Cookie", makeSessionCookie(sessionToken));
+  headers.append("Set-Cookie", clearOAuthStateCookie("google"));
+  return new Response(null, { status: 302, headers });
 }

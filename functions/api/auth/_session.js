@@ -2,6 +2,14 @@ const SESSION_TTL = 604800; // 7 days
 const SESSION_REFRESH_THRESHOLD = 518400; // 6 days (refresh in last 24h of 7-day TTL)
 const COOKIE_NAME = "__session";
 
+// OAuth `state` defends against login CSRF: an attacker can't trick a
+// victim's browser into completing OAuth with the attacker's authorization
+// code unless they also know the victim's per-flow state (which lives in
+// an HttpOnly cookie scoped to the victim's browser). Per-provider cookie
+// names so a stale GitHub state can't be replayed against a Google flow.
+const OAUTH_STATE_COOKIE_PREFIX = "__oauth_state_";
+const OAUTH_STATE_TTL = 600; // 10 minutes — covers a slow login but expires
+
 function base64urlEncode(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -43,7 +51,7 @@ export async function createSession(env, sessionData) {
 
 export async function getSession(env, token) {
   const hash = await hashToken(token);
-  const data = await env.SESSIONS.get(`session:${hash}`);
+  const data = await env.SESSIONS.get(`session:${hash}`, { cacheTtl: 600 });
   if (!data) return null;
   try {
     return JSON.parse(data);
@@ -54,7 +62,7 @@ export async function getSession(env, token) {
 
 export async function updateSession(env, token, updates) {
   const hash = await hashToken(token);
-  const data = await env.SESSIONS.get(`session:${hash}`);
+  const data = await env.SESSIONS.get(`session:${hash}`, { cacheTtl: 600 });
   if (!data) return null;
 
   const session = JSON.parse(data);
@@ -98,6 +106,37 @@ export function parseSessionCookie(request) {
     if (name === COOKIE_NAME) {
       return rest.join("=");
     }
+  }
+  return null;
+}
+
+// 256 bits of entropy, base64url-encoded. Same generation strategy as the
+// session token — high enough that an attacker can't guess a victim's
+// state value within the 10-minute TTL.
+export async function generateOAuthState() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return base64urlEncode(bytes.buffer);
+}
+
+export function makeOAuthStateCookie(provider, state) {
+  // SameSite=Lax is required: the OAuth provider redirects the browser
+  // back to /<provider>/oauth/callback as a top-level GET navigation, and
+  // SameSite=Strict would strip the cookie on that navigation.
+  return `${OAUTH_STATE_COOKIE_PREFIX}${provider}=${state}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${OAUTH_STATE_TTL}`;
+}
+
+export function clearOAuthStateCookie(provider) {
+  return `${OAUTH_STATE_COOKIE_PREFIX}${provider}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+export function parseOAuthStateCookie(request, provider) {
+  const cookieHeader = request.headers.get("Cookie");
+  if (!cookieHeader) return null;
+  const want = `${OAUTH_STATE_COOKIE_PREFIX}${provider}`;
+  const cookies = cookieHeader.split(";");
+  for (const cookie of cookies) {
+    const [name, ...rest] = cookie.trim().split("=");
+    if (name === want) return rest.join("=");
   }
   return null;
 }

@@ -1,4 +1,9 @@
-import { createSession, makeSessionCookie } from "../../api/auth/_session.js";
+import {
+  createSession,
+  makeSessionCookie,
+  parseOAuthStateCookie,
+  clearOAuthStateCookie,
+} from "../../api/auth/_session.js";
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -7,6 +12,19 @@ export async function onRequestGet(context) {
 
   if (!code) {
     return new Response("Missing OAuth code.", { status: 400 });
+  }
+
+  // CSRF defence: reject the callback unless the `state` query parameter
+  // matches the value stored in the HttpOnly cookie that /api/auth/github/start
+  // set on this browser. An attacker who induces the callback URL on a
+  // victim's browser won't have the matching cookie.
+  const state = url.searchParams.get("state");
+  const cookieState = parseOAuthStateCookie(request, "github");
+  if (!state || !cookieState || state !== cookieState) {
+    return new Response("Invalid OAuth state.", {
+      status: 400,
+      headers: { "Set-Cookie": clearOAuthStateCookie("github") },
+    });
   }
 
   let clientId;
@@ -88,11 +106,11 @@ export async function onRequestGet(context) {
   const sessionToken = await createSession(env, sessionData);
   const redirectUrl = new URL("/builder.html", url.origin);
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: redirectUrl.toString(),
-      "Set-Cookie": makeSessionCookie(sessionToken),
-    },
-  });
+  // Two Set-Cookie headers: the new session AND the state-cookie clear.
+  // Headers must be appended (not set) — repeated Set-Cookie via a plain
+  // object collapses into one in some runtimes.
+  const headers = new Headers({ Location: redirectUrl.toString() });
+  headers.append("Set-Cookie", makeSessionCookie(sessionToken));
+  headers.append("Set-Cookie", clearOAuthStateCookie("github"));
+  return new Response(null, { status: 302, headers });
 }

@@ -1,3 +1,5 @@
+import { generateOAuthState, makeOAuthStateCookie } from "../_session.js";
+
 const PROVIDERS = {
   github: {
     authUrl: "https://github.com/login/oauth/authorize",
@@ -36,10 +38,18 @@ export async function onRequestGet(context) {
   const clientId = config.getClientId(env, isDev);
   const redirectUri = config.getRedirectUri(url.origin);
 
+  // Per-flow random state — round-tripped through the provider and
+  // verified by the callback against the value pinned in the user's
+  // browser via an HttpOnly cookie. Without this an attacker can deliver
+  // their own authorization code to a victim's browser and log the
+  // victim into the attacker's account (login CSRF).
+  const state = await generateOAuthState();
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     scope: config.scope,
+    state,
   });
 
   if (config.responseType) {
@@ -52,5 +62,13 @@ export async function onRequestGet(context) {
 
   const authorizationUrl = `${config.authUrl}?${params.toString()}`;
 
-  return Response.redirect(authorizationUrl, 302);
+  // Response.redirect doesn't accept extra headers, so build the
+  // response manually to attach the state cookie alongside the Location.
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: authorizationUrl,
+      "Set-Cookie": makeOAuthStateCookie(provider, state),
+    },
+  });
 }
