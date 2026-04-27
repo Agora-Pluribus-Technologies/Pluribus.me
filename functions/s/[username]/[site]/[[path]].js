@@ -55,15 +55,21 @@ export async function onRequest(context) {
 
   console.log("Site config:", cfg);
 
+  console.log("Raw URL:", request.url);
+  console.log("URL pathname:", url.pathname);
+
   // Compute the path inside the site, after /s/:username/:site/
   // e.g. /s/alice/myblog/about/team.html -> "about/team.html"
   const segments = url.pathname.split("/").filter(Boolean); // ["s","alice","myblog","about","team.html"]
+  console.log("Path segments:", JSON.stringify(segments));
   const restSegments = segments.slice(3); // skip "s", username, and site
   let filePath = restSegments.join("/");
+  console.log("filePath after join:", filePath);
 
   // Default to index.html if no specific file
   if (!filePath) {
     filePath = "index.html";
+    console.log("filePath defaulted to index.html");
   }
 
   // Very simple path traversal guard
@@ -74,15 +80,19 @@ export async function onRequest(context) {
   // Default to HTML
   if (!filePath.includes(".")) {
     filePath += ".html";
+    console.log("filePath defaulted .html extension:", filePath);
   }
 
   console.log("File path:", filePath);
+  console.log("Encoded codepoints (first 32):",
+    Array.from(filePath).slice(0, 32).map(c => c.charCodeAt(0).toString(16)).join(" "));
 
   // Second gate: the requested file must either be one of the well-known
   // site-metadata files, an attachment, or an .html/.md whose slug exists
   // in the site's pages.json. Anything else is 404 — no random R2-key
   // probing for files that aren't pages of the site.
   const allowed = await isAllowedFilePath(filePath, env, siteId);
+  console.log("isAllowedFilePath result:", allowed);
   if (!allowed) {
     return corsResponse("Page not found", 404);
   }
@@ -227,7 +237,12 @@ async function isPagePath(filePath, env, siteId) {
     console.log("isPagePath: filePath did not match extension regex:", filePath);
     return false;
   }
-  const slug = canonicalSlug(m[1]);
+  const rawCapture = m[1];
+  const slug = canonicalSlug(rawCapture);
+  console.log("isPagePath: lookup", JSON.stringify({
+    filePath, rawCapture, slug,
+    slugCodepoints: Array.from(slug).map(c => c.charCodeAt(0).toString(16)).join(" "),
+  }));
 
   const parsed = await readPagesJsonForValidation(env, siteId);
   if (!parsed) {
@@ -236,40 +251,51 @@ async function isPagePath(filePath, env, siteId) {
   }
 
   let pages;
+  let shape;
   if (Array.isArray(parsed)) {
     pages = parsed;
+    shape = "flat-array";
   } else if (parsed && Array.isArray(parsed.batches)) {
     pages = [];
     for (const batch of parsed.batches) {
       if (Array.isArray(batch)) pages.push.apply(pages, batch);
     }
+    shape = "batched-object";
   } else {
     pages = [];
+    shape = "empty/unknown (" + (parsed && typeof parsed) + ")";
+  }
+  console.log("isPagePath: pages.json shape:", shape, "count:", pages.length);
+
+  const stored = pages
+    .map(p => (p && typeof p.fileName === "string") ? p.fileName : null)
+    .filter(Boolean);
+  const canonicals = stored.map(canonicalSlug);
+  const matchIdx = canonicals.indexOf(slug);
+
+  if (matchIdx >= 0) {
+    console.log("isPagePath: hit at index", matchIdx, "fileName:", stored[matchIdx]);
+    return true;
   }
 
-  const found = pages.some(p => p && canonicalSlug(p.fileName) === slug);
-  if (!found) {
-    // Diagnostic: surface what we looked for and a sample of what was
-    // available so the actual cause (stale cache, slug shape mismatch,
-    // missing entry) is visible in worker logs without needing R2 access.
-    const stored = pages
-      .map(p => (p && typeof p.fileName === "string") ? p.fileName : null)
-      .filter(Boolean);
-    console.log(
-      "isPagePath miss",
-      JSON.stringify({
-        slug,
-        rawCapture: m[1],
-        pageCount: pages.length,
-        sampleFileNames: stored.slice(0, 10),
-      })
-    );
-  }
-  return found;
+  console.log(
+    "isPagePath miss",
+    JSON.stringify({
+      slug,
+      rawCapture,
+      pageCount: pages.length,
+      sampleStored: stored.slice(0, 15),
+      sampleCanonical: canonicals.slice(0, 15),
+    })
+  );
+  return false;
 }
 
 async function isAllowedFilePath(filePath, env, siteId) {
-  if (isAllowedMetadataPath(filePath)) return true;
+  if (isAllowedMetadataPath(filePath)) {
+    console.log("isAllowedFilePath: matched metadata path:", filePath);
+    return true;
+  }
   // Only .html/.md requests need to correspond to a real entry in
   // pages.json — those represent pages of the site. Everything else
   // (images, fonts, CSS, JS, JSON, PDFs, etc.) is a static asset; we
@@ -277,8 +303,10 @@ async function isAllowedFilePath(filePath, env, siteId) {
   // legacy root-level images working on sites that pre-date the
   // attachments/ migration without weakening the page-probing gate.
   if (/\.(html?|md)$/i.test(filePath)) {
+    console.log("isAllowedFilePath: routing to isPagePath:", filePath);
     return await isPagePath(filePath, env, siteId);
   }
+  console.log("isAllowedFilePath: non-page asset, allowed:", filePath);
   return true;
 }
 
