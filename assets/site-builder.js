@@ -1625,14 +1625,89 @@ function initBlogEditor() {
   // Reduce footer padding to prevent excessive whitespace in block editor on mobile
   document.querySelector('#footer').style.paddingBottom = '10px';
 
+  // Always start the editor on the newest batch (page 0) when a site
+  // is opened. Without this reset, switching between sites would keep
+  // the previous site's batch index, which usually points past the new
+  // site's last batch.
+  currentBlogBatchIndex = 0;
+
   console.log('Blog editor initialized, rendering posts...');
   renderBlogPostsList();
 }
 
 // Render list of blog posts for editing
+// Which pages.json batch is currently visible in the editor. 0 = newest
+// posts (top of the published feed). Reset to 0 on every editor open.
+let currentBlogBatchIndex = 0;
+
+// Lazy-fetch the .md bodies for a given batch and stash them in
+// markdownCache. No-op for batches that are already loaded or out of
+// range. Called from the pagination Next/Prev handlers below.
+async function ensureBlogBatchLoaded(batchIndex) {
+  if (typeof blogBatches === "undefined") return;
+  if (batchIndex < 0 || batchIndex >= blogBatches.length) return;
+  if (typeof blogBatchesLoaded !== "undefined" && blogBatchesLoaded.has(batchIndex)) return;
+
+  const filesInBatch = blogBatches[batchIndex] || [];
+  const filesToLoad = filesInBatch.filter(file => {
+    const item = getCacheByFileName(file);
+    return !item || typeof item.content !== "string";
+  });
+
+  if (filesToLoad.length > 0 && typeof fetchPublicFileContent === "function") {
+    await Promise.all(filesToLoad.map(async (file) => {
+      try {
+        const content = await fetchPublicFileContent(file);
+        if (content != null) {
+          addOrUpdateCache(file, null, content, { preserveTimestamps: true });
+        }
+      } catch (e) {
+        console.warn("Failed to load blog post:", file, e);
+      }
+    }));
+  }
+
+  if (typeof blogBatchesLoaded !== "undefined") {
+    blogBatchesLoaded.add(batchIndex);
+  }
+}
+
+async function goToBlogBatch(batchIndex) {
+  if (typeof blogBatches === "undefined" || blogBatches.length === 0) return;
+  if (batchIndex < 0 || batchIndex >= blogBatches.length) return;
+  currentBlogBatchIndex = batchIndex;
+  await ensureBlogBatchLoaded(batchIndex);
+  renderBlogPostsList();
+}
+
+// Recompute blogBatches from the current markdownCache. Called after
+// add/delete/rename so the editor's pagination view stays in sync with
+// what the next publish will write to pages.json. Sort + chunk match
+// buildPagesJsonContent in api.js (newest first, batch size 10).
+function rebuildBlogBatches() {
+  if (typeof blogBatches === "undefined") return;
+  const PAGES_JSON_BATCH_SIZE = 10;
+  const items = markdownCache
+    .filter(c => c.fileName !== "public/latest.md")
+    .slice()
+    .sort((a, b) => {
+      const ad = parseBlogPostFrontmatter(a.content || "").date
+        || a.modifiedAt || a.createdAt || "";
+      const bd = parseBlogPostFrontmatter(b.content || "").date
+        || b.modifiedAt || b.createdAt || "";
+      return new Date(bd).getTime() - new Date(ad).getTime();
+    });
+  blogBatches = [];
+  for (let i = 0; i < items.length; i += PAGES_JSON_BATCH_SIZE) {
+    blogBatches.push(items.slice(i, i + PAGES_JSON_BATCH_SIZE).map(c => c.fileName));
+  }
+}
+
 function renderBlogPostsList() {
   const container = document.getElementById('editor');
-  console.log('renderBlogPostsList called, markdownCache length:', markdownCache.length);
+  console.log('renderBlogPostsList called, markdownCache length:', markdownCache.length,
+              'currentBatch:', currentBlogBatchIndex, 'totalBatches:',
+              (typeof blogBatches !== "undefined" ? blogBatches.length : 0));
   container.innerHTML = '';
 
   // Add new post button at top
@@ -1644,22 +1719,42 @@ function renderBlogPostsList() {
   });
   container.appendChild(addBtn);
 
-  // Sort posts by date (newest first) for display
-  const sortedIndices = markdownCache
-    .map((cacheItem, index) => ({
-      index,
-      date: parseBlogPostFrontmatter(cacheItem.content).date
-    }))
-    .sort((a, b) => {
-      const dateA = a.date ? new Date(a.date) : new Date(0);
-      const dateB = b.date ? new Date(b.date) : new Date(0);
-      return dateB - dateA;
-    });
+  // Determine which post file paths belong on the current page. Falls
+  // back to "everything in cache, sorted by date" when blogBatches
+  // hasn't been initialised (e.g. legacy non-batched pages.json or a
+  // brand-new blog with no published posts yet).
+  let visibleFiles;
+  if (typeof blogBatches !== "undefined" && blogBatches.length > 0) {
+    if (currentBlogBatchIndex >= blogBatches.length) currentBlogBatchIndex = 0;
+    visibleFiles = blogBatches[currentBlogBatchIndex] || [];
+  } else {
+    visibleFiles = markdownCache
+      .filter(c => c.fileName !== "public/latest.md")
+      .slice()
+      .sort((a, b) => {
+        const ad = parseBlogPostFrontmatter(a.content || "").date
+          || a.modifiedAt || a.createdAt || "";
+        const bd = parseBlogPostFrontmatter(b.content || "").date
+          || b.modifiedAt || b.createdAt || "";
+        return new Date(bd).getTime() - new Date(ad).getTime();
+      })
+      .map(c => c.fileName);
+  }
 
-  // Render each post
-  sortedIndices.forEach(({ index }) => {
-    const cacheItem = markdownCache[index];
-    const postData = parseBlogPostFrontmatter(cacheItem.content);
+  for (const filePath of visibleFiles) {
+    const cacheItem = getCacheByFileName(filePath);
+    if (!cacheItem) continue;
+
+    // Metadata-only entries (cached batches we haven't fetched bodies
+    // for yet) only carry displayName + modifiedAt. Title falls back to
+    // displayName, date to modifiedAt, tags are blank until the body
+    // arrives — which it will, since ensureBlogBatchLoaded ran before
+    // this render for the visible batch.
+    const hasContent = typeof cacheItem.content === "string";
+    const postData = hasContent
+      ? parseBlogPostFrontmatter(cacheItem.content)
+      : { title: cacheItem.displayName || "", date: cacheItem.modifiedAt || "", tags: "" };
+
     const postCard = document.createElement('div');
     postCard.className = 'blog-post-card';
 
@@ -1684,10 +1779,14 @@ function renderBlogPostsList() {
     const actions = document.createElement('div');
     actions.className = 'blog-post-card-actions';
 
+    // Resolve the cache index dynamically so the Edit/Delete handlers
+    // stay correct even after add/delete reorders markdownCache.
+    const cacheIndex = markdownCache.findIndex(c => c.fileName === filePath);
+
     const editBtn = document.createElement('button');
     editBtn.className = 'blog-post-card-edit';
     editBtn.textContent = 'Edit';
-    editBtn.addEventListener('click', () => editBlogPost(index));
+    editBtn.addEventListener('click', () => editBlogPost(cacheIndex));
     actions.appendChild(editBtn);
 
     if (markdownCache.length > 1) {
@@ -1695,13 +1794,40 @@ function renderBlogPostsList() {
       deleteBtn.className = 'blog-post-card-delete';
       deleteBtn.innerHTML = '&times;';
       deleteBtn.title = 'Delete post';
-      deleteBtn.addEventListener('click', () => deleteBlogPost(index));
+      deleteBtn.addEventListener('click', () => deleteBlogPost(cacheIndex));
       actions.appendChild(deleteBtn);
     }
 
     postCard.appendChild(actions);
     container.appendChild(postCard);
-  });
+  }
+
+  // Pagination controls — only rendered when there's more than one batch.
+  if (typeof blogBatches !== "undefined" && blogBatches.length > 1) {
+    const pager = document.createElement('div');
+    pager.className = 'blog-pagination';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'blog-pagination-btn';
+    prevBtn.textContent = '← Newer';
+    prevBtn.disabled = currentBlogBatchIndex <= 0;
+    prevBtn.addEventListener('click', () => goToBlogBatch(currentBlogBatchIndex - 1));
+    pager.appendChild(prevBtn);
+
+    const info = document.createElement('span');
+    info.className = 'blog-pagination-info';
+    info.textContent = `Page ${currentBlogBatchIndex + 1} of ${blogBatches.length}`;
+    pager.appendChild(info);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'blog-pagination-btn';
+    nextBtn.textContent = 'Older →';
+    nextBtn.disabled = currentBlogBatchIndex >= blogBatches.length - 1;
+    nextBtn.addEventListener('click', () => goToBlogBatch(currentBlogBatchIndex + 1));
+    pager.appendChild(nextBtn);
+
+    container.appendChild(pager);
+  }
 }
 
 // Add new blog post
@@ -1724,6 +1850,10 @@ function addNewBlogPost() {
     const sanitizedFileName = `public/${newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.md`;
 
     addOrUpdateCache(sanitizedFileName, newTitle, newContent);
+    // Newly-added post is the newest, so it lands in batch 0 — jump
+    // there so the user sees what they just created.
+    if (typeof rebuildBlogBatches === "function") rebuildBlogBatches();
+    currentBlogBatchIndex = 0;
     renderBlogPostsList();
 
     // Auto-publish for blog sites - only send the new post
@@ -1735,12 +1865,25 @@ function addNewBlogPost() {
 }
 
 // Edit existing blog post
-function editBlogPost(index) {
+async function editBlogPost(index) {
   const cacheItem = markdownCache[index];
   if (!cacheItem) return;
 
+  // Lazy-load body for metadata-only cache entries (e.g. user opens a
+  // post from a batch whose .md fetch is still in flight, or some other
+  // path bypassed ensureBlogBatchLoaded). Without this the modal would
+  // open with an empty body.
+  if (typeof cacheItem.content !== "string" && typeof fetchPublicFileContent === "function") {
+    try {
+      const fetched = await fetchPublicFileContent(cacheItem.fileName);
+      if (fetched != null) cacheItem.content = fetched;
+    } catch (e) {
+      console.warn("Failed to lazy-load post body:", cacheItem.fileName, e);
+    }
+  }
+
   const oldFileName = cacheItem.fileName;
-  showBlogPostEditModal(cacheItem.content, cacheItem.displayName, async (newContent, newTitle) => {
+  showBlogPostEditModal(cacheItem.content || "", cacheItem.displayName, async (newContent, newTitle) => {
     // Update cache
     cacheItem.content = newContent;
     cacheItem.displayName = newTitle;
@@ -1753,6 +1896,7 @@ function editBlogPost(index) {
       cacheItem.fileName = newFileName;
     }
 
+    if (typeof rebuildBlogBatches === "function") rebuildBlogBatches();
     renderBlogPostsList();
 
     // Auto-publish for blog sites - only send the modified post
@@ -1776,6 +1920,13 @@ async function deleteBlogPost(index) {
 
   const deletedFileName = cacheItem.fileName;
   markdownCache.splice(index, 1);
+  if (typeof rebuildBlogBatches === "function") rebuildBlogBatches();
+  // Current batch may have shrunk past the end after the delete (e.g.
+  // last post on the final page) — clamp back into range.
+  if (typeof blogBatches !== "undefined" && blogBatches.length > 0
+      && currentBlogBatchIndex >= blogBatches.length) {
+    currentBlogBatchIndex = blogBatches.length - 1;
+  }
   renderBlogPostsList();
 
   // Auto-publish for blog sites - only delete the removed post

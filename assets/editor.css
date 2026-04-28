@@ -2572,6 +2572,45 @@ nav {
   background-color: var(--bg-primary);
 }
 
+.blog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-light);
+}
+
+.blog-pagination-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.blog-pagination-btn:hover:not(:disabled) {
+  background-color: var(--link-color);
+  border-color: var(--link-color);
+  color: white;
+}
+
+.blog-pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.blog-pagination-info {
+  color: var(--text-muted);
+  font-size: 13px;
+  min-width: 110px;
+  text-align: center;
+}
+
 .blog-add-post-btn {
   width: 100%;
   padding: 15px 20px;

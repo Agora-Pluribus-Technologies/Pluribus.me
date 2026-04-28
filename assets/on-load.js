@@ -301,6 +301,15 @@ let imageCache = [];
 // Global cache for documents (PDFs, DOCX) - Array of filenames
 let documentCache = [];
 
+// Blog-site pagination state. Mirrors the batch boundaries written to
+// pages.json by buildPagesJsonContent — keeping the same boundaries
+// means the editor's "page 1" matches what readers see at the top of
+// the published feed. Each batch is an array of `public/<slug>.md`
+// paths. blogBatchesLoaded tracks which batches' .md bodies are in
+// markdownCache; batches not yet loaded have metadata-only entries.
+let blogBatches = [];
+let blogBatchesLoaded = new Set();
+
 // Helper functions for markdownCache
 function getCacheByFileName(fileName) {
   return markdownCache.find(item => item.fileName === fileName);
@@ -553,20 +562,38 @@ async function openSiteInEditor(site, initialPage = "index") {
     }
 
     // Page-load strategy:
-    //   - Blog sites: render the post list from cache content, so we still
-    //     bulk-load every .md upfront.
+    //   - Blog sites: load only the FIRST batch of posts from pages.json
+    //     (matches the published-site renderer's pagination boundary).
+    //     Other batches stay in the cache as metadata-only entries —
+    //     ensureBlogBatchLoaded fetches them on demand when the user
+    //     paginates to them in the editor.
     //   - Pages sites: load only the homepage's .md (markdownCache[0]).
-    //     Other pages stay in the cache as metadata-only entries with no
-    //     `content` field; selectSidebarPage fetches them on demand the
-    //     first time the user opens them.
+    //     Other pages stay metadata-only; selectSidebarPage fetches them
+    //     on demand the first time the user opens them.
     const isBlogSite = site.siteType === "blog";
     const homePageFile = (!isBlogSite && markdownCache.length > 0)
       ? markdownCache[0].fileName
       : null;
 
+    // Build blog batch index (file paths grouped by pages.json batch).
+    // Empty for pages sites and for blog sites whose pages.json doesn't
+    // carry the batched shape (e.g., legacy or empty blog).
+    blogBatches = [];
+    blogBatchesLoaded = new Set();
+    if (isBlogSite && pagesJsonData && Array.isArray(pagesJsonData.batches)) {
+      blogBatches = pagesJsonData.batches.map(batch =>
+        (batch || [])
+          .filter(p => p && p.fileName && p.fileName !== "latest")
+          .map(p => `public/${p.fileName}.md`)
+      );
+    }
+
     const filesToFetch = isBlogSite
-      ? markdownFiles
+      ? (blogBatches[0] || [])
       : (homePageFile ? [homePageFile] : []);
+    if (isBlogSite && blogBatches.length > 0) {
+      blogBatchesLoaded.add(0);
+    }
 
     const [mdResults, imagesJsonContent, documentsJsonContent, foldersJsonContent] = await Promise.all([
       Promise.all(filesToFetch.map(async (file) => {
