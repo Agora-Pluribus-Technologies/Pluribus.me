@@ -129,13 +129,16 @@ function isYouTubeUrl(content) {
   return trimmed.includes("youtube.com") || trimmed.includes("youtu.be");
 }
 
-// Convert YouTube URL to embed iframe HTML
+// Convert YouTube URL to embed iframe HTML. `sandbox` is baked into
+// the tag string so it's present BEFORE the iframe enters the DOM via
+// `innerHTML =` — setting sandbox post-attachment doesn't apply to the
+// initial src navigation, which is the dangerous race window.
 function youtubeUrlToEmbed(url) {
   const videoId = extractYouTubeVideoId(url);
   if (!videoId) {
     return null;
   }
-  return `<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+  return `<iframe sandbox="allow-scripts allow-same-origin" width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
 }
 
 // Check if content is a SoundCloud URL
@@ -144,12 +147,13 @@ function isSoundCloudUrl(content) {
   return trimmed.includes("soundcloud.com");
 }
 
-// Convert SoundCloud URL to embed iframe HTML
+// Convert SoundCloud URL to embed iframe HTML. `sandbox` baked in for
+// the same reason as youtubeUrlToEmbed.
 function soundcloudUrlToEmbed(url) {
   const trimmedUrl = url.trim();
   // SoundCloud widget uses the URL as a parameter
   const encodedUrl = encodeURIComponent(trimmedUrl);
-  return `<iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>`;
+  return `<iframe sandbox="allow-scripts allow-same-origin" width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>`;
 }
 
 function decodeEmbeds(basePath) {
@@ -264,6 +268,7 @@ function decodeEmbeds(basePath) {
           "src",
           "width",
           "height",
+          "sandbox",
         ],
 
         // Keep built-in protections on
@@ -271,15 +276,33 @@ function decodeEmbeds(basePath) {
         FORBID_ATTR: ["onerror", "onload"], // event handlers (DOMPurify strips these by default too)
       });
       console.log("Sanitized: " + sanitizedHtml);
-      newDiv.innerHTML = sanitizedHtml;
 
-      let iframe = newDiv.children[0];
-      if (iframe) {
+      // Pre-inject sandbox into any iframe that doesn't already carry
+      // one BEFORE assigning to innerHTML — setting sandbox after the
+      // iframe has been parsed and started loading wouldn't apply to
+      // the initial src navigation. The negative lookahead skips
+      // iframes that already have sandbox (e.g. our YouTube/SoundCloud
+      // synthesizers, or a hand-authored raw-HTML embed).
+      const sandboxedHtml = sanitizedHtml.replace(
+        /<iframe\b(?![^>]*\bsandbox=)/gi,
+        '<iframe sandbox="allow-scripts allow-same-origin"'
+      );
+      newDiv.innerHTML = sandboxedHtml;
+
+      // Failsafe: re-affirm sandbox on every iframe in case anything
+      // upstream (e.g. a future code path) skipped the pre-injection,
+      // and apply the aspect-ratio fixup. `setAttribute` here doesn't
+      // protect the initial navigation but at least ensures any later
+      // navigation within the iframe inherits the policy.
+      newDiv.querySelectorAll("iframe").forEach((iframe) => {
+        if (!iframe.hasAttribute("sandbox")) {
+          iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+        }
         const w = iframe.width || 560;
         const h = iframe.height || 315;
         iframe.style.maxWidth = "90%";
         iframe.style.aspectRatio = `${w / h}`;
-      }
+      });
 
       pre.parentElement.parentElement.replaceWith(newDiv);
     }

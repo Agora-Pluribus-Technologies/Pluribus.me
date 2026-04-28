@@ -778,26 +778,33 @@ function formatDate(dateStr) {
 }
 
 function renderEmbed(embedContent) {
-  // YouTube
+  // YouTube — sandbox baked into the tag so it's present BEFORE the
+  // iframe enters the DOM. Setting sandbox after attachment doesn't
+  // apply to the initial src navigation.
   if (embedContent.includes("youtube.com") || embedContent.includes("youtu.be")) {
     const videoId = extractYouTubeVideoId(embedContent);
     if (videoId) {
-      return `<div class="embed-container"><iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div>`;
+      return `<div class="embed-container"><iframe sandbox="allow-scripts allow-same-origin" width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div>`;
     }
   }
 
   // SoundCloud
   if (embedContent.includes("soundcloud.com")) {
     const encodedUrl = encodeURIComponent(embedContent);
-    return `<div class="embed-container"><iframe width="100%" height="166" scrolling="no" frameborder="no" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false"></iframe></div>`;
+    return `<div class="embed-container"><iframe sandbox="allow-scripts allow-same-origin" width="100%" height="166" scrolling="no" frameborder="no" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false"></iframe></div>`;
   }
 
-  // Raw HTML embed
+  // Raw HTML embed — pre-inject sandbox into any iframe that doesn't
+  // already carry one, before the HTML enters the DOM.
   const sanitized = DOMPurify.sanitize(embedContent, {
     ADD_TAGS: ["iframe"],
-    ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "src", "width", "height"],
+    ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "src", "width", "height", "sandbox"],
   });
-  return `<div class="embed-container">${sanitized}</div>`;
+  const sandboxed = sanitized.replace(
+    /<iframe\b(?![^>]*\bsandbox=)/gi,
+    '<iframe sandbox="allow-scripts allow-same-origin"'
+  );
+  return `<div class="embed-container">${sandboxed}</div>`;
 }
 
 function extractYouTubeVideoId(url) {
