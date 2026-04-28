@@ -805,6 +805,12 @@ async function handleEditContext(username) {
   await openSiteInEditor(site, pagePath);
 }
 
+// Per-user site cap. Mirrors MAX_SITES_PER_USER on the server in
+// functions/api/sites.js — the server is authoritative; this constant
+// only drives the UI hint so users at the cap see the create button
+// disabled instead of filling out the form and getting rejected.
+const MAX_SITES_PER_USER = 5;
+
 // Load sites for the current user (server returns owned + shared)
 async function loadSitesForUser(username) {
   console.log("Loading sites for user:", username);
@@ -821,6 +827,28 @@ async function loadSitesForUser(username) {
   sitesListHeader.style.display = "block";
 
   populateSitesList(sitesCache, sharedSitesCache);
+}
+
+// Reflect the per-user site cap on the "Create New Site" button. Called
+// whenever the owned-site list changes (initial load + after every
+// delete) so the button toggles back to enabled when the user drops
+// below the cap.
+function updateCreateSiteButtonState(ownedCount) {
+  const createBtn = document.getElementById("createSiteButton");
+  if (!createBtn) return;
+  if (ownedCount >= MAX_SITES_PER_USER) {
+    createBtn.disabled = true;
+    createBtn.removeAttribute("data-toggle");
+    createBtn.removeAttribute("data-target");
+    createBtn.title = `Site limit reached (${MAX_SITES_PER_USER}). Delete a site to create another.`;
+    createBtn.textContent = `Site limit reached (${ownedCount}/${MAX_SITES_PER_USER})`;
+  } else {
+    createBtn.disabled = false;
+    createBtn.setAttribute("data-toggle", "modal");
+    createBtn.setAttribute("data-target", "#createSiteModal");
+    createBtn.removeAttribute("title");
+    createBtn.textContent = "Create New Site";
+  }
 }
 
 // Position sites-list-panel below userMenuButton
@@ -1101,9 +1129,22 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
 
     if (!createResponse.ok) {
+      // Surface the server's user-facing message (e.g. site-cap exceeded)
+      // when the response is JSON; otherwise fall back to raw text.
       const errorText = await createResponse.text();
+      let errorMsg = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed && parsed.error) errorMsg = parsed.error;
+      } catch { /* not JSON — use the raw text */ }
       console.error("Failed to create site:", errorText);
-      alert("Failed to create site: " + errorText);
+      alert("Failed to create site: " + errorMsg);
+      // Refresh button state in case the cap is what blocked us — the
+      // server is the source of truth, so re-pull the count.
+      if (typeof loadSitesForUser === "function" && typeof getStoredUsername === "function") {
+        const u = getStoredUsername();
+        if (u) loadSitesForUser(u).catch(() => {});
+      }
       return false;
     }
 
@@ -2323,6 +2364,10 @@ function setSiteAvailable(available) {
 function populateSitesList(ownedSites, sharedSites = []) {
   const sitesList = document.getElementById("sites-list");
   sitesList.innerHTML = ""; // Clear existing list
+
+  // Keep the create button in sync with the cap on every refresh
+  // (initial load + after every delete).
+  updateCreateSiteButtonState(ownedSites.length);
 
   // Helper function to create a site item
   function createSiteItem(site, isOwned) {

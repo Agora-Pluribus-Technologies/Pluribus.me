@@ -1,5 +1,9 @@
 import { isOwner, forbidden } from "./auth/_authorize.js";
 
+// Per-user cap on owned sites. Counts only sites the user OWNS — being a
+// collaborator on someone else's site doesn't count toward the limit.
+const MAX_SITES_PER_USER = 5;
+
 // POST /api/sites - Create a new site
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -29,6 +33,21 @@ export async function onRequestPost(context) {
   const validSiteType = siteType === "blog" ? "blog" : "pages";
 
   try {
+    // Per-user site cap. COUNT(*) on the indexed LOWER(owner) column
+    // (idx_sites_owner_lower) is a cheap index seek; no scan.
+    const ownedCountRow = await env.USERS_DB.prepare(
+      "SELECT COUNT(*) AS n FROM Sites WHERE LOWER(owner) = LOWER(?)"
+    ).bind(owner).first();
+    const ownedCount = (ownedCountRow && ownedCountRow.n) || 0;
+    if (ownedCount >= MAX_SITES_PER_USER) {
+      return new Response(
+        JSON.stringify({
+          error: `Site limit reached: each user may own at most ${MAX_SITES_PER_USER} sites. Delete an existing site to create a new one.`,
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const existing = await env.USERS_DB.prepare(
       "SELECT siteId FROM Sites WHERE siteId = ?"
     ).bind(siteId).first();
