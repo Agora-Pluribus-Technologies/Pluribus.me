@@ -923,33 +923,8 @@ function isSafeButtonUrl(url) {
 }
 
 function createFooter(origin, basePath, siteName) {
-  // Derive siteId for subscribe widget
-  let siteId = "";
-  if (basePath) {
-    const parts = basePath.split("/").filter(Boolean);
-    if (parts.length >= 3 && parts[0] === "s") {
-      siteId = parts[1] + "/" + parts[2];
-    }
-  }
-
-  // Fixed footer bar
   const footer = document.createElement("footer");
   footer.classList.add("pluribus-footer");
-
-  // Subscribe widget inside footer
-  if (siteId) {
-    const widget = document.createElement("div");
-    widget.className = "subscribe-widget";
-    widget.innerHTML = `
-      <form class="subscribe-form" id="subscribeForm">
-        <input type="email" class="subscribe-input" id="subscribeEmail" placeholder="Subscribe via email" required>
-        <div id="subscribeTurnstile"></div>
-        <button type="submit" class="subscribe-button" id="subscribeButton">Subscribe</button>
-      </form>
-      <span class="subscribe-status" id="subscribeStatus"></span>
-    `;
-    footer.appendChild(widget);
-  }
 
   const footerRight = document.createElement("div");
   footerRight.className = "footer-right";
@@ -971,105 +946,6 @@ function createFooter(origin, basePath, siteName) {
   footer.appendChild(footerRight);
 
   document.body.appendChild(footer);
-
-  // Attach subscribe handler after footer is in DOM
-  if (siteId) {
-    const form = document.getElementById("subscribeForm");
-    const emailInput = document.getElementById("subscribeEmail");
-    const button = document.getElementById("subscribeButton");
-    const status = document.getElementById("subscribeStatus");
-
-    // Initialize invisible Turnstile widget for subscribe form
-    let subscribeTurnstileToken = null;
-    let subscribeTurnstileWidgetId = null;
-
-    function initSubscribeTurnstile() {
-      if (typeof turnstile === "undefined") {
-        setTimeout(initSubscribeTurnstile, 200);
-        return;
-      }
-      subscribeTurnstileWidgetId = turnstile.render("#subscribeTurnstile", {
-        sitekey: "0x4AAAAAACJNWjSEPW9SeZxb",
-        size: "invisible",
-        callback: function (token) {
-          subscribeTurnstileToken = token;
-        },
-        "expired-callback": function () {
-          subscribeTurnstileToken = null;
-        },
-      });
-    }
-    initSubscribeTurnstile();
-
-    async function getSubscribeTurnstileToken() {
-      if (subscribeTurnstileToken) {
-        const token = subscribeTurnstileToken;
-        subscribeTurnstileToken = null;
-        return token;
-      }
-      if (typeof turnstile !== "undefined" && subscribeTurnstileWidgetId !== null) {
-        turnstile.reset(subscribeTurnstileWidgetId);
-      }
-      return new Promise((resolve) => {
-        let attempts = 0;
-        const check = setInterval(() => {
-          attempts++;
-          if (subscribeTurnstileToken) {
-            clearInterval(check);
-            const token = subscribeTurnstileToken;
-            subscribeTurnstileToken = null;
-            resolve(token);
-          } else if (attempts >= 100) {
-            clearInterval(check);
-            resolve(null);
-          }
-        }, 100);
-      });
-    }
-
-    form.addEventListener("submit", async function (e) {
-      e.preventDefault();
-      const email = emailInput.value.trim();
-      if (!email) return;
-
-      button.disabled = true;
-      button.textContent = "Subscribing...";
-      status.textContent = "";
-      status.className = "subscribe-status";
-
-      try {
-        const turnstileToken = await getSubscribeTurnstileToken();
-        const headers = { "Content-Type": "application/json" };
-        if (turnstileToken) {
-          headers["X-Turnstile-Token"] = turnstileToken;
-        }
-
-        const response = await fetch(`${origin}/api/subscribers`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ siteId, email }),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          status.textContent = result.message || "Check your email to confirm!";
-          status.className = "subscribe-status subscribe-success";
-          emailInput.value = "";
-        } else {
-          status.textContent = result.message || result.error || "Failed to subscribe.";
-          status.className = "subscribe-status subscribe-error";
-        }
-      } catch (err) {
-        status.textContent = "An error occurred.";
-        status.className = "subscribe-status subscribe-error";
-      } finally {
-        button.disabled = false;
-        button.textContent = "Subscribe";
-      }
-    });
-  }
-
 }
 
 // Theme toggle functionality. Default to the OS color-scheme preference

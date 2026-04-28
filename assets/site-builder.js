@@ -1731,9 +1731,6 @@ function addNewBlogPost() {
       fileName: sanitizedFileName,
       content: newContent,
     });
-
-    // Notify subscribers about the new post
-    notifySubscribersOfNewPost(currentSiteId, newTitle, newContent);
   });
 }
 
@@ -1857,44 +1854,6 @@ async function autoPublishBlogSettings() {
   } finally {
     showBlogPublishingIndicator(false);
   }
-}
-
-// Notify subscribers when a new blog post is published (fire-and-forget)
-async function notifySubscribersOfNewPost(siteId, postTitle, postContent) {
-  if (!siteId || !postTitle) return;
-
-  // Read custom blog URL from site.json, fall back to AgoraPages URL
-  let postUrl = `https://agorapages.com/s/${siteId}/`;
-  try {
-    const siteJsonContent = await getFileContent(siteId, "public/site.json");
-    if (siteJsonContent) {
-      const siteJson = JSON.parse(siteJsonContent);
-      if (siteJson.blogEmailUrl) {
-        // Ensure trailing slash
-        postUrl = siteJson.blogEmailUrl.replace(/\/?$/, "/");
-      }
-    }
-  } catch (e) {
-    // Use default URL
-  }
-
-  // Extract excerpt from post body
-  let excerpt = "";
-  const bodyMatch = postContent.match(/^---\n[\s\S]*?\n---\n([\s\S]*)/);
-  const body = bodyMatch ? bodyMatch[1] : postContent;
-  excerpt = body.replace(/[#*_`\[\]()]/g, "").trim().substring(0, 200);
-  if (body.trim().length > 200) excerpt += "...";
-
-  // Fire-and-forget — don't block the UI
-  notifySubscribers(siteId, postTitle, excerpt, postUrl)
-    .then(result => {
-      if (result.sent > 0) {
-        console.log(`Notified ${result.sent} subscriber(s) about "${postTitle}"`);
-      }
-    })
-    .catch(err => {
-      console.error("Failed to notify subscribers:", err);
-    });
 }
 
 // Load blog posts into editor (called from on-load.js)

@@ -719,74 +719,6 @@ tr:last-child td {
     font-size: 13px;
 }
 
-/* Subscribe Widget (inside footer) */
-.subscribe-widget {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.subscribe-form {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-}
-
-.subscribe-input {
-    padding: 4px 10px;
-    font-size: 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background-color: var(--bg-tertiary);
-    color: var(--text-primary);
-    outline: none;
-    width: 160px;
-    transition: border-color 0.3s ease;
-}
-
-.subscribe-input::placeholder {
-    color: var(--text-muted);
-}
-
-.subscribe-input:focus {
-    border-color: var(--accent-color);
-}
-
-.subscribe-button {
-    padding: 4px 12px;
-    font-size: 12px;
-    font-weight: bold;
-    background-color: var(--accent-color);
-    color: var(--bg-primary);
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    white-space: nowrap;
-}
-
-.subscribe-button:hover {
-    background-color: var(--accent-hover);
-}
-
-.subscribe-button:disabled {
-    opacity: 0.6;
-    cursor: default;
-}
-
-.subscribe-status {
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-.subscribe-success {
-    color: #4caf50;
-}
-
-.subscribe-error {
-    color: #f44336;
-}
-
 .footer-right {
     display: flex;
     align-items: center;
@@ -828,9 +760,5 @@ tr:last-child td {
         font-size: 10pt;
         gap: 10px;
         flex-wrap: wrap;
-    }
-
-    .subscribe-input {
-        width: 120px;
     }
 }

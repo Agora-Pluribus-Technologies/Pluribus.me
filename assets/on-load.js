@@ -1515,18 +1515,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (siteJsonContent) {
           const siteJson = JSON.parse(siteJsonContent);
           document.getElementById("showHistoryCheckbox").checked = siteJson.showHistory || false;
-          document.getElementById("blogEmailUrl").value = siteJson.blogEmailUrl || "";
           if (siteJson.siteName) {
             document.getElementById("siteSettingsNameInput").value = siteJson.siteName;
           }
         } else {
           document.getElementById("showHistoryCheckbox").checked = false;
-          document.getElementById("blogEmailUrl").value = "";
         }
       } catch (error) {
         console.error("Error loading site.json:", error);
         document.getElementById("showHistoryCheckbox").checked = false;
-        document.getElementById("blogEmailUrl").value = "";
       }
 
       // Show/hide edit history option based on site type
@@ -1535,15 +1532,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         showHistoryGroup.style.display = "none";
       } else {
         showHistoryGroup.style.display = "";
-      }
-
-      // Show/hide subscribers section for blog sites
-      const subscribersSection = document.getElementById("subscribersSection");
-      if (currentSiteType === "blog" && isOwner) {
-        subscribersSection.style.display = "block";
-        loadSubscribersPanel(currentSiteId);
-      } else {
-        subscribersSection.style.display = "none";
       }
 
       // Show modal with loading state
@@ -1641,13 +1629,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         const showHistory = document.getElementById("showHistoryCheckbox").checked;
         siteJson.showHistory = showHistory;
 
-        // Update blog email URL
-        const blogEmailUrl = document.getElementById("blogEmailUrl").value.trim();
-        if (blogEmailUrl) {
-          siteJson.blogEmailUrl = blogEmailUrl;
-        } else {
-          delete siteJson.blogEmailUrl;
-        }
+        // Email-subscription feature was removed; clear any legacy
+        // blogEmailUrl from existing site.json on next save.
+        delete siteJson.blogEmailUrl;
 
         // Update site display name
         const newDisplayName = document.getElementById("siteSettingsNameInput").value.trim();
@@ -1686,84 +1670,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       } finally {
         saveButton.disabled = false;
         saveButton.textContent = originalText;
-      }
-    });
-
-  // Handle subscriber CSV import button
-  document
-    .getElementById("importSubscribersButton")
-    .addEventListener("click", function () {
-      document.getElementById("subscribersCsvInput").click();
-    });
-
-  // Handle CSV file selection
-  document
-    .getElementById("subscribersCsvInput")
-    .addEventListener("change", async function (e) {
-      const file = e.target.files[0];
-      if (!file || !currentSiteId) return;
-
-      const statusEl = document.getElementById("subscribersImportStatus");
-      statusEl.style.display = "block";
-      statusEl.className = "text-info";
-      statusEl.textContent = "Parsing CSV...";
-
-      try {
-        const text = await file.text();
-        const emails = parseCsvForEmails(text);
-
-        if (emails.length === 0) {
-          statusEl.className = "text-danger";
-          statusEl.textContent = "No valid email addresses found in the CSV.";
-          return;
-        }
-
-        statusEl.textContent = `Found ${emails.length} emails. Importing...`;
-
-        const result = await importSubscribers(currentSiteId, emails);
-        statusEl.className = "text-success";
-        statusEl.textContent = `Imported ${result.imported} subscribers. ${result.skipped} skipped (duplicates or invalid).`;
-
-        // Refresh the list
-        await loadSubscribersPanel(currentSiteId);
-      } catch (error) {
-        statusEl.className = "text-danger";
-        statusEl.textContent = "Failed to import: " + error.message;
-      } finally {
-        // Reset file input
-        e.target.value = "";
-      }
-    });
-
-  // Handle subscriber CSV export
-  document
-    .getElementById("exportSubscribersButton")
-    .addEventListener("click", async function () {
-      if (!currentSiteId) return;
-
-      try {
-        const data = await getSubscribers(currentSiteId);
-        if (data.subscribers.length === 0) {
-          alert("No subscribers to export.");
-          return;
-        }
-
-        let csv = "Email,Subscribed Date\n";
-        for (const sub of data.subscribers) {
-          csv += `${sub.email},${sub.subscribedAt}\n`;
-        }
-
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `subscribers-${currentSiteId.replace("/", "-")}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch (error) {
-        alert("Failed to export subscribers: " + error.message);
       }
     });
 
@@ -3951,116 +3857,6 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
 });
-
-// ==================== Subscriber Management Functions ====================
-
-async function loadSubscribersPanel(siteId) {
-  const listEl = document.getElementById("subscribersList");
-  const countEl = document.getElementById("subscriberCount");
-  const postSelect = document.getElementById("notifyPostSelect");
-
-  try {
-    const data = await getSubscribers(siteId);
-    const confirmedCount = data.subscribers.filter(s => s.confirmed).length;
-    const pendingCount = data.count - confirmedCount;
-    countEl.textContent = confirmedCount + (pendingCount > 0 ? ` (+${pendingCount} pending)` : "");
-
-    if (data.subscribers.length === 0) {
-      listEl.innerHTML = '<p style="color: #888; font-size: 12px;">No subscribers yet.</p>';
-    } else {
-      let html = '<table class="table table-condensed" style="margin-bottom: 0; font-size: 12px;"><tbody>';
-      for (const sub of data.subscribers) {
-        const date = new Date(sub.subscribedAt).toLocaleDateString();
-        const statusBadge = sub.confirmed
-          ? '<span class="label label-success" style="font-size: 10px;">confirmed</span>'
-          : '<span class="label label-warning" style="font-size: 10px;">pending</span>';
-        html += `<tr>
-          <td>${escapeHtmlOnLoad(sub.email)} ${statusBadge}</td>
-          <td style="color: #888;">${date}</td>
-          <td style="width: 30px;">
-            <button class="btn btn-xs btn-danger remove-subscriber-btn" data-id="${sub.id}" title="Remove">
-              <span class="glyphicon glyphicon-remove"></span>
-            </button>
-          </td>
-        </tr>`;
-      }
-      html += '</tbody></table>';
-      listEl.innerHTML = html;
-
-      // Attach remove handlers
-      listEl.querySelectorAll(".remove-subscriber-btn").forEach(btn => {
-        btn.addEventListener("click", async function () {
-          const subId = this.dataset.id;
-          if (!confirm("Remove this subscriber?")) return;
-          this.disabled = true;
-          try {
-            await removeSubscriber(siteId, subId);
-            await loadSubscribersPanel(siteId);
-          } catch (e) {
-            alert("Failed to remove subscriber.");
-            this.disabled = false;
-          }
-        });
-      });
-    }
-  } catch (error) {
-    listEl.innerHTML = '<p style="color: #888; font-size: 12px;">Could not load subscribers.</p>';
-    countEl.textContent = "0";
-  }
-}
-
-function parseCsvForEmails(csvText) {
-  const lines = csvText.split(/\r?\n/).filter(line => line.trim());
-  if (lines.length === 0) return [];
-
-  // Parse header to find email column
-  const headerLine = lines[0];
-  const separator = headerLine.includes("\t") ? "\t" : ",";
-  const headers = headerLine.split(separator).map(h => h.trim().replace(/^["']|["']$/g, "").toLowerCase());
-
-  // Find email column index
-  let emailIndex = headers.findIndex(h =>
-    h === "email" || h === "email address" || h === "email_address" || h === "e-mail"
-  );
-
-  // Find status column index (if any)
-  const statusIndex = headers.findIndex(h =>
-    h === "status" || h === "state" || h === "subscription_status"
-  );
-
-  // If no email header found, check if first column contains emails
-  if (emailIndex === -1) {
-    const firstDataLine = lines[1] ? lines[1].split(separator) : [];
-    for (let i = 0; i < firstDataLine.length; i++) {
-      const val = firstDataLine[i].trim().replace(/^["']|["']$/g, "");
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-        emailIndex = i;
-        break;
-      }
-    }
-  }
-
-  if (emailIndex === -1) return [];
-
-  const results = [];
-  // Start from line 1 (skip header), unless header row itself had no recognizable headers
-  const startLine = headers.some(h => h.includes("@")) ? 0 : 1;
-
-  for (let i = startLine; i < lines.length; i++) {
-    const cols = lines[i].split(separator).map(c => c.trim().replace(/^["']|["']$/g, ""));
-    const email = (cols[emailIndex] || "").trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
-
-    if (statusIndex !== -1) {
-      const status = (cols[statusIndex] || "").trim();
-      results.push({ email, status });
-    } else {
-      results.push(email);
-    }
-  }
-
-  return results;
-}
 
 function escapeHtmlOnLoad(text) {
   const div = document.createElement("div");
