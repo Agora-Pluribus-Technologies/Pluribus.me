@@ -487,6 +487,19 @@ async function openSiteInEditor(site, initialPage = "index") {
     return await resp.text();
   };
 
+  // Strip every shape pages.json's `fileName` field has historically
+  // taken (with/without `public/` prefix, with/without `.md` suffix,
+  // with a stray leading slash) so we always reapply exactly one of
+  // each downstream. Without this, a legacy pages.json carrying e.g.
+  // `fileName: "public/<slug>.md"` would produce `public/public/<slug>.md.md`
+  // when the loader later interpolates `public/${fileName}.md`.
+  const canonicalPageSlug = (name) => {
+    return String(name || "")
+      .replace(/^\/+/, "")
+      .replace(/^public\//, "")
+      .replace(/\.(md|markdown)$/i, "");
+  };
+
   const pagesJsonText = await fetchPublicFileContent("public/pages.json");
   let pagesJsonData = null;
   let markdownFiles = [];
@@ -499,7 +512,7 @@ async function openSiteInEditor(site, initialPage = "index") {
       const pagesArray = (typeof flattenPagesJson === "function")
         ? flattenPagesJson(pagesJsonData)
         : (Array.isArray(pagesJsonData) ? pagesJsonData : []);
-      markdownFiles = pagesArray.map(page => `public/${page.fileName}.md`);
+      markdownFiles = pagesArray.map(page => `public/${canonicalPageSlug(page.fileName)}.md`);
     } catch {
       pagesJsonData = null;
       markdownFiles = [];
@@ -548,7 +561,11 @@ async function openSiteInEditor(site, initialPage = "index") {
     markdownCache = pagesArray.slice();
     markdownCache = markdownCache.filter(item => item.fileName !== "latest");
     for (let i=0; i < markdownCache.length; i++) {
-      let fileName = markdownCache[i].fileName;
+      // Normalize legacy pages.json shapes (e.g. fileName already
+      // carrying `public/` prefix or `.md` suffix) to a bare slug
+      // before reapplying both — without this, those shapes produce
+      // `public/public/<slug>.md.md` cache keys and downstream URLs.
+      let fileName = canonicalPageSlug(markdownCache[i].fileName);
       // Migrate old index.md files to use displayName-based filename
       if (fileName === "index") {
         const newFileName = sanitizeSlug(markdownCache[i].displayName) || "home";
@@ -584,7 +601,10 @@ async function openSiteInEditor(site, initialPage = "index") {
       blogBatches = pagesJsonData.batches.map(batch =>
         (batch || [])
           .filter(p => p && p.fileName && p.fileName !== "latest")
-          .map(p => `public/${p.fileName}.md`)
+          // canonicalPageSlug strips a stray `public/` prefix or `.md`
+          // suffix from legacy pages.json entries before we reapply
+          // exactly one of each. Otherwise we'd double both.
+          .map(p => `public/${canonicalPageSlug(p.fileName)}.md`)
       );
     }
 
