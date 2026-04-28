@@ -534,6 +534,12 @@ nav {
   display: none !important;
 }
 
+/* Blog editor has no sidebar (hidden above), so the editor body
+   shouldn't be inset by the sidebar's width either. */
+#editorSection.blog-mode #editorBody {
+  margin-left: 0;
+}
+
 #editorContainer {
   display: flex;
   flex-direction: column;
