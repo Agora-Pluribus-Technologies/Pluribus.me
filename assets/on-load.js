@@ -348,24 +348,6 @@ function removeCacheByFileName(fileName) {
   }
 }
 
-// Helper functions for imageCache
-function addImageToCache(filename) {
-  if (!imageCache.includes(filename)) {
-    imageCache.push(filename);
-  }
-}
-
-function removeImageFromCache(filename) {
-  const index = imageCache.indexOf(filename);
-  if (index !== -1) {
-    imageCache.splice(index, 1);
-  }
-}
-
-function isImageInCache(filename) {
-  return imageCache.includes(filename);
-}
-
 // Helper functions for documentCache
 function addDocumentToCache(filename) {
   if (!documentCache.includes(filename)) {

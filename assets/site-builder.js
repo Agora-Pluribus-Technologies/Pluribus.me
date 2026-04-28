@@ -92,41 +92,11 @@ function blobToBase64(blob) {
   });
 }
 
-async function processAndUploadImage(file) {
-  try {
-    const processedBlob = await processImage(file);
-    // NFC normalize at the upload boundary — see folder-import.js for
-    // the full rationale (macOS NFD bytes vs everywhere-else NFC bytes
-    // for the same visible character break Map/key comparisons).
-    const rawName = (file.name || "").normalize("NFC");
-    let originalName = rawName.replace(/\.[^/.]+$/, '');
-    if (originalName === "image") {
-      originalName = `uploaded-image-${Date.now()}`;
-    }
-    // Unicode allowlist: \p{L} = letter, \p{N} = number. CJK / Cyrillic /
-    // accented Latin survive instead of being collapsed to a single dash.
-    const sanitizedName = originalName
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}]+/gu, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-+/g, '-');
-    const filename = `${sanitizedName}.webp`;
-
-    const base64Content = await blobToBase64(processedBlob);
-    const success = await uploadImage(currentSiteId, filename, base64Content);
-
-    if (success) {
-      addImageToCache(filename);
-      console.log('Image uploaded successfully:', filename);
-      return filename;
-    } else {
-      throw new Error('Failed to upload image to repository');
-    }
-  } catch (error) {
-    console.error('Error uploading image:', error);
-    throw error;
-  }
-}
+// processImage / isHeicFile / convertHeicToJpeg / blobToBase64 above are
+// kept because folder-import.js still calls window.processImage on
+// vault-imported images. The editor-side image upload UI (popup,
+// gallery, toolbar buttons, image-block type) was removed —
+// folder-import remains the only path that produces image attachments.
 
 // ============================================
 // Markdown <-> Blocks Conversion
@@ -170,18 +140,10 @@ function parseMarkdownToBlocks(markdown) {
       continue;
     }
 
-    // Check for standalone image
-    const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (imageMatch) {
-      blocks.push({
-        id: generateBlockId(),
-        type: 'image',
-        content: trimmed
-      });
-      continue;
-    }
-
-    // Default: panel block
+    // Default: panel block. Standalone-image markdown (`![alt](url)`)
+    // used to be a dedicated `image` block type, but the in-editor
+    // image upload feature was removed; existing image markdown now
+    // lives inside panel blocks and renders normally through marked.
     blocks.push({
       id: generateBlockId(),
       type: 'panel',
@@ -203,7 +165,6 @@ function blocksToMarkdown(blocks) {
       case 'link-button':
         parts.push(`\`\`\`link-button\n${block.content}\n\`\`\``);
         break;
-      case 'image':
       case 'panel':
       default:
         parts.push(block.content);
@@ -389,8 +350,6 @@ function renderBlockPreview(block) {
   switch (block.type) {
     case 'panel':
       return renderPanelPreview(block.content);
-    case 'image':
-      return renderImagePreview(block.content);
     case 'embed':
       return renderEmbedPreview(block.content);
     case 'link-button':
@@ -484,24 +443,6 @@ function ensureKaTeXLoadedForEditor() {
   }).catch(err => {
     console.error("KaTeX failed to load; math will render as raw LaTeX:", err);
   });
-}
-
-function renderImagePreview(content) {
-  // Extract image URL and optional caption from markdown
-  // Format: ![alt](url) or ![alt](url "caption")
-  const match = content.match(/!\[([^\]]*)\]\(([^\s"]+)(?:\s+"([^"]*)")?\)/);
-  if (match) {
-    const alt = match[1];
-    const url = match[2];
-    const caption = match[3] || '';
-    let html = `<div class="embed-container"><img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" style="max-width:100%;">`;
-    if (caption) {
-      html += `<p class="image-caption">${escapeHtml(caption)}</p>`;
-    }
-    html += '</div>';
-    return html;
-  }
-  return '<div class="embed-container"><p>Invalid image</p></div>';
 }
 
 function renderEmbedPreview(content) {
@@ -612,7 +553,6 @@ function showAddBlockMenu(wrapper, afterIndex) {
   const options = [
     { type: 'panel', icon: '&#x1F4DD;', label: 'Text Panel' },
     { type: 'link-button', icon: '&#x1F517;', label: 'Link Button' },
-    { type: 'image', icon: '🖼️', label: 'Image' },
     { type: 'embed', icon: '&#x1F3AC;', label: 'Embed' },
   ];
 
@@ -683,21 +623,6 @@ function editBlock(index) {
     case 'panel':
       if (activeInlineEditIndex === index) return;
       startInlineEdit(index, null);
-      break;
-    case 'image':
-      // Parse current caption from existing content
-      const captionMatch = block.content.match(/!\[[^\]]*\]\([^)]+\s+"([^"]+)"\)/);
-      const currentCaption = captionMatch ? captionMatch[1] : '';
-      showImageUploadPopup(({ filename, caption }) => {
-        const imageUrl = `/s/${currentSitePathFull}/attachments/${filename}`;
-        if (caption) {
-          block.content = `![${filename}](${imageUrl} "${caption}")`;
-        } else {
-          block.content = `![${filename}](${imageUrl})`;
-        }
-        saveBlocksToCache();
-        renderAllBlocks();
-      }, currentCaption);
       break;
     case 'embed':
       showEmbedPopup(block.content, (newContent) => {
@@ -933,11 +858,6 @@ function startInlineEdit(index, clickEvent) {
       ['ul', 'ol', 'task', 'indent', 'outdent'],
       ['table', 'link', 'code', 'codeblock'],
       [{
-        name: 'image',
-        tooltip: 'Insert image',
-        className: 'toastui-editor-toolbar-icons image',
-        command: 'insertImage'
-      }, {
         name: 'wikilink',
         tooltip: 'Insert wikilink (Cmd/Ctrl+K)',
         text: '[[ ]]',
@@ -948,25 +868,6 @@ function startInlineEdit(index, clickEvent) {
   });
 
   activeInlineEditorInstance = panelEditor;
-
-  function insertImageIntoPanelEditor({ filename, caption }) {
-    const url = `/s/${currentSitePathFull}/attachments/${filename}`;
-    const alt = caption || filename;
-    const wasWysiwyg = panelEditor.isWysiwygMode();
-    if (wasWysiwyg) panelEditor.changeMode('markdown');
-    panelEditor.insertText(`![${alt}](${url})`);
-    if (wasWysiwyg) panelEditor.changeMode('wysiwyg');
-  }
-
-  panelEditor.addCommand('wysiwyg', 'insertImage', () => {
-    showImageUploadPopup(insertImageIntoPanelEditor);
-    return true;
-  });
-
-  panelEditor.addCommand('markdown', 'insertImage', () => {
-    showImageUploadPopup(insertImageIntoPanelEditor);
-    return true;
-  });
 
   panelEditor.addCommand('wysiwyg', 'insertWikilink', () => {
     insertWikilinkBrackets(panelEditor);
@@ -1015,10 +916,9 @@ function handleClickOutsideEditor(e) {
   const blockItem = document.querySelector(`.block-item[data-index="${activeInlineEditIndex}"]`);
   if (!blockItem) return;
 
-  // Check if click is inside the editing block, or inside a popup (image upload, etc.)
+  // Check if click is inside the editing block, or inside a popup
   if (blockItem.contains(e.target)) return;
   if (e.target.closest('.block-popup')) return;
-  if (e.target.closest('.image-upload-popup')) return;
   if (e.target.closest('.toastui-editor-popup')) return;
   if (e.target.closest('.wikilink-autocomplete')) return;
 
@@ -1333,199 +1233,6 @@ function shortestWikilinkTarget(chosen, pages, folders) {
 }
 
 // ============================================
-// Image Upload Popup (for blocks)
-// ============================================
-
-let selectedImageFilename = null;
-
-function showImageUploadPopup(callback, currentCaption = '') {
-  pendingBlockCallback = callback;
-  selectedImageFilename = null;
-
-  const existingPopup = document.querySelector('.image-upload-popup');
-  if (existingPopup) existingPopup.remove();
-
-  const popup = document.createElement('div');
-  popup.className = 'block-popup image-upload-popup';
-
-  popup.innerHTML = `
-    <div class="popup-content">
-      <div class="popup-header">
-        <h3>Select Image</h3>
-        <button class="popup-close">&times;</button>
-      </div>
-      <div class="image-upload-dropzone" id="imageDropzone">
-        <input type="file" id="imageFileInput" accept="image/*,.heic,.heif" style="display: none;" />
-        <div class="dropzone-content">
-          <p class="dropzone-icon">&#x1F4C1;</p>
-          <p>Click to upload a new image or drag and drop here</p>
-        </div>
-      </div>
-      <div class="image-upload-progress" style="display: none;">
-        <div class="progress-bar"><div class="progress-fill"></div></div>
-        <p class="progress-text">Processing and uploading...</p>
-      </div>
-      <div class="image-caption-section">
-        <label for="imageCaptionInput">Caption (optional):</label>
-        <input type="text" id="imageCaptionInput" placeholder="Enter a caption for the image...">
-      </div>
-      <div class="image-gallery-section">
-        <h4>Image Gallery</h4>
-        <div class="image-gallery" id="imageGallery"></div>
-      </div>
-      <div class="popup-buttons">
-        <button class="popup-cancel">Cancel</button>
-        <button class="popup-confirm" disabled>Confirm</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(popup);
-
-  const dropzone = popup.querySelector('#imageDropzone');
-  const fileInput = popup.querySelector('#imageFileInput');
-  const closeButton = popup.querySelector('.popup-close');
-  const progressContainer = popup.querySelector('.image-upload-progress');
-  const imageGallery = popup.querySelector('#imageGallery');
-  const captionInput = popup.querySelector('#imageCaptionInput');
-  const confirmBtn = popup.querySelector('.popup-confirm');
-  const cancelBtn = popup.querySelector('.popup-cancel');
-
-  // Set current caption if editing
-  captionInput.value = currentCaption;
-
-  populateImageGalleryForBlock(imageGallery, popup, captionInput, confirmBtn);
-
-  closeButton.addEventListener('click', () => {
-    popup.remove();
-    pendingBlockCallback = null;
-    selectedImageFilename = null;
-  });
-
-  cancelBtn.addEventListener('click', () => {
-    popup.remove();
-    pendingBlockCallback = null;
-    selectedImageFilename = null;
-  });
-
-  confirmBtn.addEventListener('click', () => {
-    if (selectedImageFilename && pendingBlockCallback) {
-      const caption = captionInput.value.trim();
-      popup.remove();
-      pendingBlockCallback({ filename: selectedImageFilename, caption });
-      pendingBlockCallback = null;
-      selectedImageFilename = null;
-    }
-  });
-
-  dropzone.addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (file) await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput, confirmBtn);
-  });
-
-  dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('dragover');
-  });
-
-  dropzone.addEventListener('dragleave', () => {
-    dropzone.classList.remove('dragover');
-  });
-
-  dropzone.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file && (file.type.startsWith('image/') || isHeicFile(file))) {
-      await handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput, confirmBtn);
-    } else {
-      alert('Please drop an image file');
-    }
-  });
-}
-
-function populateImageGalleryForBlock(galleryElement, popup, captionInput, confirmBtn) {
-  galleryElement.innerHTML = '';
-
-  if (imageCache.length === 0) {
-    galleryElement.innerHTML = '<p class="gallery-empty">No images uploaded yet</p>';
-    return;
-  }
-
-  imageCache.forEach(filename => {
-    const imageUrl = `/s/${currentSitePathFull}/attachments/${filename}`;
-
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'image-gallery-item';
-    itemDiv.dataset.filename = filename;
-
-    // Check if this image is currently selected
-    if (selectedImageFilename === filename) {
-      itemDiv.classList.add('selected');
-    }
-
-    const img = document.createElement('img');
-    img.src = imageUrl;
-    img.alt = filename;
-
-    itemDiv.addEventListener('click', () => {
-      // Deselect all items
-      galleryElement.querySelectorAll('.image-gallery-item').forEach(item => {
-        item.classList.remove('selected');
-      });
-      // Select this item
-      itemDiv.classList.add('selected');
-      selectedImageFilename = filename;
-      // Enable confirm button
-      if (confirmBtn) {
-        confirmBtn.disabled = false;
-      }
-    });
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'image-delete-btn';
-    deleteBtn.innerHTML = '&times;';
-    deleteBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!confirm(`Delete "${filename}"?`)) return;
-      try {
-        await deleteImage(currentSiteId, filename);
-        removeImageFromCache(filename);
-        // Clear selection if deleted image was selected
-        if (selectedImageFilename === filename) {
-          selectedImageFilename = null;
-          if (confirmBtn) confirmBtn.disabled = true;
-        }
-        populateImageGalleryForBlock(galleryElement, popup, captionInput, confirmBtn);
-      } catch (error) {
-        alert('Failed to delete image');
-      }
-    });
-
-    itemDiv.appendChild(img);
-    itemDiv.appendChild(deleteBtn);
-    galleryElement.appendChild(itemDiv);
-  });
-}
-
-async function handleImageUploadForBlock(file, popup, progressContainer, imageGallery, captionInput, confirmBtn) {
-  try {
-    progressContainer.style.display = 'block';
-    const filename = await processAndUploadImage(file);
-    progressContainer.style.display = 'none';
-    // Auto-select the newly uploaded image
-    selectedImageFilename = filename;
-    if (confirmBtn) confirmBtn.disabled = false;
-    populateImageGalleryForBlock(imageGallery, popup, captionInput, confirmBtn);
-  } catch (error) {
-    progressContainer.style.display = 'none';
-    alert('Failed to upload image: ' + error.message);
-  }
-}
-
-// ============================================
 // Embed Popup (for blocks)
 // ============================================
 
@@ -1807,15 +1514,7 @@ function showBlogPostEditModal(content, displayName, callback) {
       </div>
       <div class="blog-post-field-row">
         <div class="blog-post-field">
-          <label for="blogPostImage">Featured Image</label>
-          <div class="blog-post-media-input">
-            <input type="text" id="blogPostImage" placeholder="image-filename.webp" value="${escapeHtml(postData.image)}" readonly>
-            <button type="button" id="blogPostImageSelect" class="blog-post-media-btn">Select</button>
-            <button type="button" id="blogPostImageClear" class="blog-post-media-clear">&times;</button>
-          </div>
-        </div>
-        <div class="blog-post-field">
-          <label for="blogPostEmbed">Or Embed URL</label>
+          <label for="blogPostEmbed">Embed URL</label>
           <input type="text" id="blogPostEmbed" placeholder="https://youtube.com/..." value="${escapeHtml(postData.embed)}">
         </div>
       </div>
@@ -1845,48 +1544,7 @@ function showBlogPostEditModal(content, displayName, callback) {
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
       ['table', 'link', 'code', 'codeblock'],
-      [{
-        name: 'image',
-        tooltip: 'Insert image',
-        className: 'toastui-editor-toolbar-icons image',
-        command: 'insertImage'
-      }]
     ]
-  });
-
-  function insertImageIntoBlogEditor({ filename, caption }) {
-    const url = `/s/${currentSitePathFull}/attachments/${filename}`;
-    const alt = caption || filename;
-    const wasWysiwyg = blogPostEditor.isWysiwygMode();
-    if (wasWysiwyg) blogPostEditor.changeMode('markdown');
-    blogPostEditor.insertText(`![${alt}](${url})`);
-    if (wasWysiwyg) blogPostEditor.changeMode('wysiwyg');
-  }
-
-  blogPostEditor.addCommand('wysiwyg', 'insertImage', () => {
-    showImageUploadPopup(insertImageIntoBlogEditor);
-    return true;
-  });
-
-  blogPostEditor.addCommand('markdown', 'insertImage', () => {
-    showImageUploadPopup(insertImageIntoBlogEditor);
-    return true;
-  });
-
-  // Image select button — store the path with the `attachments/` prefix
-  // so the published blog template (`${basePath}/${post.image}`) resolves
-  // to the file's actual location in R2.
-  modal.querySelector('#blogPostImageSelect').addEventListener('click', () => {
-    showImageUploadPopup(({ filename }) => {
-      document.getElementById('blogPostImage').value = `attachments/${filename}`;
-      // Clear embed if image is selected
-      document.getElementById('blogPostEmbed').value = '';
-    });
-  });
-
-  // Image clear button
-  modal.querySelector('#blogPostImageClear').addEventListener('click', () => {
-    document.getElementById('blogPostImage').value = '';
   });
 
   // Close button
@@ -1901,13 +1559,15 @@ function showBlogPostEditModal(content, displayName, callback) {
     blogPostEditor = null;
   });
 
-  // Save button
+  // Save button. The featured-image upload UI was removed, but if the
+  // post already had a featured image in its frontmatter we preserve
+  // it verbatim so editing the post doesn't strip prior images.
   modal.querySelector('.blog-post-save').addEventListener('click', () => {
     const newPostData = {
       title: document.getElementById('blogPostTitle').value.trim(),
       date: document.getElementById('blogPostDate').value,
       tags: document.getElementById('blogPostTags').value.trim(),
-      image: document.getElementById('blogPostImage').value.trim(),
+      image: postData.image || '',
       embed: document.getElementById('blogPostEmbed').value.trim(),
       body: readMarkdownFromEditor(blogPostEditor)
     };

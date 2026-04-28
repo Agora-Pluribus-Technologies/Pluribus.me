@@ -1538,33 +1538,6 @@ function attachmentPublicPath(filename) {
   return `${ATTACHMENTS_DIR}/${filename}`;
 }
 
-async function uploadImage(siteId, filename, base64Content) {
-  const result = await saveFileToR2(siteId, attachmentR2Path(filename), base64Content, {
-    encoding: "base64",
-    contentType: guessContentType(filename),
-  });
-
-  if (result) {
-    console.log("Image uploaded to R2 successfully:", filename);
-  } else {
-    console.error("Failed to upload image to R2");
-  }
-
-  return result;
-}
-
-async function deleteImage(siteId, filename) {
-  const result = await deleteFileFromR2(siteId, attachmentR2Path(filename));
-
-  if (result) {
-    console.log("Image deleted from R2 successfully:", filename);
-  } else {
-    console.error("Failed to delete image from R2");
-  }
-
-  return result;
-}
-
 // ==================== Collaborator API Functions ====================
 
 async function getCollaborators(siteId) {
