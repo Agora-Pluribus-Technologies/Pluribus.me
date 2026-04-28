@@ -1642,29 +1642,22 @@ let currentBlogBatchIndex = 0;
 
 // Lazy-fetch the .md bodies for a given batch and stash them in
 // markdownCache. No-op for batches that are already loaded or out of
-// range. Called from the pagination Next/Prev handlers below.
+// range. Uses ensurePageContentLoaded (defined in on-load.js) — it
+// strips the `public/` prefix before fetching and updates the cache
+// item in place. fetchPublicFileContent is NOT global (it's a closure
+// inside openSiteInEditor), so we can't call it from here.
 async function ensureBlogBatchLoaded(batchIndex) {
   if (typeof blogBatches === "undefined") return;
   if (batchIndex < 0 || batchIndex >= blogBatches.length) return;
   if (typeof blogBatchesLoaded !== "undefined" && blogBatchesLoaded.has(batchIndex)) return;
 
   const filesInBatch = blogBatches[batchIndex] || [];
-  const filesToLoad = filesInBatch.filter(file => {
-    const item = getCacheByFileName(file);
-    return !item || typeof item.content !== "string";
-  });
+  const itemsToLoad = filesInBatch
+    .map(file => getCacheByFileName(file))
+    .filter(item => item && typeof item.content !== "string");
 
-  if (filesToLoad.length > 0 && typeof fetchPublicFileContent === "function") {
-    await Promise.all(filesToLoad.map(async (file) => {
-      try {
-        const content = await fetchPublicFileContent(file);
-        if (content != null) {
-          addOrUpdateCache(file, null, content, { preserveTimestamps: true });
-        }
-      } catch (e) {
-        console.warn("Failed to load blog post:", file, e);
-      }
-    }));
+  if (itemsToLoad.length > 0 && typeof ensurePageContentLoaded === "function") {
+    await Promise.all(itemsToLoad.map(item => ensurePageContentLoaded(item)));
   }
 
   if (typeof blogBatchesLoaded !== "undefined") {
@@ -1872,11 +1865,11 @@ async function editBlogPost(index) {
   // Lazy-load body for metadata-only cache entries (e.g. user opens a
   // post from a batch whose .md fetch is still in flight, or some other
   // path bypassed ensureBlogBatchLoaded). Without this the modal would
-  // open with an empty body.
-  if (typeof cacheItem.content !== "string" && typeof fetchPublicFileContent === "function") {
+  // open with an empty body. ensurePageContentLoaded (in on-load.js)
+  // updates the cache item in place after stripping `public/`.
+  if (typeof cacheItem.content !== "string" && typeof ensurePageContentLoaded === "function") {
     try {
-      const fetched = await fetchPublicFileContent(cacheItem.fileName);
-      if (fetched != null) cacheItem.content = fetched;
+      await ensurePageContentLoaded(cacheItem);
     } catch (e) {
       console.warn("Failed to lazy-load post body:", cacheItem.fileName, e);
     }
