@@ -861,7 +861,7 @@ function startInlineEdit(index, clickEvent) {
         name: 'externalImage',
         tooltip: 'Insert image from URL',
         text: '🖼',
-        className: 'external-image-toolbar-btn',
+        className: 'toastui-editor-toolbar-icons external-image-toolbar-btn',
         command: 'insertExternalImage'
       }, {
         name: 'wikilink',
@@ -1762,7 +1762,7 @@ function showBlogPostEditModal(content, displayName, callback) {
         name: 'externalImage',
         tooltip: 'Insert image from URL',
         text: '🖼',
-        className: 'external-image-toolbar-btn',
+        className: 'toastui-editor-toolbar-icons external-image-toolbar-btn',
         command: 'insertExternalImage'
       }]
     ]
