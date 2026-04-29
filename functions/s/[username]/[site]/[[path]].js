@@ -38,8 +38,12 @@ export async function onRequest(context) {
     return corsResponse("Missing site id", 400);
   }
 
-  // Basic validation for siteId (avoid weird characters / traversal tricks)
-  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
+  // Basic validation for siteId (avoid weird characters / traversal
+  // tricks). Unicode-aware allowlist (\p{L}\p{N}) matches sanitizeSiteName
+  // so CJK / accented-Latin / etc. slugs work end to end. \p{L}/\p{N} are
+  // categories — they don't include path separators or punctuation, so
+  // the traversal-protection invariant is preserved.
+  if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return corsResponse("Invalid site id", 400);
   }
 

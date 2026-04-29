@@ -25,8 +25,12 @@ export async function onRequestPost(context) {
     return new Response("Missing required field: repo", { status: 400 });
   }
 
-  // Validate siteId format
-  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
+  // Validate siteId format. Unicode-aware allowlist (\p{L}\p{N}) so CJK
+  // / Cyrillic / Greek / accented-Latin slugs validate; structural
+  // characters (`/` between username and repo, `_`, `-`) still allowed
+  // as before. ASCII slugs remain valid since \p{L}\p{N} is a superset
+  // of [a-zA-Z0-9].
+  if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
 

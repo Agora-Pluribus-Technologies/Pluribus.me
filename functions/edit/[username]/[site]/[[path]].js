@@ -16,13 +16,24 @@ export async function onRequestGet(context) {
     return new Response("Missing site id", { status: 400 });
   }
 
-  // Basic validation for siteId
-  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
+  // Basic validation for siteId. Unicode-aware allowlist (\p{L}\p{N})
+  // matches sanitizeSiteName so CJK / accented-Latin / etc. slugs work
+  // end to end. Structural separators (`/`, `_`, `-`) remain allowed.
+  if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return new Response("Invalid site id", { status: 400 });
   }
 
-  // Compute the path (page to edit), after /edit/:username/:site/
-  const segments = url.pathname.split("/").filter(Boolean);
+  // Compute the path (page to edit), after /edit/:username/:site/.
+  // `URL.pathname` does NOT percent-decode, so a CJK page like
+  // `中文笔记` arrives as `%E4%B8%AD%E6%96%87%E7%AC%94%E8%AE%B0`.
+  // Decode each segment + NFC normalize so the downstream Unicode-aware
+  // regex sees actual code points, not percent-encoded bytes (and so a
+  // URL pasted from a macOS NFD source matches our NFC pages.json
+  // entries). Mirrors the same boundary handling in the published-site
+  // worker (functions/s/[username]/[site]/[[path]].js).
+  const segments = url.pathname.split("/").filter(Boolean).map((seg) => {
+    try { return decodeURIComponent(seg).normalize("NFC"); } catch { return seg; }
+  });
   const restSegments = segments.slice(3); // skip "edit", username, and site
   let pagePath = restSegments.join("/");
 
@@ -39,8 +50,13 @@ export async function onRequestGet(context) {
     return new Response("Invalid path", { status: 400 });
   }
 
-  // Validate pagePath characters (same rules as siteId - alphanumeric, hyphens, slashes, underscores)
-  if (!/^[a-zA-Z0-9-/_]*$/.test(pagePath)) {
+  // Validate pagePath characters. Unicode-aware allowlist (\p{L}\p{N})
+  // matches sanitizeSiteName / slugifySegment so CJK / Cyrillic / Greek /
+  // accented-Latin page slugs validate; structural separators (`/`, `_`,
+  // `-`) remain allowed as before. \p{L}/\p{N} are categories — they
+  // don't include path separators or punctuation, so traversal protection
+  // is preserved.
+  if (!/^[\p{L}\p{N}/_-]*$/u.test(pagePath)) {
     return new Response("Invalid path characters", { status: 400 });
   }
 

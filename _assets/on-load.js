@@ -1148,10 +1148,20 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Lower-cases, hyphenates, and clamps a raw site name. Returns "" if the
   // result has fewer than 2 valid characters.
+  //
+  // Unicode-aware: the allowlist is `\p{L}\p{N}` (any letter, any number)
+  // so CJK / Cyrillic / Greek / accented-Latin / etc. site names slug to
+  // themselves rather than collapsing to "" the way the old ASCII-only
+  // regex did. NFC normalization on input means a Mac-NFD source produces
+  // the same slug as the same characters supplied as NFC. Mirrors
+  // folder-import.js's slugifySegment so a vault import and a manual
+  // create produce the same slug for the same display name.
   function sanitizeSiteName(rawSiteName) {
-    let siteName = rawSiteName
+    let siteName = (rawSiteName || "")
+      .normalize("NFC")
       .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/[\s_]+/g, "-")
+      .replace(/[^\p{L}\p{N}-]+/gu, "-")
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "");
     if (siteName.length > 30) {

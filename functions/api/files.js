@@ -83,7 +83,7 @@ export async function onRequestPut(context) {
     return new Response("Missing required fields: siteId, filePath, content", { status: 400 });
   }
 
-  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
+  if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
 
@@ -159,7 +159,7 @@ export async function onRequestPost(context) {
     return new Response("Missing required fields: siteId, files (array)", { status: 400 });
   }
 
-  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
+  if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
 
@@ -268,7 +268,7 @@ export async function onRequestGet(context) {
     return new Response("Missing required query param: siteId", { status: 400 });
   }
 
-  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
+  if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
 
@@ -345,7 +345,7 @@ export async function onRequestDelete(context) {
     return new Response("Missing required query param: siteId", { status: 400 });
   }
 
-  if (!/^[a-zA-Z0-9-/_]+$/.test(siteId)) {
+  if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
 
