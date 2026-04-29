@@ -164,7 +164,6 @@ body.light-mode {
   --warning-color-alt: #ff9800;
 }
 
-html,
 body {
   display: flex;
   flex-direction: column;
