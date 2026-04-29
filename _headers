@@ -1,7 +1,7 @@
-/assets/*
+/_assets/*
   Cache-Control: public, max-age=0, must-revalidate
 
-/templates/*
+/_templates/*
   Cache-Control: public, max-age=0, must-revalidate
 
 /*

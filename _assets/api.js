@@ -244,8 +244,8 @@ function displayLoginButtons() {
   buttonContainer.style.flexWrap = "wrap";
 
   const providers = [
-    { name: "Google", icon: "/assets/Google_G_logo.svg", path: "/api/auth/google/start", style: "" },
-    { name: "GitHub", icon: "/assets/Octicons-mark-github.svg", path: "/api/auth/github/start", style: "filter: invert(1);" },
+    { name: "Google", icon: "/_assets/Google_G_logo.svg", path: "/api/auth/google/start", style: "" },
+    { name: "GitHub", icon: "/_assets/Octicons-mark-github.svg", path: "/api/auth/github/start", style: "filter: invert(1);" },
   ];
 
   for (const p of providers) {

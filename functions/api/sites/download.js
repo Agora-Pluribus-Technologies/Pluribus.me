@@ -60,7 +60,7 @@ function utf8ToBase64(str) {
 //   public/<slug>.html    <- added here, loads the sibling .md
 //   public/index.html     <- site root
 // The frontend ZIP-builder also drops the matching template .css/.js
-// under public/templates/, so a deploy with `public/` as the publish
+// under public/_templates/, so a deploy with `public/` as the publish
 // directory works out of the box.
 function synthesizeShellEntries(mdPaths, siteType) {
   const shellHtml = templateForSiteType(siteType);

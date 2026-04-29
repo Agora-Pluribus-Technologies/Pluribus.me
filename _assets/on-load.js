@@ -708,7 +708,7 @@ async function openSiteInEditor(site, initialPage = "index") {
     const indexHtmlContent = await getFileContent(currentSiteId, "public/index.html");
     if (!indexHtmlContent) {
       console.log("index.html not found, creating it for existing site");
-      const templateName = currentSiteType === "blog" ? "/templates/blog-template.html" : "/templates/owo-template.html";
+      const templateName = currentSiteType === "blog" ? "/_templates/blog-template.html" : "/_templates/owo-template.html";
       const templateResponse = await fetch(templateName);
       if (templateResponse.ok) {
         const indexHtml = await templateResponse.text();
@@ -1795,34 +1795,34 @@ document.addEventListener("DOMContentLoaded", async function () {
         try {
           const templateName = currentSiteType === "blog" ? "blog-template" : "owo-template";
           const [cssResponse, jsResponse, wikilinksResponse, mathResponse] = await Promise.all([
-            fetch(`/templates/${templateName}.css`),
-            fetch(`/templates/${templateName}.js`),
-            fetch(`/assets/wikilinks.js`),
-            fetch(`/assets/math.js`),
+            fetch(`/_templates/${templateName}.css`),
+            fetch(`/_templates/${templateName}.js`),
+            fetch(`/_assets/wikilinks.js`),
+            fetch(`/_assets/math.js`),
           ]);
 
           if (cssResponse.ok) {
             const cssContent = await cssResponse.text();
-            zip.file(`public/templates/${templateName}.css`, cssContent);
+            zip.file(`public/_templates/${templateName}.css`, cssContent);
           }
 
           if (jsResponse.ok) {
             const jsContent = await jsResponse.text();
-            zip.file(`public/templates/${templateName}.js`, jsContent);
+            zip.file(`public/_templates/${templateName}.js`, jsContent);
           }
 
-          // wikilinks.js / math.js are loaded as <script defer src="/assets/...">
-          // by the SPA shell (see templates/owo-template.html). Bundling them
-          // under public/assets/ matches the layout a static-host deploy with
-          // public/ as the publish directory would resolve `/assets/...` to.
+          // wikilinks.js / math.js are loaded as <script defer src="/_assets/...">
+          // by the SPA shell (see _templates/owo-template.html). Bundling them
+          // under public/_assets/ matches the layout a static-host deploy with
+          // public/ as the publish directory would resolve `/_assets/...` to.
           if (wikilinksResponse.ok) {
             const wikilinksContent = await wikilinksResponse.text();
-            zip.file(`public/assets/wikilinks.js`, wikilinksContent);
+            zip.file(`public/_assets/wikilinks.js`, wikilinksContent);
           }
 
           if (mathResponse.ok) {
             const mathContent = await mathResponse.text();
-            zip.file(`public/assets/math.js`, mathContent);
+            zip.file(`public/_assets/math.js`, mathContent);
           }
 
           console.log(`Added ${templateName} template files and shell assets to ZIP`);
@@ -3806,19 +3806,31 @@ document.addEventListener("DOMContentLoaded", function() {
           // Fetch and include the correct template files for each site
           try {
             const templateName = site.config.siteType === "blog" ? "blog-template" : "owo-template";
-            const [cssResponse, jsResponse] = await Promise.all([
-              fetch(`/templates/${templateName}.css`),
-              fetch(`/templates/${templateName}.js`),
+            const [cssResponse, jsResponse, wikilinksResponse, mathResponse] = await Promise.all([
+              fetch(`/_templates/${templateName}.css`),
+              fetch(`/_templates/${templateName}.js`),
+              fetch(`/_assets/wikilinks.js`),
+              fetch(`/_assets/math.js`),
             ]);
 
             if (cssResponse.ok) {
               const cssContent = await cssResponse.text();
-              zip.file(`${siteFolderName}/public/templates/${templateName}.css`, cssContent);
+              zip.file(`${siteFolderName}/public/_templates/${templateName}.css`, cssContent);
             }
 
             if (jsResponse.ok) {
               const jsContent = await jsResponse.text();
-              zip.file(`${siteFolderName}/public/templates/${templateName}.js`, jsContent);
+              zip.file(`${siteFolderName}/public/_templates/${templateName}.js`, jsContent);
+            }
+
+            if (wikilinksResponse.ok) {
+              const wikilinksContent = await wikilinksResponse.text();
+              zip.file(`${siteFolderName}/public/_assets/wikilinks.js`, wikilinksContent);
+            }
+
+            if (mathResponse.ok) {
+              const mathContent = await mathResponse.text();
+              zip.file(`${siteFolderName}/public/_assets/math.js`, mathContent);
             }
           } catch (templateError) {
             console.error(`Error fetching template files for ${siteFolderName}:`, templateError);
