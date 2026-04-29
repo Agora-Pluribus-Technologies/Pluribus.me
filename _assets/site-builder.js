@@ -11,94 +11,6 @@ function generateBlockId() {
 }
 
 // ============================================
-// Image Processing Functions (kept from original)
-// ============================================
-
-function isHeicFile(file) {
-  const type = (file.type || '').toLowerCase();
-  if (type === 'image/heic' || type === 'image/heif') return true;
-  const name = (file.name || '').toLowerCase();
-  return name.endsWith('.heic') || name.endsWith('.heif');
-}
-
-async function convertHeicToJpeg(file) {
-  const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
-  return Array.isArray(blob) ? blob[0] : blob;
-}
-
-async function processImage(file) {
-  if (isHeicFile(file)) {
-    file = await convertHeicToJpeg(file);
-  }
-
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      img.src = e.target.result;
-    };
-
-    img.onload = async () => {
-
-      // Downsize if exceeds max dimensions
-      let width = img.width;
-      let height = img.height;
-      const maxWidth = 1080; // 1920 / 1.777...
-      const maxHeight = 607; // 1080 / 1.777...
-      
-      if (width > maxWidth || height > maxHeight) {
-        const widthRatio = maxWidth / width;
-        const heightRatio = maxHeight / height;
-        const scaleFactor = Math.min(widthRatio, heightRatio);
-        width = Math.floor(width * scaleFactor);
-        height = Math.floor(height * scaleFactor);
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Failed to convert image to WebP'));
-          }
-        },
-        'image/webp',
-        0.75
-      );
-    };
-
-    img.onerror = () => reject(new Error('Failed to load image'));
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-// processImage / isHeicFile / convertHeicToJpeg / blobToBase64 above are
-// kept because folder-import.js still calls window.processImage on
-// vault-imported images. The editor-side image upload UI (popup,
-// gallery, toolbar buttons, image-block type) was removed —
-// folder-import remains the only path that produces image attachments.
-
-// ============================================
 // Markdown <-> Blocks Conversion
 // ============================================
 
@@ -805,6 +717,84 @@ function commonPrefixLength(a, b) {
   return i;
 }
 
+// AgoraPages does not host user-uploaded image bytes (CSAM policy). The
+// helpers below close every Toast UI ingestion path that would otherwise
+// land image bytes in the markdown source: the documented blob hook,
+// drop/paste of binary image files, and paste of text that smuggles in a
+// `data:image/...` URI. The `externalImage` toolbar button (image-by-URL)
+// remains the supported way to embed images.
+function dataTransferHasImageFile(dt) {
+  if (!dt) return false;
+  if (dt.files && dt.files.length) {
+    for (const f of dt.files) {
+      if (f && typeof f.type === "string" && f.type.startsWith("image/")) return true;
+    }
+  }
+  if (dt.items && dt.items.length) {
+    for (const it of dt.items) {
+      if (it && it.kind === "file" && typeof it.type === "string" && it.type.startsWith("image/")) return true;
+    }
+  }
+  return false;
+}
+
+// Detect smuggled-in image bytes inside pasted text — a `data:image/...`
+// URI in either the rich-text (text/html) or plain-text payload of the
+// clipboard. text/html catches the common case of copying an `<img>` from
+// a webpage where the browser has inlined the image as a data URI;
+// text/plain catches users pasting raw markdown like `![](data:image/...)`.
+function clipboardTextContainsDataImage(clipboardData) {
+  if (!clipboardData) return false;
+  const dataImageRe = /data:image\/[a-z0-9.+-]+;[^\s"'<>]*base64,/i;
+  try {
+    const html = clipboardData.getData("text/html");
+    if (html && dataImageRe.test(html)) return true;
+  } catch (_) {}
+  try {
+    const text = clipboardData.getData("text/plain");
+    if (text && dataImageRe.test(text)) return true;
+  } catch (_) {}
+  return false;
+}
+
+function notifyImagePolicy() {
+  alert("AgoraPages does not host uploaded images. Use the “Insert image from URL” toolbar button (🖼) to embed an external image.");
+}
+
+// Attach capture-phase drop+paste listeners to the editor's container so
+// we run before Toast UI's own listeners. The listeners die with the
+// container element (panel editor: removed when inline edit ends; blog
+// editor: removed when the modal overlay is destroyed), so no explicit
+// cleanup is needed.
+function installEditorImageBlockListeners(editorContainerEl) {
+  if (!editorContainerEl) return;
+  editorContainerEl.addEventListener("drop", (e) => {
+    if (dataTransferHasImageFile(e.dataTransfer)) {
+      e.preventDefault();
+      e.stopPropagation();
+      notifyImagePolicy();
+    }
+  }, true);
+  editorContainerEl.addEventListener("paste", (e) => {
+    if (dataTransferHasImageFile(e.clipboardData) || clipboardTextContainsDataImage(e.clipboardData)) {
+      e.preventDefault();
+      e.stopPropagation();
+      notifyImagePolicy();
+    }
+  }, true);
+}
+
+// Toast UI's documented hook for image blobs entering the editor. We
+// reject by simply not invoking the callback; returning false is
+// belt-and-suspenders against future versions that interpret the return
+// value. The capture-phase listeners above already block the underlying
+// drop/paste — this hook is the API-level layer in case Toast UI ever
+// surfaces a new ingest path the DOM listeners don't cover.
+function rejectImageBlobHook(_blob, _callback, _source) {
+  notifyImagePolicy();
+  return false;
+}
+
 function startInlineEdit(index, clickEvent) {
   // Capture click info before any DOM changes
   const clickInfo = clickEvent ? getClickedTextInfo(clickEvent) : null;
@@ -853,6 +843,9 @@ function startInlineEdit(index, clickEvent) {
     theme: 'dark',
     height: '300px',
     initialValue: initialValue,
+    hooks: {
+      addImageBlobHook: rejectImageBlobHook,
+    },
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
@@ -872,6 +865,8 @@ function startInlineEdit(index, clickEvent) {
       }]
     ]
   });
+
+  installEditorImageBlockListeners(editorEl);
 
   activeInlineEditorInstance = panelEditor;
 
@@ -1747,13 +1742,17 @@ function showBlogPostEditModal(content, displayName, callback) {
   document.body.appendChild(overlay);
 
   // Initialize ToastUI editor for body
+  const blogEditorEl = document.querySelector('#blogPostBodyEditor');
   blogPostEditor = new toastui.Editor({
-    el: document.querySelector('#blogPostBodyEditor'),
+    el: blogEditorEl,
     initialEditType: 'wysiwyg',
     previewStyle: 'vertical',
     theme: 'dark',
     height: '300px',
     initialValue: escapeMathForEditor(postData.body),
+    hooks: {
+      addImageBlobHook: rejectImageBlobHook,
+    },
     toolbarItems: [
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
@@ -1767,6 +1766,8 @@ function showBlogPostEditModal(content, displayName, callback) {
       }]
     ]
   });
+
+  installEditorImageBlockListeners(blogEditorEl);
 
   blogPostEditor.addCommand('wysiwyg', 'insertExternalImage', () => {
     insertExternalImageViaPopup(blogPostEditor);

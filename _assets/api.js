@@ -710,12 +710,12 @@ function buildSearchIndexContent(cacheItems, previous, dirty) {
 
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
-  const { siteName, repo, owner, siteType, importedPages, importedAssets } = siteSettings;
+  const { siteName, repo, owner, siteType, importedPages } = siteSettings;
   const isBlog = siteType === "blog";
-  const assets = Array.isArray(importedAssets) ? importedAssets : [];
-  // Manifest of attachment basenames so the editor's image gallery picks
-  // up imported images on first load.
-  const imagesManifest = JSON.stringify(assets.map(a => a.filename));
+  // images.json is the editor's per-site image manifest. New sites start
+  // empty — folder import no longer produces image attachments (CSAM
+  // policy: AgoraPages does not host user-uploaded image bytes).
+  const imagesManifest = "[]";
 
   const siteJson = {
     siteName: siteName || repo || "Untitled Site",
@@ -901,17 +901,6 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
       filePath: "public/home.md",
       content: defaultHomeContent,
       contentType: "text/markdown",
-    });
-  }
-
-  // Imported image attachments (already WebP-encoded by folder-import.js).
-  // Each asset carries pre-base64-encoded binary content.
-  for (const asset of assets) {
-    files.push({
-      filePath: attachmentR2Path(asset.filename),
-      content: asset.base64,
-      contentType: asset.contentType || "image/webp",
-      encoding: "base64",
     });
   }
 
@@ -1471,22 +1460,6 @@ async function renamePage(siteId, pageName, newPageName) {
     { filePath: `public/${pageName}.html`, action: "delete" },
     { filePath: `public/${pageName}.md`, action: "delete" },
   ]);
-}
-
-// All uploaded images live under public/attachments/ at the site root so
-// markdown content has a stable, predictable place to reference them
-// regardless of which folder the page lives in.
-const ATTACHMENTS_DIR = "attachments";
-
-function attachmentR2Path(filename) {
-  return `public/${ATTACHMENTS_DIR}/${filename}`;
-}
-
-// Public URL fragment (after the site basePath) that points at an attachment.
-// Used by the editor when inserting markdown image syntax and by the
-// published-page renderer when rewriting absolute image URLs.
-function attachmentPublicPath(filename) {
-  return `${ATTACHMENTS_DIR}/${filename}`;
 }
 
 // ==================== Collaborator API Functions ====================

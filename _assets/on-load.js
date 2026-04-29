@@ -1158,8 +1158,8 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   // Shared site-creation pipeline used by both the "create from scratch" and
-  // "import from folder" flows. importedPages/importedAssets are null for scratch.
-  async function createNewSite({ rawSiteName, sanitized, owner, siteType, importedPages, importedAssets }) {
+  // "import from folder" flows. importedPages is null for scratch.
+  async function createNewSite({ rawSiteName, sanitized, owner, siteType, importedPages }) {
     console.log("Creating new site:", sanitized);
 
     const repo = sanitized;
@@ -1203,7 +1203,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       owner,
       siteType,
       importedPages,
-      importedAssets,
     });
 
     sitesCache.unshift({
@@ -1231,7 +1230,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   function openImportFolderModal(context) {
     pendingImportContext = context;
     pendingImportPages = null;
-    pendingImportAssets = null;
     document.getElementById("importFolderSiteName").textContent =
       `${context.owner}/${context.sanitized}`;
     document.getElementById("importSummary").style.display = "none";
@@ -1284,7 +1282,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         const ok = await createNewSite({
           ...pendingImportContext,
           importedPages: pendingImportPages,
-          importedAssets: pendingImportAssets,
         });
         if (ok) $("#importFolderModal").modal("hide");
       } catch (e) {
@@ -1296,10 +1293,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
   }
-
-  // Holds the WebP-encoded image attachments parsed from the dropped folder
-  // until the user confirms creation. Cleared between modal openings.
-  let pendingImportAssets = null;
 
   async function ingestImportSelection(source) {
     if (typeof AgoraFolderImport === "undefined") {
@@ -1317,38 +1310,24 @@ document.addEventListener("DOMContentLoaded", async function () {
     summaryEl.style.display = "";
 
     try {
-      // Build the URL prefix the importer should use when rewriting image
-      // refs in markdown — match the absolute form the editor writes
-      // (`/s/<owner>/<site>/attachments/<file>`).
-      const ctx = pendingImportContext || {};
-      const attachmentsUrl = (ctx.owner && ctx.sanitized)
-        ? `/s/${ctx.owner}/${ctx.sanitized}/attachments`
-        : "attachments";
-
-      const result = await AgoraFolderImport.importFromDataTransfer(source, {
-        attachmentsUrl,
-      });
+      const result = await AgoraFolderImport.importFromDataTransfer(source);
       pendingImportPages = result.pages;
-      pendingImportAssets = result.assets || [];
 
       const pageCount = result.pages.length;
-      const assetCount = pendingImportAssets.length;
 
       if (pageCount === 0) {
         countEl.textContent = "No Markdown files found.";
         skippedEl.textContent = result.skipped > 0
-          ? `${result.skipped} non-Markdown file(s) ignored.`
+          ? `${result.skipped} non-Markdown file(s) ignored. AgoraPages doesn't host uploaded images — re-add any inline images via the editor's “Insert image from URL” button.`
           : "";
         document.getElementById("confirmImportButton").disabled = true;
         return;
       }
-      const pageMsg = `${pageCount} Markdown file${pageCount === 1 ? "" : "s"}`;
-      const assetMsg = assetCount > 0
-        ? ` and ${assetCount} image${assetCount === 1 ? "" : "s"}`
-        : "";
-      countEl.textContent = `${pageMsg}${assetMsg} ready to import.`;
+      countEl.textContent = `${pageCount} Markdown file${pageCount === 1 ? "" : "s"} ready to import.`;
       if (result.skipped > 0) {
-        skippedEl.textContent = `${result.skipped} unsupported file(s) ignored.`;
+        // Image files land here too — call out the image policy so the
+        // user knows to re-embed images by URL in the editor.
+        skippedEl.textContent = `${result.skipped} non-Markdown file(s) ignored. AgoraPages doesn't host uploaded images — re-add any inline images via the editor's “Insert image from URL” button.`;
       }
       const previewLimit = 50;
       const preview = result.pages.slice(0, previewLimit);
