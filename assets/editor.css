@@ -2015,11 +2015,28 @@ nav {
   text-align: center;
 }
 
-/* Toolbar button label styling — text-based icons render at default
-   size but the surrounding button needs a touch of horizontal padding
-   to look balanced next to Toast UI's icon buttons. */
-.toastui-editor-toolbar-icons.external-image-toolbar-btn {
+/* Toolbar button label styling. Avoid the .toastui-editor-toolbar-icons
+   base class on this button — that class paints a sprite background
+   (showing the heading icon by default) and uses text-indent: -9999px
+   to hide the button's text. We want the emoji visible, so we style
+   the standalone class from scratch and force a readable color. */
+.external-image-toolbar-btn {
+  width: auto !important;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 6px !important;
+  background: none !important;
+  background-image: none !important;
+  text-indent: 0 !important;
   font-size: 16px;
+  line-height: 24px;
+  color: var(--text-primary) !important;
+  white-space: nowrap;
+}
+
+.external-image-toolbar-btn:hover {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
 }
 
 /* Add Block Button */
