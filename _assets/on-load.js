@@ -1057,10 +1057,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Set username prefix when create site modal is shown
+  // Reset the create-site modal each time it's shown.
   $("#createSiteModal").on("show.bs.modal", function () {
-    const username = getStoredUsername();
-    document.getElementById("siteNamePrefix").textContent = username + "/";
     document.getElementById("siteName").value = "";
     document.getElementById("siteType").value = "pages";
     const sourceField = document.getElementById("siteSource");
@@ -1095,11 +1093,16 @@ document.addEventListener("DOMContentLoaded", async function () {
         const sourceField = document.getElementById("siteSource");
         const siteSource = sourceField ? sourceField.value : "scratch";
 
-        // Validate the site name up front so the import modal doesn't open
-        // for an obviously-bad submission.
+        // The input now accepts a free-form display name; the URL slug
+        // is derived in the background by sanitizeSiteName, and that
+        // slug is what the server uses for duplicate detection (siteId =
+        // owner/<slug>). Validate up front so the import modal doesn't
+        // open for an obviously-bad submission, and tell the user
+        // specifically that the slug is empty (they may have typed only
+        // non-ASCII characters, which sanitizeSiteName strips today).
         const sanitized = sanitizeSiteName(rawSiteName);
         if (!sanitized) {
-          alert("Site name is too short. Please enter at least 2 valid characters (letters or numbers).");
+          alert("Site name needs at least 2 letters or numbers (used to build the site's URL).");
           submitButton.disabled = false;
           submitButton.innerText = originalButtonText;
           submitButton.style.opacity = "";
