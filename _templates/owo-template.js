@@ -170,9 +170,14 @@ function injectIframeSandbox(html) {
   });
 }
 
-// Apply non-security iframe styling (max-width + aspect-ratio) after
-// iframes are attached to the DOM. Sandbox enforcement happens earlier
-// via injectIframeSandbox, so this function only touches presentation.
+// Apply non-security iframe styling (max-width + aspect-ratio + center)
+// after iframes are attached to the DOM. Sandbox enforcement happens
+// earlier via injectIframeSandbox, so this function only touches
+// presentation. `display: block` + `margin: 0 auto` centers every
+// iframe — both raw <iframe> tags written directly into markdown
+// (which have no surrounding container) and iframes from legacy
+// `.embed-container` blocks (where the auto-margin overrides the
+// container's text-align since block-level elements ignore it).
 function applyIframeStyles(root) {
   if (!root) return;
   root.querySelectorAll("iframe").forEach((iframe) => {
@@ -180,6 +185,9 @@ function applyIframeStyles(root) {
     const h = iframe.height || 315;
     iframe.style.maxWidth = "90%";
     iframe.style.aspectRatio = `${w / h}`;
+    iframe.style.display = "block";
+    iframe.style.marginLeft = "auto";
+    iframe.style.marginRight = "auto";
   });
 }
 
