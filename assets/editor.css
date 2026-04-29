@@ -1983,6 +1983,32 @@ nav {
 }
 
 /* External Image Popup (Toast UI toolbar) */
+.external-image-form .form-group {
+  margin-bottom: 16px;
+}
+
+.external-image-form .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.external-image-form .form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.external-image-form .form-group input:focus {
+  outline: none;
+  border-color: var(--link-color);
+}
+
 .external-image-form .form-hint {
   margin-top: 4px;
   font-size: 12px;
