@@ -1441,6 +1441,35 @@ function insertExternalImageViaPopup(editor) {
   });
 }
 
+// Imgur URLs pasted from a browser address bar typically point at the
+// HTML viewer page (`https://imgur.com/<id>` or `https://i.imgur.com/<id>`),
+// not the raw image — so they can't be embedded as an `<img>`. Rewrite
+// to the i.imgur.com host and append `.jpeg` so we hit the canonical
+// raw image (imgur transparently serves the actual format). Album,
+// gallery, and tag URLs are left alone because they don't resolve to a
+// single image. URLs that already carry an image extension are
+// untouched. Returns the input unchanged for non-imgur URLs.
+function normalizeImgurImageUrl(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return url; }
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "imgur.com" && host !== "i.imgur.com" && host !== "www.imgur.com") {
+    return url;
+  }
+  // Don't touch album / gallery / tag pages — those aren't single images.
+  if (/^\/(a|gallery|t|user)\//i.test(parsed.pathname)) return url;
+  // Already an image asset URL.
+  if (/\.(jpe?g|png|gif|webp|avif|bmp|tiff?)$/i.test(parsed.pathname)) {
+    // Force the i.imgur.com host even if the user pasted plain imgur.com.
+    if (host !== "i.imgur.com") parsed.hostname = "i.imgur.com";
+    return parsed.toString();
+  }
+  // No extension and not an album path — append .jpeg and force i. host.
+  parsed.hostname = "i.imgur.com";
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "") + ".jpeg";
+  return parsed.toString();
+}
+
 // URL-only image picker. Deliberately does NOT accept file uploads —
 // the upload pipeline was removed sitewide; this restores image
 // embedding via external https:// links (the previewable kind a user
@@ -1519,6 +1548,17 @@ function showExternalImagePopup(callback) {
       confirmBtn.disabled = true;
       setStatus('URL must start with https://');
       return;
+    }
+
+    // Imgur URLs without an image extension serve an HTML page, which
+    // can't be embedded as an <img>. Rewrite to the i.imgur.com host
+    // and append .jpeg so the preview (and the inserted markdown) hit
+    // the actual raw image. Reflect the normalized form back into the
+    // input so the user sees what's being inserted.
+    const normalized = normalizeImgurImageUrl(raw);
+    if (normalized !== raw) {
+      raw = normalized;
+      if (urlInput.value.trim() !== raw) urlInput.value = raw;
     }
 
     pendingSrc = raw;
