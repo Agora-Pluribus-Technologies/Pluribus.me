@@ -8,8 +8,20 @@ export async function onRequestGet(context) {
   const { request, env, params } = context;
   const url = new URL(request.url);
 
-  const username = params && params.username ? String(params.username).toLowerCase() : null;
-  const site = params && params.site ? String(params.site) : null;
+  // Decode + NFC normalize the route params before assembling siteId.
+  // Cloudflare Pages Functions hand back route params with percent-
+  // encoding intact, so a CJK site slug arrives as `%E4%B8%AD…` instead
+  // of the actual code points — and the Unicode-aware validation gate
+  // below then rejects those `%` characters as non-alphanumeric. NFC
+  // normalize while we're here so a URL pasted from a macOS NFD source
+  // matches the NFC form stored in D1 / R2.
+  const decodeParam = (raw) => {
+    if (!raw) return null;
+    try { return decodeURIComponent(String(raw)).normalize("NFC"); }
+    catch { return String(raw); }
+  };
+  const username = params && params.username ? decodeParam(params.username).toLowerCase() : null;
+  const site = params && params.site ? decodeParam(params.site) : null;
   const siteId = username && site ? `${username}/${site}` : null;
 
   if (!siteId) {
