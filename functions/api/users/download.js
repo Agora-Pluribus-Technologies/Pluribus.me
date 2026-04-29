@@ -14,11 +14,12 @@ import { loadOrBuildSiteBundle } from "../_export-helpers.js";
 //   2. Cold-built bundles get persisted, so subsequent single-site
 //      downloads of the same SHA hit the cached bundle for free.
 //
-// Edge-caches the assembled aggregate under a synthetic hostname so the
-// entry can never leak as a public HTTP response — only this worker
-// (which gates auth above) can reach it via cache.match. The cache key
-// folds in every site's siteId+shortSha so any publish to any of the
-// user's sites invalidates the aggregate without an explicit purge.
+// No aggregate edge cache: the assembled user bundle is rebuilt on every
+// request from the per-site bundles. The per-site cache is the
+// load-bearing optimization — assembling is just a few R2 GETs +
+// concatenation, dwarfed by the network transfer of the response itself
+// — and dropping the aggregate layer removes a second cache-invalidation
+// surface (no need to fold every site's sha into a synthetic cache key).
 export async function onRequestGet(context) {
   const { env } = context;
   const usernameLower = context.data.username;
@@ -37,34 +38,6 @@ export async function onRequestGet(context) {
     "SELECT siteId, owner, repo, lastCommitShortSha FROM Sites WHERE LOWER(owner) = LOWER(?)"
   ).bind(usernameLower).all();
   const siteConfigs = sitesResult.results || [];
-
-  // Aggregate edge-cache key. Synthetic hostname keeps the entry off the
-  // public surface; the URL folds in every site's id+sha so any publish
-  // (which advances some site's sha) yields a fresh key. Sort siteIds so
-  // identical inputs always produce the same key — no order-dependence.
-  const cache = caches.default;
-  const cacheToken = siteConfigs
-    .map(s => `${encodeURIComponent(s.siteId)}:${s.lastCommitShortSha || "0"}`)
-    .sort()
-    .join(",");
-  const cacheKey = new Request(
-    `https://internal-user-export/${encodeURIComponent(usernameLower)}/${cacheToken}`
-  );
-  // Skip the edge-cache lookup when the user has no sites with a sha —
-  // there's nothing to invalidate against and we'd serve a "0,0,0" key
-  // forever otherwise. Cheap path through anyway since there are no
-  // bundles to assemble.
-  const allShasKnown = siteConfigs.length > 0 && siteConfigs.every(s => s.lastCommitShortSha);
-  if (allShasKnown) {
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      console.log("user-download: edge cache hit for", usernameLower);
-      return new Response(cached.body, {
-        status: cached.status,
-        headers: cached.headers,
-      });
-    }
-  }
 
   try {
     // Load every site's bundle in parallel. loadOrBuildSiteBundle reads
@@ -100,34 +73,18 @@ export async function onRequestGet(context) {
       },
       sites: siteBundles,
     };
-    const json = JSON.stringify(exportData);
 
-    const response = new Response(json, {
+    return new Response(JSON.stringify(exportData), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
-        // Browser shouldn't cache (auth-bound); the edge cache stores
-        // its own copy via cache.put below using the sha-keyed Request.
+        // Auth-bound — don't let the browser (or any intermediary) cache
+        // the assembled bundle. Per-site bundles in `_exports/` are the
+        // only caching layer; they live in R2 and are gated behind this
+        // worker's auth check on every request.
         "Cache-Control": "private, max-age=0",
       },
     });
-
-    if (allShasKnown) {
-      // Cache for the edge under the per-sha aggregate URL. Any site
-      // publish advances some sha → new key → cold cache → rebuild
-      // path runs. Keep TTL short on the headers but rely on the
-      // cache-key change for invalidation.
-      const cacheable = new Response(json, {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=86400",
-        },
-      });
-      context.waitUntil(cache.put(cacheKey, cacheable));
-    }
-
-    return response;
   } catch (error) {
     console.error("Error exporting user data:", error);
     return new Response("Failed to export data: " + error.message, { status: 500 });
