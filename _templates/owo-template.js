@@ -76,13 +76,26 @@ function decodeImages(basePath) {
       p.style.textAlign = "center";
       p.parentElement.parentElement.classList.add("image-container");
 
-      // Reconstruct image URL: /s/<owner>/<siteName>/imageFileName -> basePath/imageFileName
+      // Reconstruct image URL: /s/<owner>/<siteName>/imageFileName ->
+      // basePath/public/imageFileName. The `public/` prefix matches where
+      // the worker stores attachments in R2 (`<siteId>/public/...`); the
+      // SPA shell now mirrors that prefix in its fetch URLs after the
+      // export-portability rework. Legacy markdown that has the bare
+      // `/s/owner/site/<file>` form gets rewritten here so it keeps
+      // working without a content migration. (The worker also has a
+      // bare-URL fallback as a belt-and-suspenders for paths that
+      // bypass this rewriter.)
       const src = img.getAttribute("src");
       if (src) {
         const sitePathMatch = src.match(/^\/s\/[^/]+\/[^/]+\/(.+)$/);
         if (sitePathMatch) {
           const imageFileName = sitePathMatch[1];
-          img.setAttribute("src", `${basePath}/${imageFileName}`);
+          // Don't double up if the legacy URL already happened to include
+          // `public/` (e.g. someone hand-edited it in the past).
+          const rel = imageFileName.startsWith("public/")
+            ? imageFileName
+            : `public/${imageFileName}`;
+          img.setAttribute("src", `${basePath}/${rel}`);
         }
       }
 
@@ -245,10 +258,14 @@ function decodeEmbeds(basePath) {
       continue;
     }
 
-    // Handle PDF/DOCX attachments
+    // Handle PDF/DOCX attachments. The fetch URL needs the `public/`
+    // prefix so the worker (or static deploy) finds the file; storage
+    // path is `<siteId>/public/<filename>` and the SPA mirrors that
+    // in its data URLs.
     if (pdfAttachment) {
       const filename = pdfAttachment;
-      const fileUrl = `${basePath}/${filename}`;
+      const rel = filename.startsWith("public/") ? filename : `public/${filename}`;
+      const fileUrl = `${basePath}/${rel}`;
       const isDocx = filename.toLowerCase().endsWith('.docx');
       const icon = isDocx ? '📝' : '📄';
 
@@ -321,7 +338,7 @@ function stripFrontmatter(text) {
 }
 
 async function fetchSiteJson(origin, basePath) {
-  const siteJsonLink = `${origin}${basePath}/site.json`;
+  const siteJsonLink = `${origin}${basePath}/public/site.json`;
 
   const content = await fetch(siteJsonLink, {
     method: "GET",
@@ -341,7 +358,7 @@ async function fetchSiteJson(origin, basePath) {
 }
 
 async function fetchPagesJson(origin, basePath) {
-  const pagesJsonLink = `${origin}${basePath}/pages.json`;
+  const pagesJsonLink = `${origin}${basePath}/public/pages.json`;
 
   const content = await fetch(pagesJsonLink, {
     method: "GET",
@@ -362,7 +379,7 @@ async function fetchPagesJson(origin, basePath) {
 
 async function fetchWikilinksJson(origin, basePath) {
   try {
-    const resp = await fetch(`${origin}${basePath}/wikilinks.json`, {
+    const resp = await fetch(`${origin}${basePath}/public/wikilinks.json`, {
       method: "GET",
       headers: {
         "Access-Control-Allow-Origin": "*",
@@ -378,7 +395,7 @@ async function fetchWikilinksJson(origin, basePath) {
 
 async function fetchFoldersJson(origin, basePath) {
   try {
-    const resp = await fetch(`${origin}${basePath}/folders.json`, {
+    const resp = await fetch(`${origin}${basePath}/public/folders.json`, {
       method: "GET",
       headers: {
         "Access-Control-Allow-Origin": "*",
@@ -636,7 +653,7 @@ function createSidebarSearch(origin, basePath, pagesJson, foldersJson, treeWrap)
   let indexPromise = null;
   function getIndex() {
     if (!indexPromise) {
-      indexPromise = fetch(`${origin}${basePath}/search-index.json`, {
+      indexPromise = fetch(`${origin}${basePath}/public/search-index.json`, {
         method: "GET",
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -833,7 +850,7 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
   var panel = document.createElement("main");
   const errorMessage = "Could not fetch page content<br><br>O_o";
   try {
-    let fetchPathName = `${origin}${basePath}/${pathName}.md`;
+    let fetchPathName = `${origin}${basePath}/public/${pathName}.md`;
     const content = await fetch(fetchPathName, {
       method: "GET",
       headers: {
@@ -1035,7 +1052,7 @@ async function showHistoryModal(origin, basePath) {
   overlay.style.display = "flex";
 
   try {
-    const historyJson = await fetch(`${origin}${basePath}/history.json`, {
+    const historyJson = await fetch(`${origin}${basePath}/public/history.json`, {
       method: "GET",
       headers: {
         "Cache-Control": "no-cache, must-revalidate",

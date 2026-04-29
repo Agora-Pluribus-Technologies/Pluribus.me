@@ -1657,26 +1657,29 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           if (cssResponse.ok) {
             const cssContent = await cssResponse.text();
-            zip.file(`public/_templates/owo-template.css`, cssContent);
+            zip.file(`_templates/owo-template.css`, cssContent);
           }
 
           if (jsResponse.ok) {
             const jsContent = await jsResponse.text();
-            zip.file(`public/_templates/owo-template.js`, jsContent);
+            zip.file(`_templates/owo-template.js`, jsContent);
           }
 
           // wikilinks.js / math.js are loaded as <script defer src="/_assets/...">
-          // by the SPA shell (see _templates/owo-template.html). Bundling them
-          // under public/_assets/ matches the layout a static-host deploy with
-          // public/ as the publish directory would resolve `/_assets/...` to.
+          // by the SPA shell (see _templates/owo-template.html). Bundling
+          // them under `_assets/` at the deploy root matches the absolute
+          // paths the shell uses — same root the server's bundle drops
+          // the per-page .html shells at. (Markdown sources + metadata
+          // live under `public/` in the same bundle, matching where the
+          // SPA shell fetches them from.)
           if (wikilinksResponse.ok) {
             const wikilinksContent = await wikilinksResponse.text();
-            zip.file(`public/_assets/wikilinks.js`, wikilinksContent);
+            zip.file(`_assets/wikilinks.js`, wikilinksContent);
           }
 
           if (mathResponse.ok) {
             const mathContent = await mathResponse.text();
-            zip.file(`public/_assets/math.js`, mathContent);
+            zip.file(`_assets/math.js`, mathContent);
           }
 
           console.log("Added template files and shell assets to ZIP");
@@ -2028,6 +2031,17 @@ async function createNewFolder(folderName) {
     return;
   }
   const parentFolder = getSelectedFolder();
+  // "public" is reserved at the root because it shadows the storage-side
+  // namespace the worker uses to map URLs to R2 keys (`<siteId>/public/...`).
+  // A root-level `public/` folder collides with the URL convention the SPA
+  // shell uses to fetch markdown — and during the post-publish browser-
+  // cache window can serve the wrong page for a same-named root page.
+  // Nested `public` folders (e.g. `notes/public/`) are fine since they
+  // don't sit at the routing-prefix boundary.
+  if (!parentFolder && sanitizedName === "public") {
+    alert("\"public\" is a reserved folder name at the root of a site. Pick a different name (e.g. \"docs\", \"notes\", or \"shared\"), or nest the folder inside another one.");
+    return;
+  }
   const folderPath = parentFolder ? `${parentFolder}/${sanitizedName}` : sanitizedName;
 
   if (getFolderDepth(folderPath) > MAX_FOLDER_DEPTH) {
@@ -2485,6 +2499,13 @@ function renameFolder(folderPath, newDisplayName) {
 
   const lastSlash = folderPath.lastIndexOf("/");
   const parentPath = lastSlash >= 0 ? folderPath.slice(0, lastSlash) : "";
+  // "public" is reserved at the root — see createNewFolder for rationale.
+  // Renaming a nested folder TO `public` is fine; only blocks renames
+  // that would land at the routing-prefix boundary.
+  if (!parentPath && sanitized === "public") {
+    alert("\"public\" is a reserved folder name at the root of a site. Pick a different name (e.g. \"docs\", \"notes\", or \"shared\").");
+    return false;
+  }
   const newFolderPath = parentPath ? `${parentPath}/${sanitized}` : sanitized;
 
   // Slug unchanged → only the display name needs updating.
@@ -3668,22 +3689,22 @@ document.addEventListener("DOMContentLoaded", function() {
 
             if (cssResponse.ok) {
               const cssContent = await cssResponse.text();
-              zip.file(`${siteFolderName}/public/_templates/owo-template.css`, cssContent);
+              zip.file(`${siteFolderName}/_templates/owo-template.css`, cssContent);
             }
 
             if (jsResponse.ok) {
               const jsContent = await jsResponse.text();
-              zip.file(`${siteFolderName}/public/_templates/owo-template.js`, jsContent);
+              zip.file(`${siteFolderName}/_templates/owo-template.js`, jsContent);
             }
 
             if (wikilinksResponse.ok) {
               const wikilinksContent = await wikilinksResponse.text();
-              zip.file(`${siteFolderName}/public/_assets/wikilinks.js`, wikilinksContent);
+              zip.file(`${siteFolderName}/_assets/wikilinks.js`, wikilinksContent);
             }
 
             if (mathResponse.ok) {
               const mathContent = await mathResponse.text();
-              zip.file(`${siteFolderName}/public/_assets/math.js`, mathContent);
+              zip.file(`${siteFolderName}/_assets/math.js`, mathContent);
             }
           } catch (templateError) {
             console.error(`Error fetching template files for ${siteFolderName}:`, templateError);

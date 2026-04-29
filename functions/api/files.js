@@ -5,15 +5,21 @@ const PURGE_BATCH_SIZE = 30;
 
 async function purgeCache(env, siteId, filePaths, requestOrigin) {
   // Build the serving paths for every changed file. .html is skipped:
-  // the worker now serves an inlined SPA shell for every .html request,
-  // and the shell body is independent of any .md content — it just
+  // the worker serves an inlined SPA shell for every .html request, and
+  // the shell body is independent of any .md content — it just
   // bootstraps the client-side fetch of the relevant .md. So a .md
   // change doesn't need to invalidate the matching .html cache entry.
+  //
+  // The serving URL preserves the `public/` prefix because the SPA
+  // shell's data-fetch URLs include it (e.g. `/s/<id>/public/about.md`)
+  // — same path the worker now uses for both the validation cache key
+  // and the R2 key. Keeping these aligned means a publish-time purge
+  // actually evicts what the SPA fetches.
   const servingPaths = [];
   for (const fp of filePaths) {
     if (!fp.startsWith("public/")) continue;
     if (fp.endsWith(".html")) continue;
-    servingPaths.push(fp.slice("public/".length));
+    servingPaths.push(fp);
   }
   if (servingPaths.length === 0) return;
 

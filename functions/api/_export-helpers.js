@@ -8,9 +8,21 @@
 // Bundle layout invariants (do not break without coordinated frontend
 // changes — see _assets/on-load.js bulk-download flow):
 //
-//   per-site bundle JSON  =  { site: {...siteConfig, exportedAt}, files: [...] }
+//   per-site bundle JSON  =  { formatVersion, site: {...siteConfig, exportedAt}, files: [...] }
 //   user bundle JSON      =  { user: {...user, exportedAt}, sites: [{config, files}, ...] }
 //   each file entry        =  { path, contentType, content (base64) }
+//
+// `formatVersion` is bumped whenever the on-disk shape of `files[]`
+// changes (paths, layout, encoding) — `loadOrBuildSiteBundle` treats a
+// version mismatch as stale and rebuilds. Lets us flip layouts without
+// manually purging the persisted bundles in `_exports/`.
+//
+// History:
+//   v2 — markdown + metadata files HOISTED out of `public/` to the ZIP
+//        root. (Caused git desync; replaced by v3.)
+//   v3 — hybrid: shells at root, markdown stays under `public/` so the
+//        bundled `.git/` history lines up with the working tree.
+const BUNDLE_FORMAT_VERSION = 3;
 
 import { SITE_TEMPLATE_HTML } from "../_site-templates.js";
 
@@ -74,19 +86,36 @@ export function arrayBufferToBase64(buffer) {
 }
 
 // Synthesize the .html SPA shells the worker would normally serve at
-// request time. We bake one shell per .md page (plus a root index.html)
-// into the export so the unzipped site is deployable as-is on a static
-// host (Netlify, GitHub Pages, Cloudflare Pages, etc.) without needing
-// the AgoraPages worker to materialize shells. The shell is byte-
-// identical per page so this only adds a few hundred bytes per page.
+// request time, plus a `.nojekyll` marker. We bake one shell per .md
+// page (plus a root index.html) into the export so the unzipped site
+// is deployable as-is on a static host (Netlify, GitHub Pages,
+// Cloudflare Pages, etc.) without needing the AgoraPages worker to
+// materialize shells. The shell is byte-identical per page so this
+// only adds a few hundred bytes per page.
 //
-// Layout in the ZIP mirrors what the worker exposes at request time:
-//   public/<slug>.md      <- already in the bundle
-//   public/<slug>.html    <- added here, loads the sibling .md
-//   public/index.html     <- site root
-// The frontend ZIP-builder also drops the matching template .css/.js
-// under public/_templates/, so a deploy with `public/` as the publish
-// directory works out of the box.
+// Hybrid layout that solves three constraints simultaneously:
+//   1. `index.html` (and per-page `<slug>.html`) at the deploy root,
+//      so drag-and-drop deploy on Netlify / GitHub Pages / etc. works.
+//   2. Markdown sources + JSON metadata stay under `public/`, matching
+//      where they live in R2 AND matching the path entries in the
+//      bundled `.git/` history. So `git status` after unzip is clean.
+//   3. The SPA shell prefixes its data fetches with `public/` (e.g.
+//      `<basePath>/public/about.md`), so on a static deploy where the
+//      shell is at root it correctly resolves to the `public/about.md`
+//      file in the same archive.
+//
+// Result:
+//   index.html             <- site root, served by the static host
+//   <slug>.html            <- per-page shell (loads the sibling .md)
+//   _templates/, _assets/  <- shell-loaded static assets, at root
+//                              because the shell uses absolute paths
+//   .nojekyll              <- tells GitHub Pages to bypass Jekyll
+//   public/<slug>.md       <- markdown source (matches git history)
+//   public/pages.json      <- metadata (matches git history)
+//   .git/                  <- history tracks `public/<file>` paths
+//
+// `mdPaths` arrives WITH the `public/` prefix (e.g. `public/about.md`).
+// We strip it when computing the shell's deploy-root path.
 export function synthesizeShellEntries(mdPaths) {
   const shellBase64 = utf8ToBase64(SITE_TEMPLATE_HTML);
   const entries = [];
@@ -102,11 +131,25 @@ export function synthesizeShellEntries(mdPaths) {
     });
   };
 
-  push("public/index.html");
+  push("index.html");
   for (const mdPath of mdPaths) {
-    if (!mdPath.startsWith("public/") || !mdPath.endsWith(".md")) continue;
-    push(mdPath.slice(0, -3) + ".html");
+    if (!mdPath.endsWith(".md")) continue;
+    // Strip `public/` so the shell lands at the deploy root, even
+    // though the markdown it loads stays under `public/`.
+    const rooted = mdPath.startsWith("public/")
+      ? mdPath.slice("public/".length)
+      : mdPath;
+    push(rooted.slice(0, -3) + ".html");
   }
+  // .nojekyll: empty marker file; GitHub Pages reads this and skips
+  // its Jekyll build, which would otherwise filter out our
+  // `_templates/` and `_assets/` directories. Other static hosts
+  // ignore the file; harmless overhead (zero bytes of content).
+  entries.push({
+    path: ".nojekyll",
+    contentType: "application/octet-stream",
+    content: "",
+  });
   return entries;
 }
 
@@ -114,6 +157,14 @@ export function synthesizeShellEntries(mdPaths) {
 // fetching every (non-skipped) file in parallel. Returns the bundle
 // object { site, files: [...] }, plus the JSON-stringified version
 // for caching/PUT.
+//
+// File paths in the bundle preserve the storage layout — `public/<x>`
+// stays as `public/<x>` (where the SPA's data-fetch URLs and the git
+// history both reference it), and top-level keys like
+// `.git-history.json` stay at the root. The hosted-elsewhere
+// deployability of the export comes from synthesizeShellEntries
+// emitting the `index.html` / `<slug>.html` shells AT the ZIP root,
+// while the markdown they load remains nested under `public/`.
 export async function buildExportBundle(env, siteId, siteConfig) {
   const r2Prefix = `${siteId}/`;
   const list = await env.PLURIBUS_BUCKET.list({ prefix: r2Prefix });
@@ -144,12 +195,15 @@ export async function buildExportBundle(env, siteId, siteConfig) {
 
   const files = fileResults.filter(Boolean);
 
-  // Bake in one .html SPA shell per .md page (plus a root index.html).
-  // See synthesizeShellEntries for layout rationale.
+  // Bake in one .html SPA shell per .md page (plus a root index.html
+  // and a `.nojekyll`). The shells go to the ZIP ROOT (no `public/`)
+  // even though the matching .md files stay under `public/` — see
+  // synthesizeShellEntries for the layout rationale.
   const mdPaths = files.map(f => f.path).filter(p => p.endsWith(".md"));
   const shellEntries = synthesizeShellEntries(mdPaths);
 
   const exportData = {
+    formatVersion: BUNDLE_FORMAT_VERSION,
     site: {
       ...siteConfig,
       exportedAt: new Date().toISOString(),
@@ -179,7 +233,19 @@ export async function loadOrBuildSiteBundle(env, siteConfig) {
       const persisted = await env.PLURIBUS_BUCKET.get(bundleKey);
       if (persisted && persisted.customMetadata?.shortSha === currentSha) {
         const json = await persisted.text();
-        return { bundle: JSON.parse(json), json, source: "r2-bundle" };
+        const bundle = JSON.parse(json);
+        // Format-version gate: bundles built before a layout change
+        // (e.g. when the export root was hoisted out of `public/`) get
+        // ignored and rebuilt instead of returned with the stale shape.
+        // Newly-built bundles will then carry the current version.
+        if (bundle && bundle.formatVersion === BUNDLE_FORMAT_VERSION) {
+          return { bundle, json, source: "r2-bundle" };
+        }
+        console.log(
+          `download: persisted bundle for ${siteId} has formatVersion`,
+          bundle && bundle.formatVersion,
+          "— current is", BUNDLE_FORMAT_VERSION + ", rebuilding"
+        );
       }
     } catch (e) {
       console.warn(`download: failed to read persisted bundle for ${siteId}, will rebuild:`, e);

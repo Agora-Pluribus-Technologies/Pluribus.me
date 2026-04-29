@@ -241,6 +241,16 @@
 
       let slug = pathToSlug(relativePath);
       if (!slug) continue;
+      // "public" is a reserved root-level folder name (it shadows the
+      // storage namespace the worker uses to map URLs to R2 keys —
+      // see createNewFolder). Rewrite a top-level `public/` segment in
+      // any imported path to `public-imported/` so the vault import
+      // doesn't accidentally land at the routing-prefix boundary.
+      // Nested `public/` segments (e.g. `notes/public/...`) are fine
+      // and pass through unchanged.
+      if (slug === "public" || slug.startsWith("public/")) {
+        slug = "public-imported" + slug.slice("public".length);
+      }
       // De-dupe colliding slugs (e.g. "Foo.md" + "foo.md") by suffixing.
       if (seenSlugs.has(slug)) {
         const n = seenSlugs.get(slug) + 1;

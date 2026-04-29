@@ -156,21 +156,34 @@ export async function onRequest(context) {
     return new Response(SITE_TEMPLATE_HTML, { status: 200, headers });
   }
 
-  // Non-HTML requests (md, json, attachments, css, js, etc.) still
-  // come from R2.
-  let basePath = "/public";
-  if (basePath.startsWith("/")) basePath = basePath.slice(1);
-  if (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
-
-  // Build the R2 key: siteId/basePath/filePath
-  const r2Key = basePath ? `${siteId}/${basePath}/${filePath}` : `${siteId}/${filePath}`;
-
-  console.log("R2 key:", r2Key);
-
+  // Non-HTML requests (md, json, attachments, css, js, etc.) come from
+  // R2. The SPA shell now includes `public/` in its data-fetch URLs
+  // (matches where files actually live in R2 — see commit that hoisted
+  // shells out of `public/` for export portability), so the URL path
+  // and the R2 key suffix line up directly:
+  //
+  //   /s/<owner>/<site>/public/about.md  ->  <siteId>/public/about.md
+  //
+  // For backwards compatibility with already-loaded SPA shells (browser
+  // cache up to 5 min, plus legacy markdown that has bare
+  // `/s/owner/site/<file>` image refs that bypass owo-template.js's
+  // src-rewriter), retry with `public/` prepended on a miss when the
+  // requested path didn't already include it. One extra R2 GET only on
+  // the legacy-URL path; new shells pay nothing.
   try {
-    const object = await env.PLURIBUS_BUCKET.get(r2Key);
-
     const headers = new Headers(corsHeaders);
+
+    let object = await env.PLURIBUS_BUCKET.get(`${siteId}/${filePath}`);
+    let resolvedKey = `${siteId}/${filePath}`;
+    if (!object && !filePath.startsWith("public/")) {
+      const fallback = `${siteId}/public/${filePath}`;
+      object = await env.PLURIBUS_BUCKET.get(fallback);
+      if (object) {
+        console.log("R2 miss on direct key, hit on legacy fallback:", fallback);
+        resolvedKey = fallback;
+      }
+    }
+    console.log("R2 key:", resolvedKey);
 
     if (!object) {
       return new Response("File not found", { status: 404, headers });
@@ -225,9 +238,13 @@ async function readPagesJsonForValidation(env, siteId, requestOrigin) {
   // functions/api/files.js) targets when pages.json is republished —
   // keeping the keys in sync means a publish-time purge actually evicts
   // this validation entry.
+  // Cache key matches the SPA shell's data-fetch URL convention
+  // (`<basePath>/public/pages.json`) so a publish-time purge from
+  // functions/api/files.js (which builds URLs the same way) actually
+  // evicts this entry.
   const origin = requestOrigin || "https://agorapages.com";
   const cacheKey = new Request(
-    `${origin}/s/${siteId}/pages.json`
+    `${origin}/s/${siteId}/public/pages.json`
   );
 
   const cached = await cache.match(cacheKey);
@@ -342,8 +359,16 @@ async function isPagePath(filePath, env, siteId, requestOrigin) {
 }
 
 async function isAllowedFilePath(filePath, env, siteId, requestOrigin) {
-  if (isAllowedMetadataPath(filePath)) {
-    console.log("isAllowedFilePath: matched metadata path:", filePath);
+  // Strip a leading `public/` so the gate accepts both URL conventions
+  // — the new SPA shell prefixes data fetches with `public/`, but
+  // already-loaded shells (browser-cached for up to 5 min) and HTML
+  // page-navigation URLs (`/<slug>.html`) don't. The existing rules
+  // below all reason about bare names.
+  const checkPath = filePath.startsWith("public/")
+    ? filePath.slice("public/".length)
+    : filePath;
+  if (isAllowedMetadataPath(checkPath)) {
+    console.log("isAllowedFilePath: matched metadata path:", checkPath);
     return true;
   }
   // Only .html/.md requests need to correspond to a real entry in
@@ -352,11 +377,11 @@ async function isAllowedFilePath(filePath, env, siteId, requestOrigin) {
   // let the R2 lookup decide whether it actually exists. This keeps
   // legacy root-level images working on sites that pre-date the
   // attachments/ migration without weakening the page-probing gate.
-  if (/\.(html?|md)$/i.test(filePath)) {
-    console.log("isAllowedFilePath: routing to isPagePath:", filePath);
-    return await isPagePath(filePath, env, siteId, requestOrigin);
+  if (/\.(html?|md)$/i.test(checkPath)) {
+    console.log("isAllowedFilePath: routing to isPagePath:", checkPath);
+    return await isPagePath(checkPath, env, siteId, requestOrigin);
   }
-  console.log("isAllowedFilePath: non-page asset, allowed:", filePath);
+  console.log("isAllowedFilePath: non-page asset, allowed:", checkPath);
   return true;
 }
 
