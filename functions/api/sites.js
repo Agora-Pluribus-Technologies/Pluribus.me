@@ -219,6 +219,17 @@ export async function onRequestDelete(context) {
       console.error("Error deleting R2 files:", error);
     }
 
+    // Also delete the cached download bundle, which lives outside the
+    // site's own R2 prefix (`_exports/<siteId>.json` — see
+    // exportBundleR2Key in functions/api/sites/download.js). Without
+    // this, the bundle would survive site deletion as a structural
+    // orphan.
+    try {
+      await env.PLURIBUS_BUCKET.delete(`_exports/${siteId}.json`);
+    } catch (error) {
+      console.error("Error deleting export bundle:", error);
+    }
+
     // Delete collaborators for this site
     await env.USERS_DB.prepare(
       "DELETE FROM Collaborators WHERE siteId = ?"

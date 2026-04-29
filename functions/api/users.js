@@ -145,6 +145,14 @@ export async function onRequestDelete(context) {
         console.error(`Error deleting R2 files for site ${siteId}:`, r2Error);
       }
 
+      // Cached download bundle lives outside the site prefix
+      // (`_exports/<siteId>.json`); delete separately.
+      try {
+        await env.PLURIBUS_BUCKET.delete(`_exports/${siteId}.json`);
+      } catch (e) {
+        console.error(`Error deleting export bundle for site ${siteId}:`, e);
+      }
+
       // Delete collaborators for this site
       await env.USERS_DB.prepare(
         "DELETE FROM Collaborators WHERE siteId = ?"
