@@ -1794,9 +1794,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Fetch and include the correct template files based on site type
         try {
           const templateName = currentSiteType === "blog" ? "blog-template" : "owo-template";
-          const [cssResponse, jsResponse] = await Promise.all([
+          const [cssResponse, jsResponse, wikilinksResponse, mathResponse] = await Promise.all([
             fetch(`/templates/${templateName}.css`),
             fetch(`/templates/${templateName}.js`),
+            fetch(`/assets/wikilinks.js`),
+            fetch(`/assets/math.js`),
           ]);
 
           if (cssResponse.ok) {
@@ -1809,7 +1811,21 @@ document.addEventListener("DOMContentLoaded", async function () {
             zip.file(`public/templates/${templateName}.js`, jsContent);
           }
 
-          console.log(`Added ${templateName} template files to ZIP`);
+          // wikilinks.js / math.js are loaded as <script defer src="/assets/...">
+          // by the SPA shell (see templates/owo-template.html). Bundling them
+          // at the zip root under assets/ keeps the same absolute path layout
+          // a static-host deploy would expect.
+          if (wikilinksResponse.ok) {
+            const wikilinksContent = await wikilinksResponse.text();
+            zip.file(`assets/wikilinks.js`, wikilinksContent);
+          }
+
+          if (mathResponse.ok) {
+            const mathContent = await mathResponse.text();
+            zip.file(`assets/math.js`, mathContent);
+          }
+
+          console.log(`Added ${templateName} template files and shell assets to ZIP`);
         } catch (templateError) {
           console.error("Error fetching template files:", templateError);
           // Continue without templates - not critical
