@@ -133,23 +133,6 @@
               <input type="text" class="form-control" id="siteName" placeholder="My Cool Site" required maxlength="60">
             </div>
             <div class="form-group">
-              <label>Site Type</label>
-              <input type="hidden" id="siteType" value="pages">
-              <div class="site-type-cards">
-                <div class="site-type-card selected" data-value="pages">
-                  <div class="site-type-card-icon">&#x1F4C4;</div>
-                  <div class="site-type-card-title">Pages</div>
-                  <div class="site-type-card-desc">Multiple pages with navigation. Each markdown file becomes a separate page with its own URL.</div>
-                </div>
-                <div class="site-type-card" data-value="blog">
-                  <div class="site-type-card-icon">&#x270D;&#xFE0F;</div>
-                  <div class="site-type-card-title">Blog</div>
-                  <div class="site-type-card-desc">Single page feed of posts. Each markdown file is a blog post with title, date, and tags.</div>
-                </div>
-              </div>
-            </div>
-            <!-- Source-type cards: only meaningful for "pages" sites; hidden for blogs. -->
-            <div class="form-group" id="siteSourceGroup">
               <label>Starting content</label>
               <input type="hidden" id="siteSource" value="scratch">
               <div class="site-type-cards">
@@ -539,22 +522,13 @@
       }
     })();
 
-    // Card selection — scoped to each .site-type-cards group so the two
-    // card groups (site-type and starting-content) stay independent.
+    // Card selection — picks the starting-content option (scratch vs.
+    // import). Mirrors the value into the hidden #siteSource input.
     document.querySelectorAll('.site-type-cards').forEach(function(group) {
       group.querySelectorAll('.site-type-card').forEach(function(card) {
         card.addEventListener('click', function() {
           group.querySelectorAll('.site-type-card').forEach(function(c) { c.classList.remove('selected'); });
           card.classList.add('selected');
-          if (card.dataset.value !== undefined) {
-            document.getElementById('siteType').value = card.dataset.value;
-            // Importing only makes sense for "pages" sites; hide the
-            // starting-content group for blogs.
-            const sourceGroup = document.getElementById('siteSourceGroup');
-            if (sourceGroup) {
-              sourceGroup.style.display = card.dataset.value === 'pages' ? '' : 'none';
-            }
-          }
           if (card.dataset.source !== undefined) {
             document.getElementById('siteSource').value = card.dataset.source;
           }

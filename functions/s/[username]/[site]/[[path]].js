@@ -3,7 +3,7 @@
 // This function serves user sites from Cloudflare R2 storage.
 // URL shape: /s/:username/:site/... -> fetch from R2 and return the file.
 
-import { templateForSiteType } from "../../../_site-templates.js";
+import { SITE_TEMPLATE_HTML } from "../../../_site-templates.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,11 +63,8 @@ export async function onRequest(context) {
   console.log("Site id:", siteId);
 
   // Look up site configuration in D1 to verify the site exists.
-  // siteType decides which inlined SPA shell we serve for .html
-  // requests (pages → owo-template, blog → blog-template). Defaults
-  // to "pages" for legacy rows missing the column.
   const cfg = await env.USERS_DB.prepare(
-    "SELECT siteId, owner, repo, siteType FROM Sites WHERE siteId = ?"
+    "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
   ).bind(siteId).first();
 
   if (!cfg) {
@@ -75,14 +72,13 @@ export async function onRequest(context) {
     return corsResponse("Unknown site", 404);
   }
 
-  const siteType = cfg.siteType || "pages";
-  console.log("Site config:", cfg, "siteType:", siteType);
+  console.log("Site config:", cfg);
 
   console.log("Raw URL:", request.url);
   console.log("URL pathname:", url.pathname);
 
   // Compute the path inside the site, after /s/:username/:site/
-  // e.g. /s/alice/myblog/about/team.html -> "about/team.html".
+  // e.g. /s/alice/notes/about/team.html -> "about/team.html".
   // `URL.pathname` does NOT percent-decode, so a CJK page like
   // `中文笔记.html` arrives here as `%E4%B8%AD%E6%96%87%E7%AC%94%E8%AE%B0.html`.
   // Decode each segment so the downstream slug comparison and R2 key
@@ -97,8 +93,8 @@ export async function onRequest(context) {
   console.log("filePath after join:", filePath);
 
   // Canonicalize the site-root URL to always have a trailing slash. The
-  // SPA shell (owo-template.js / blog-template.js) detects the published
-  // site via a regex that requires the trailing slash; without it the
+  // SPA shell (owo-template.js) detects the published site via a regex
+  // that requires the trailing slash; without it the
   // shell mistakes the path for a root marketing page and fetches
   // `/s/<user>/<site>/s/<user>/<site>.md` (404). 302 redirect so the
   // browser's URL bar ends up on the canonical form before any JS runs.
@@ -141,24 +137,23 @@ export async function onRequest(context) {
   }
 
   // .html requests (page shells + index.html for the SPA root) are
-  // served from the baked-in template constants — never from R2. The
-  // shell is identical for every page of a given site type; the actual
-  // page content is fetched client-side as <slug>.md by the SPA logic
-  // inside the template's bundled JS. This eliminates one R2 PUT per
-  // page at publish time, halves R2 storage for Pages sites, and
-  // means template updates only require a worker redeploy (not a
-  // republish on every site).
+  // served from the baked-in template constant — never from R2. The
+  // shell is identical for every page; the actual page content is
+  // fetched client-side as <slug>.md by the SPA logic inside the
+  // template's bundled JS. This eliminates one R2 PUT per page at
+  // publish time, halves R2 storage, and means template updates only
+  // require a worker redeploy (not a republish on every site).
   if (filePath.toLowerCase().endsWith(".html")) {
     const headers = new Headers(corsHeaders);
     headers.set("Content-Type", "text/html; charset=utf-8");
     // Edge-cache the response so subsequent visitors of the same page
-    // skip the worker invocation entirely. The body is constant per
-    // siteType, so a long TTL is safe; cache is invalidated by the
-    // existing publish-time purge of <slug>.html URLs (see
-    // functions/api/files.js purgeCache).
+    // skip the worker invocation entirely. The body is constant, so a
+    // long TTL is safe; cache is invalidated by the existing publish-
+    // time purge of <slug>.html URLs (see functions/api/files.js
+    // purgeCache).
     headers.set("Cache-Control", "public, max-age=300, must-revalidate");
-    console.log("Serving inlined template for", filePath, "siteType:", siteType);
-    return new Response(templateForSiteType(siteType), { status: 200, headers });
+    console.log("Serving inlined template for", filePath);
+    return new Response(SITE_TEMPLATE_HTML, { status: 200, headers });
   }
 
   // Non-HTML requests (md, json, attachments, css, js, etc.) still
@@ -201,10 +196,8 @@ const ALLOWED_METADATA_FILES = new Set([
   "folders.json",
   "wikilinks.json",
   "images.json",
-  "tags.json",
-  "search-index.json", // pages-site sidebar search (per-page title + headings)
+  "search-index.json", // sidebar search (per-page title + headings)
   "history.json",
-  "latest.md",        // blog: most-recent-post snapshot
 ]);
 
 function isAllowedMetadataPath(filePath) {
@@ -300,8 +293,8 @@ function canonicalSlug(value) {
 // Verify that a non-metadata file path corresponds to a real page of the
 // site. Goes through Cloudflare's edge cache first, then R2 — never
 // HTTPS-back-into-itself, since recursive fetches get intercepted by
-// Cloudflare Access on protected previews. Pages sites store pages.json
-// as a flat array; blog sites use a batched object.
+// Cloudflare Access on protected previews. pages.json is a flat array
+// of `{ fileName, displayName, ... }` entries.
 async function isPagePath(filePath, env, siteId, requestOrigin) {
   const m = filePath.match(/^(.+?)\.(html?|md)$/i);
   if (!m) {
@@ -321,22 +314,8 @@ async function isPagePath(filePath, env, siteId, requestOrigin) {
     return false;
   }
 
-  let pages;
-  let shape;
-  if (Array.isArray(parsed)) {
-    pages = parsed;
-    shape = "flat-array";
-  } else if (parsed && Array.isArray(parsed.batches)) {
-    pages = [];
-    for (const batch of parsed.batches) {
-      if (Array.isArray(batch)) pages.push.apply(pages, batch);
-    }
-    shape = "batched-object";
-  } else {
-    pages = [];
-    shape = "empty/unknown (" + (parsed && typeof parsed) + ")";
-  }
-  console.log("isPagePath: pages.json shape:", shape, "count:", pages.length);
+  const pages = Array.isArray(parsed) ? parsed : [];
+  console.log("isPagePath: pages.json count:", pages.length);
 
   const stored = pages
     .map(p => (p && typeof p.fileName === "string") ? p.fileName : null)

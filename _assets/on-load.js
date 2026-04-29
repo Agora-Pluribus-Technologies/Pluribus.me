@@ -38,7 +38,6 @@ function getFolderDepth(folderPath) {
 let currentSitePath = null;
 let currentSiteId = null;
 let currentSitePathFull = null;
-let currentSiteType = "pages"; // "pages" or "blog"
 let lastDeployTimeInterval = null;
 let modified = false;
 
@@ -66,7 +65,6 @@ function performAutoSave() {
       documentCache: documentCache,
       folderMeta: folderMeta,
       currentSitePath: currentSitePath,
-      currentSiteType: currentSiteType,
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(getAutoSaveKey(currentSiteId), JSON.stringify(payload));
@@ -172,8 +170,6 @@ function markTourCompleted(siteId) {
 
 function startOnboardingTour() {
   if (!currentSiteId || !shouldShowTour(currentSiteId)) return;
-  // Only show tour for pages sites (blog has different UI)
-  if (currentSiteType === 'blog') return;
 
   _tourStep = 0;
   showTourStep();
@@ -300,15 +296,6 @@ let imageCache = [];
 
 // Global cache for documents (PDFs, DOCX) - Array of filenames
 let documentCache = [];
-
-// Blog-site pagination state. Mirrors the batch boundaries written to
-// pages.json by buildPagesJsonContent — keeping the same boundaries
-// means the editor's "page 1" matches what readers see at the top of
-// the published feed. Each batch is an array of `public/<slug>.md`
-// paths. blogBatchesLoaded tracks which batches' .md bodies are in
-// markdownCache; batches not yet loaded have metadata-only entries.
-let blogBatches = [];
-let blogBatchesLoaded = new Set();
 
 // Helper functions for markdownCache
 function getCacheByFileName(fileName) {
@@ -506,12 +493,7 @@ async function openSiteInEditor(site, initialPage = "index") {
   if (pagesJsonText) {
     try {
       pagesJsonData = JSON.parse(pagesJsonText);
-      // Blog sites store pages.json as a batched object — flatten before
-      // deriving the list of markdown files to load. Pages sites still
-      // arrive as a flat array; flattenPagesJson is a no-op for those.
-      const pagesArray = (typeof flattenPagesJson === "function")
-        ? flattenPagesJson(pagesJsonData)
-        : (Array.isArray(pagesJsonData) ? pagesJsonData : []);
+      const pagesArray = Array.isArray(pagesJsonData) ? pagesJsonData : [];
       markdownFiles = pagesArray.map(page => `public/${canonicalPageSlug(page.fileName)}.md`);
     } catch {
       pagesJsonData = null;
@@ -537,29 +519,22 @@ async function openSiteInEditor(site, initialPage = "index") {
     // Disable Visit Site button for unpublished sites
     setSiteAvailable(false);
 
-    // For pages sites, create a default home page; blog sites start empty
-    if (site.siteType !== "blog") {
-      console.log("Site is empty - created dummy home.md");
-      addOrUpdateCache(
-        "public/home.md",
-        "Home",
-        "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above."
-      );
-      // Mark as modified for new sites (needs to be published)
-      modified = true;
-      updateDeployButtonState();
-    }
+    console.log("Site is empty - created dummy home.md");
+    addOrUpdateCache(
+      "public/home.md",
+      "Home",
+      "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above."
+    );
+    // Mark as modified for new sites (needs to be published)
+    modified = true;
+    updateDeployButtonState();
   } else if (!restoredFromAutoSave) {
     // Site has been published before, enable Visit Site button
     setSiteAvailable(true);
-    // Initialize markdownCache from pages.json (exclude latest.md). Blog
-    // sites store pages.json as a batched object on disk — flatten back to
-    // a list here so the editor's cache stays a single flat array.
-    const pagesArray = (typeof flattenPagesJson === "function")
-      ? flattenPagesJson(pagesJsonData)
-      : (Array.isArray(pagesJsonData) ? pagesJsonData : []);
+    // Initialize markdownCache from pages.json. pages.json is a flat
+    // array of `{ fileName, displayName, ... }` entries.
+    const pagesArray = Array.isArray(pagesJsonData) ? pagesJsonData : [];
     markdownCache = pagesArray.slice();
-    markdownCache = markdownCache.filter(item => item.fileName !== "latest");
     for (let i=0; i < markdownCache.length; i++) {
       // Normalize legacy pages.json shapes (e.g. fileName already
       // carrying `public/` prefix or `.md` suffix) to a bare slug
@@ -578,42 +553,11 @@ async function openSiteInEditor(site, initialPage = "index") {
       }
     }
 
-    // Page-load strategy:
-    //   - Blog sites: load only the FIRST batch of posts from pages.json
-    //     (matches the published-site renderer's pagination boundary).
-    //     Other batches stay in the cache as metadata-only entries —
-    //     ensureBlogBatchLoaded fetches them on demand when the user
-    //     paginates to them in the editor.
-    //   - Pages sites: load only the homepage's .md (markdownCache[0]).
-    //     Other pages stay metadata-only; selectSidebarPage fetches them
-    //     on demand the first time the user opens them.
-    const isBlogSite = site.siteType === "blog";
-    const homePageFile = (!isBlogSite && markdownCache.length > 0)
-      ? markdownCache[0].fileName
-      : null;
-
-    // Build blog batch index (file paths grouped by pages.json batch).
-    // Empty for pages sites and for blog sites whose pages.json doesn't
-    // carry the batched shape (e.g., legacy or empty blog).
-    blogBatches = [];
-    blogBatchesLoaded = new Set();
-    if (isBlogSite && pagesJsonData && Array.isArray(pagesJsonData.batches)) {
-      blogBatches = pagesJsonData.batches.map(batch =>
-        (batch || [])
-          .filter(p => p && p.fileName && p.fileName !== "latest")
-          // canonicalPageSlug strips a stray `public/` prefix or `.md`
-          // suffix from legacy pages.json entries before we reapply
-          // exactly one of each. Otherwise we'd double both.
-          .map(p => `public/${canonicalPageSlug(p.fileName)}.md`)
-      );
-    }
-
-    const filesToFetch = isBlogSite
-      ? (blogBatches[0] || [])
-      : (homePageFile ? [homePageFile] : []);
-    if (isBlogSite && blogBatches.length > 0) {
-      blogBatchesLoaded.add(0);
-    }
+    // Lazy-load strategy: only fetch the homepage's .md (markdownCache[0])
+    // up front. Other pages stay metadata-only; selectSidebarPage fetches
+    // them on demand the first time the user opens them.
+    const homePageFile = markdownCache.length > 0 ? markdownCache[0].fileName : null;
+    const filesToFetch = homePageFile ? [homePageFile] : [];
 
     const [mdResults, imagesJsonContent, documentsJsonContent, foldersJsonContent] = await Promise.all([
       Promise.all(filesToFetch.map(async (file) => {
@@ -681,35 +625,12 @@ async function openSiteInEditor(site, initialPage = "index") {
   // Initialize git repo and load files from R2
   await loadR2ToGit(currentSiteId);
 
-  // Load site type from site.json or site config
-  try {
-    const siteJsonContent = await getFileContent(currentSiteId, "public/site.json");
-    if (siteJsonContent) {
-      const siteJson = JSON.parse(siteJsonContent);
-      currentSiteType = siteJson.siteType || "pages";
-      console.log("Site type from site.json:", currentSiteType);
-    } else if (site.siteType) {
-      // Fallback to site config (for new sites before first deploy)
-      currentSiteType = site.siteType;
-      console.log("Site type from site config:", currentSiteType);
-    } else {
-      currentSiteType = "pages"; // default for older sites
-      console.log("Site type defaulting to pages");
-    }
-  } catch (error) {
-    console.error("Error loading site.json:", error);
-    // Fallback to site config
-    currentSiteType = site.siteType || "pages";
-    console.log("Site type from fallback:", currentSiteType);
-  }
-
   // Migration: Ensure index.html exists for existing sites
   try {
     const indexHtmlContent = await getFileContent(currentSiteId, "public/index.html");
     if (!indexHtmlContent) {
       console.log("index.html not found, creating it for existing site");
-      const templateName = currentSiteType === "blog" ? "/_templates/blog-template.html" : "/_templates/owo-template.html";
-      const templateResponse = await fetch(templateName);
+      const templateResponse = await fetch("/_templates/owo-template.html");
       if (templateResponse.ok) {
         const indexHtml = await templateResponse.text();
         await gitWriteFile(currentSiteId, "public/index.html", indexHtml);
@@ -723,32 +644,12 @@ async function openSiteInEditor(site, initialPage = "index") {
     console.error("Error checking/creating index.html:", error);
   }
 
-  // For blog sites, hide the sidebar and edit history button
-  const editorSidebar = document.getElementById("editorSidebar");
-  const historyButton = document.getElementById("historyButton");
-  if (currentSiteType === "blog") {
-    if (editorSidebar) {
-      editorSidebar.style.display = "none";
-    }
-    if (historyButton) {
-      historyButton.style.display = "none";
-    }
-    // Load the blog editor
-    initBlogEditor();
-  } else {
-    if (editorSidebar) {
-      editorSidebar.style.display = "";
-    }
-    if (historyButton) {
-      historyButton.style.display = "";
-    }
-    // Populate sidebar from cache
-    await populateSidebar(site.siteId);
-    // Wire the sidebar search bar to this site's published search index.
-    setupEditorSidebarSearch(site.siteId);
-    // Load the block editor
-    initBlockEditor();
-  }
+  // Populate sidebar from cache
+  await populateSidebar(site.siteId);
+  // Wire the sidebar search bar to this site's published search index.
+  setupEditorSidebarSearch(site.siteId);
+  // Load the block editor
+  initBlockEditor();
 
   // Remember whether we restored from auto-save so we can preserve the modified flag
   const wasRestoredFromAutoSave = restoredFromAutoSave;
@@ -761,43 +662,33 @@ async function openSiteInEditor(site, initialPage = "index") {
     // Position the editor body below the topbar
     positionEditorBody();
 
-    // Blog sites don't use the sidebar/page-selection model — initBlogEditor
-    // already rendered the post-list UI. Calling selectSidebarPage here
-    // would invoke loadPageIntoBlockEditor and clobber the blog editor with
-    // the block (pages) editor.
-    if (currentSiteType !== "blog") {
-      const fileName = `public/${initialPage}.md`;
-      const cacheItem = markdownCache.find(c =>
-        c.fileName === fileName ||
-        c.displayName.toLowerCase() === initialPage.toLowerCase()
-      );
+    const fileName = `public/${initialPage}.md`;
+    const cacheItem = markdownCache.find(c =>
+      c.fileName === fileName ||
+      c.displayName.toLowerCase() === initialPage.toLowerCase()
+    );
 
-      if (cacheItem) {
-        console.log("Opening page:", cacheItem.displayName);
-        selectSidebarPage(cacheItem.fileName);
-        if (!wasRestoredFromAutoSave) {
-          modified = false;
-        }
-      } else if (markdownCache.length > 0) {
-        console.log("Page not found:", initialPage, "- opening first page");
-        selectSidebarPage(markdownCache[0].fileName);
-        if (!wasRestoredFromAutoSave) {
-          modified = false;
-        }
+    if (cacheItem) {
+      console.log("Opening page:", cacheItem.displayName);
+      selectSidebarPage(cacheItem.fileName);
+      if (!wasRestoredFromAutoSave) {
+        modified = false;
       }
-    } else if (!wasRestoredFromAutoSave) {
-      modified = false;
+    } else if (markdownCache.length > 0) {
+      console.log("Page not found:", initialPage, "- opening first page");
+      selectSidebarPage(markdownCache[0].fileName);
+      if (!wasRestoredFromAutoSave) {
+        modified = false;
+      }
     }
 
     // After initial load, sync the deploy button state
     updateDeployButtonState();
 
     // Start polling history.json for upstream commits
-    if (site.siteType !== "blog") {
-      initConflictPolling(currentSiteId).catch(err =>
-        console.error("Failed to start conflict polling:", err)
-      );
-    }
+    initConflictPolling(currentSiteId).catch(err =>
+      console.error("Failed to start conflict polling:", err)
+    );
 
     // Start onboarding tour after editor is fully rendered
     setTimeout(() => startOnboardingTour(), 500);
@@ -1060,17 +951,11 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Reset the create-site modal each time it's shown.
   $("#createSiteModal").on("show.bs.modal", function () {
     document.getElementById("siteName").value = "";
-    document.getElementById("siteType").value = "pages";
     const sourceField = document.getElementById("siteSource");
     if (sourceField) sourceField.value = "scratch";
     document.querySelectorAll(".site-type-card").forEach(function(c) { c.classList.remove("selected"); });
-    const defaultCard = document.querySelector('.site-type-card[data-value="pages"]');
-    if (defaultCard) defaultCard.classList.add("selected");
     const defaultSourceCard = document.querySelector('.site-type-card[data-source="scratch"]');
     if (defaultSourceCard) defaultSourceCard.classList.add("selected");
-    // Pages is the default, so make sure the starting-content group is visible.
-    const sourceGroup = document.getElementById("siteSourceGroup");
-    if (sourceGroup) sourceGroup.style.display = "";
   });
 
   // Handle create site form submission
@@ -1089,7 +974,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       try {
         const rawSiteName = document.getElementById("siteName").value.trim();
-        const siteType = document.getElementById("siteType").value;
         const sourceField = document.getElementById("siteSource");
         const siteSource = sourceField ? sourceField.value : "scratch";
 
@@ -1116,9 +1000,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         // Branch: import flow opens the dropzone modal, scratch flow creates immediately.
-        if (siteType === "pages" && siteSource === "import") {
+        if (siteSource === "import") {
           $("#createSiteModal").modal("hide");
-          openImportFolderModal({ rawSiteName, sanitized, owner, siteType });
+          openImportFolderModal({ rawSiteName, sanitized, owner });
           return;
         }
 
@@ -1126,7 +1010,6 @@ document.addEventListener("DOMContentLoaded", async function () {
           rawSiteName,
           sanitized,
           owner,
-          siteType,
           importedPages: null,
         });
       } catch (error) {
@@ -1172,7 +1055,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Shared site-creation pipeline used by both the "create from scratch" and
   // "import from folder" flows. importedPages is null for scratch.
-  async function createNewSite({ rawSiteName, sanitized, owner, siteType, importedPages }) {
+  async function createNewSite({ rawSiteName, sanitized, owner, importedPages }) {
     console.log("Creating new site:", sanitized);
 
     const repo = sanitized;
@@ -1184,7 +1067,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       body: JSON.stringify({
         repo: repo,
         displayName: rawSiteName,
-        siteType: siteType,
       }),
     });
 
@@ -1214,7 +1096,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       siteName: sanitized,
       repo,
       owner,
-      siteType,
       importedPages,
     });
 
@@ -1223,7 +1104,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       owner: owner,
       repo: repo,
       displayName: rawSiteName,
-      siteType: siteType,
     });
 
     $("#createSiteModal").modal("hide");
@@ -1565,14 +1445,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.getElementById("showHistoryCheckbox").checked = false;
       }
 
-      // Show/hide edit history option based on site type
-      const showHistoryGroup = document.getElementById("showHistoryCheckbox").closest(".form-group");
-      if (currentSiteType === "blog") {
-        showHistoryGroup.style.display = "none";
-      } else {
-        showHistoryGroup.style.display = "";
-      }
-
       // Show modal with loading state
       const collaboratorsList = document.getElementById("collaboratorsList");
       collaboratorsList.innerHTML = "<p style='color: #888;'>Loading collaborators...</p>";
@@ -1668,10 +1540,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         const showHistory = document.getElementById("showHistoryCheckbox").checked;
         siteJson.showHistory = showHistory;
 
-        // Email-subscription feature was removed; clear any legacy
-        // blogEmailUrl from existing site.json on next save.
-        delete siteJson.blogEmailUrl;
-
         // Update site display name
         const newDisplayName = document.getElementById("siteSettingsNameInput").value.trim();
         if (newDisplayName) {
@@ -1694,15 +1562,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Close modal
         $("#siteSettingsModal").modal("hide");
 
-        // For blog sites, auto-deploy; for pages sites, mark as modified
-        if (currentSiteType === "blog") {
-          await autoPublishBlogSettings();
-          showAlertBar("Settings saved and published. Changes can take up to 5 minutes to appear.", true);
-        } else {
-          modified = true;
-          updateDeployButtonState();
-          showAlertBar("Settings saved. Deploy to apply changes.", true);
-        }
+        modified = true;
+        updateDeployButtonState();
+        showAlertBar("Settings saved. Deploy to apply changes.", true);
       } catch (error) {
         console.error("Error saving site settings:", error);
         showAlertBar("Failed to save settings: " + error.message, false);
@@ -1783,24 +1645,24 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         }
 
-        // Fetch and include the correct template files based on site type
+        // Fetch and include the template files (owo-template + the
+        // wikilinks/math shell-asset scripts).
         try {
-          const templateName = currentSiteType === "blog" ? "blog-template" : "owo-template";
           const [cssResponse, jsResponse, wikilinksResponse, mathResponse] = await Promise.all([
-            fetch(`/_templates/${templateName}.css`),
-            fetch(`/_templates/${templateName}.js`),
+            fetch(`/_templates/owo-template.css`),
+            fetch(`/_templates/owo-template.js`),
             fetch(`/_assets/wikilinks.js`),
             fetch(`/_assets/math.js`),
           ]);
 
           if (cssResponse.ok) {
             const cssContent = await cssResponse.text();
-            zip.file(`public/_templates/${templateName}.css`, cssContent);
+            zip.file(`public/_templates/owo-template.css`, cssContent);
           }
 
           if (jsResponse.ok) {
             const jsContent = await jsResponse.text();
-            zip.file(`public/_templates/${templateName}.js`, jsContent);
+            zip.file(`public/_templates/owo-template.js`, jsContent);
           }
 
           // wikilinks.js / math.js are loaded as <script defer src="/_assets/...">
@@ -1817,7 +1679,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             zip.file(`public/_assets/math.js`, mathContent);
           }
 
-          console.log(`Added ${templateName} template files and shell assets to ZIP`);
+          console.log("Added template files and shell assets to ZIP");
         } catch (templateError) {
           console.error("Error fetching template files:", templateError);
           // Continue without templates - not critical
@@ -3274,7 +3136,7 @@ function scoreEditorSearchHits(publishedIndex, q) {
   // current editing session, including unpublished renames/new pages.
   for (const item of (markdownCache || [])) {
     const fn = item && item.fileName;
-    if (!fn || fn === "public/latest.md") continue;
+    if (!fn) continue;
     const slug = fn.replace(/^public\//, "").replace(/\.md$/, "");
     const display = item.displayName || slug;
     const hay = display.toLocaleLowerCase();
@@ -3795,24 +3657,23 @@ document.addEventListener("DOMContentLoaded", function() {
             }
           }
 
-          // Fetch and include the correct template files for each site
+          // Fetch and include the template files for each site.
           try {
-            const templateName = site.config.siteType === "blog" ? "blog-template" : "owo-template";
             const [cssResponse, jsResponse, wikilinksResponse, mathResponse] = await Promise.all([
-              fetch(`/_templates/${templateName}.css`),
-              fetch(`/_templates/${templateName}.js`),
+              fetch(`/_templates/owo-template.css`),
+              fetch(`/_templates/owo-template.js`),
               fetch(`/_assets/wikilinks.js`),
               fetch(`/_assets/math.js`),
             ]);
 
             if (cssResponse.ok) {
               const cssContent = await cssResponse.text();
-              zip.file(`${siteFolderName}/public/_templates/${templateName}.css`, cssContent);
+              zip.file(`${siteFolderName}/public/_templates/owo-template.css`, cssContent);
             }
 
             if (jsResponse.ok) {
               const jsContent = await jsResponse.text();
-              zip.file(`${siteFolderName}/public/_templates/${templateName}.js`, jsContent);
+              zip.file(`${siteFolderName}/public/_templates/owo-template.js`, jsContent);
             }
 
             if (wikilinksResponse.ok) {

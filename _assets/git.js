@@ -867,54 +867,28 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       await gitWriteFile(siteId, item.fileName, item.content);
     }
 
-    // Write pages.json (exclude latest.md). For blog sites use the batched
-    // shape so the git working copy matches what the publish flow uploads
-    // to R2 — keeps git diffs meaningful.
-    const pages = markdownCache
-      .filter(item => item.fileName !== "public/latest.md")
-      .map((item) => {
-        const fileName = item.fileName.replace("public/", "").replace(".md", "");
-        const entry = {
-          displayName: item.displayName,
-          fileName: fileName,
-          createdAt: item.createdAt || new Date().toISOString(),
-          modifiedAt: item.modifiedAt || new Date().toISOString(),
-        };
-        if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
-        return entry;
-      });
-    const isBlog = typeof currentSiteType !== "undefined" && currentSiteType === "blog";
+    // Write pages.json (flat array of `{ fileName, displayName, ... }`).
+    const pages = markdownCache.map((item) => {
+      const fileName = item.fileName.replace("public/", "").replace(".md", "");
+      const entry = {
+        displayName: item.displayName,
+        fileName: fileName,
+        createdAt: item.createdAt || new Date().toISOString(),
+        modifiedAt: item.modifiedAt || new Date().toISOString(),
+      };
+      if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
+      return entry;
+    });
     const pagesJsonContent = (typeof buildPagesJsonContent === "function")
-      ? buildPagesJsonContent(pages, isBlog)
+      ? buildPagesJsonContent(pages)
       : JSON.stringify(pages);
     await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
 
-    // Blog sites: also keep the tags.json inverted index in sync. Pages
-    // sites have no tag concept and skip this file entirely. Incremental:
-    // we read the previous tags.json from the git working tree and reuse
-    // its classifications so we don't reparse every post on every save.
-    // (The published copy is authoritative — deployChanges/deployBlogPost
-    // pass a `dirty` set there to catch tag edits.)
-    if (isBlog && typeof buildTagsJsonContent === "function") {
-      let prevTags = { tags: {}, noTags: [] };
-      if (typeof parseTagsJson === "function") {
-        try {
-          const prevText = await gitReadFile(siteId, "public/tags.json");
-          prevTags = parseTagsJson(prevText);
-        } catch (_) { /* file not in tree yet */ }
-      }
-      await gitWriteFile(
-        siteId,
-        "public/tags.json",
-        buildTagsJsonContent(markdownCache, prevTags)
-      );
-    }
-
-    // Pages sites: keep search-index.json in sync with the cache. Same
-    // incremental pattern as tags.json above — reuse the previous index
-    // from the git working tree so we don't reparse pages whose body
-    // hasn't changed (and don't penalise lazy-loaded metadata-only stubs).
-    if (!isBlog && typeof buildSearchIndexContent === "function") {
+    // Keep search-index.json in sync with the cache. Incremental: reuse
+    // the previous index from the git working tree so we don't reparse
+    // pages whose body hasn't changed (and don't penalise lazy-loaded
+    // metadata-only stubs).
+    if (typeof buildSearchIndexContent === "function") {
       let prevSearch = { pages: {} };
       if (typeof parseSearchIndexJson === "function") {
         try {
@@ -1014,11 +988,8 @@ async function loadR2ToGit(siteId) {
       await gitWriteFile(siteId, "public/pages.json", pagesJson);
 
       // Load all page files in parallel, then write to git sequentially.
-      // Blog sites store pages.json as a batched object, so flatten first.
       const parsedPages = JSON.parse(pagesJson);
-      const pages = (typeof flattenPagesJson === "function")
-        ? flattenPagesJson(parsedPages)
-        : (Array.isArray(parsedPages) ? parsedPages : []);
+      const pages = Array.isArray(parsedPages) ? parsedPages : [];
       const pageContents = await Promise.all(
         pages.map(async (page) => ({
           fileName: page.fileName,

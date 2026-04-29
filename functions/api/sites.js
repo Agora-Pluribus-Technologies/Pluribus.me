@@ -16,7 +16,7 @@ export async function onRequestPost(context) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { repo, siteType } = data;
+  const { repo } = data;
   // Use session username as owner, ignore client-provided owner
   const owner = sessionUsername;
   const siteId = `${owner}/${repo}`;
@@ -33,8 +33,6 @@ export async function onRequestPost(context) {
   if (!/^[\p{L}\p{N}/_-]+$/u.test(siteId)) {
     return new Response("Invalid site ID", { status: 400 });
   }
-
-  const validSiteType = siteType === "blog" ? "blog" : "pages";
 
   try {
     // Per-user site cap. COUNT(*) on the indexed LOWER(owner) column
@@ -60,16 +58,9 @@ export async function onRequestPost(context) {
       return new Response("Site ID already exists", { status: 409 });
     }
 
-    try {
-      await env.USERS_DB.prepare(
-        "INSERT INTO Sites (siteId, owner, repo, siteType) VALUES (?, ?, ?, ?)"
-      ).bind(siteId, owner, repo, validSiteType).run();
-    } catch (dbError) {
-      console.log("siteType column may not exist, falling back to basic insert");
-      await env.USERS_DB.prepare(
-        "INSERT INTO Sites (siteId, owner, repo) VALUES (?, ?, ?)"
-      ).bind(siteId, owner, repo).run();
-    }
+    await env.USERS_DB.prepare(
+      "INSERT INTO Sites (siteId, owner, repo) VALUES (?, ?, ?)"
+    ).bind(siteId, owner, repo).run();
 
     return new Response("Created", { status: 201 });
   } catch (error) {
@@ -90,12 +81,11 @@ export async function onRequestGet(context) {
     if (siteIdEncoded) {
       const siteId = decodeURIComponent(siteIdEncoded);
       const site = await env.USERS_DB.prepare(
-        "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE siteId = ?"
+        "SELECT siteId, owner, repo, displayName FROM Sites WHERE siteId = ?"
       ).bind(siteId).first();
 
       if (site) {
         site.displayName = site.displayName || site.repo;
-        site.siteType = site.siteType || "pages";
         return new Response(JSON.stringify(site), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -107,7 +97,7 @@ export async function onRequestGet(context) {
 
     // List user's own sites
     const ownResult = await env.USERS_DB.prepare(
-      "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE LOWER(owner) = LOWER(?)"
+      "SELECT siteId, owner, repo, displayName FROM Sites WHERE LOWER(owner) = LOWER(?)"
     ).bind(sessionUsername).all();
     let sites = ownResult.results || [];
 
@@ -120,7 +110,7 @@ export async function onRequestGet(context) {
     for (const collabSiteId of collabSiteIds) {
       if (!sites.some(s => s.siteId === collabSiteId)) {
         const collabSite = await env.USERS_DB.prepare(
-          "SELECT siteId, owner, repo, siteType, displayName FROM Sites WHERE siteId = ?"
+          "SELECT siteId, owner, repo, displayName FROM Sites WHERE siteId = ?"
         ).bind(collabSiteId).first();
         if (collabSite) {
           sites.push(collabSite);
@@ -131,7 +121,6 @@ export async function onRequestGet(context) {
     sites = sites.map(site => ({
       ...site,
       displayName: site.displayName || site.repo,
-      siteType: site.siteType || "pages",
     }));
 
     return new Response(JSON.stringify(sites), {

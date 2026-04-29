@@ -348,205 +348,11 @@ function guessContentType(filename) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
-// Public shape of pages.json for blog sites: posts grouped into batches of
-// PAGES_JSON_BATCH_SIZE (newest first by modifiedAt) so the blog template
-// can lazy-load one batch at a time as the reader paginates rather than
-// fetching every post on first load.
-const PAGES_JSON_BATCH_SIZE = 10;
-
-// Build the JSON string written to public/pages.json. Pages sites stay on
-// the legacy flat-array shape (the editor's pages-side code knows nothing
-// about blogs). Blog sites get the batched object shape; blog templates
-// detect it via `blog: true` and walk batches sequentially.
-function buildPagesJsonContent(pages, isBlog) {
+// Build the JSON string written to public/pages.json. Pages sites use a
+// flat array of `{ fileName, displayName, ... }` entries.
+function buildPagesJsonContent(pages) {
   if (!Array.isArray(pages)) return JSON.stringify(pages || []);
-  if (!isBlog) return JSON.stringify(pages);
-
-  // Sort by frontmatter date (author-supplied) so the published blog feed
-  // doesn't reshuffle when an old post is edited. Falls back to modifiedAt
-  // and createdAt when an entry has no parsed date.
-  const sorted = pages.slice().sort((a, b) => {
-    const ad = new Date(a.date || a.modifiedAt || a.createdAt || 0).getTime();
-    const bd = new Date(b.date || b.modifiedAt || b.createdAt || 0).getTime();
-    return bd - ad; // newest first
-  });
-  const batches = [];
-  for (let i = 0; i < sorted.length; i += PAGES_JSON_BATCH_SIZE) {
-    batches.push(sorted.slice(i, i + PAGES_JSON_BATCH_SIZE));
-  }
-  return JSON.stringify({
-    blog: true,
-    totalPosts: sorted.length,
-    perBatch: PAGES_JSON_BATCH_SIZE,
-    batches,
-  });
-}
-
-// Inverse of buildPagesJsonContent: accept either shape and return a flat
-// array of page entries. Used by the editor on load (markdownCache stays
-// flat regardless of how the on-disk file is structured).
-function flattenPagesJson(parsed) {
-  if (Array.isArray(parsed)) return parsed;
-  if (parsed && Array.isArray(parsed.batches)) {
-    const out = [];
-    for (const batch of parsed.batches) {
-      if (Array.isArray(batch)) out.push.apply(out, batch);
-    }
-    return out;
-  }
-  return [];
-}
-
-// Pull out the post-date from a blog post's YAML frontmatter (`date: ...`).
-// Returns null when no frontmatter or no date field. Used by the publish
-// flow so blog posts in pages.json are sorted by author-supplied date
-// instead of by file modifiedAt — editing an old post shouldn't reorder
-// the blog feed.
-function extractFrontmatterDate(markdown) {
-  if (!markdown || typeof markdown !== "string") return null;
-  const fm = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!fm) return null;
-  const dateLine = fm[1].match(/^date:[ \t]*(.+?)[ \t]*$/m);
-  if (!dateLine) return null;
-  const raw = dateLine[1].replace(/^['"]|['"]$/g, "").trim();
-  return raw || null;
-}
-
-// Pull out the tag list from a post's YAML frontmatter. Accepts both the
-// hashtag form (`tags: #obsidian #ml`) and the legacy comma form
-// (`tags: obsidian, ml`). Returns [] when no frontmatter or no tags field.
-function extractFrontmatterTags(markdown) {
-  if (!markdown || typeof markdown !== "string") return [];
-  const fm = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!fm) return [];
-  const tagsLine = fm[1].match(/^tags:[ \t]*(.+)$/m);
-  if (!tagsLine) return [];
-  const raw = tagsLine[1].trim();
-  let tags;
-  if (raw.indexOf("#") >= 0) {
-    tags = raw.split(/\s+/).map(t => t.replace(/^#/, "").trim());
-  } else {
-    tags = raw.split(",").map(t => t.trim());
-  }
-  return tags.filter(Boolean);
-}
-
-// Parse an existing tags.json string into the canonical shape. Tolerates
-// missing/malformed input by returning an empty index. Used by the
-// incremental update path so we don't have to re-parse posts that were
-// already classified on a previous publish.
-function parseTagsJson(text) {
-  if (!text || typeof text !== "string") return { tags: {}, noTags: [] };
-  let parsed;
-  try { parsed = JSON.parse(text); } catch { return { tags: {}, noTags: [] }; }
-  const tags = (parsed && parsed.tags && typeof parsed.tags === "object") ? parsed.tags : {};
-  const noTags = Array.isArray(parsed && parsed.noTags) ? parsed.noTags : [];
-  return { tags, noTags };
-}
-
-// Inverted-index of tag -> [post slug, ...] for blog sites, plus a
-// no-tags list of slugs known to have no tags at all. Schema:
-//
-//   {
-//     "tags":   { "obsidian": ["vault-thoughts", ...], ... },
-//     "noTags": ["welcome", "about-me", ...]
-//   }
-//
-// Generation strategy is INCREMENTAL: posts already classified on a
-// previous publish (either in some tag bucket or in noTags) are reused
-// verbatim and their frontmatter is NOT re-parsed. Only:
-//   - Slugs not previously classified, AND
-//   - Slugs explicitly marked dirty (via the `dirty` Set of bare slugs)
-// get their frontmatter walked. Slugs that no longer appear in
-// `cacheItems` are garbage-collected from both the index and noTags.
-//
-// `cacheItems`  array of { fileName, content }; fileName is the
-//               `public/<slug>.md` form used by markdownCache.
-// `previous`    optional { tags, noTags } from the prior tags.json
-//               (parse it via parseTagsJson). Defaults to empty, which
-//               means a full rebuild — used by the initial-commit path.
-// `dirty`       optional Set of bare slugs (no `public/`, no `.md`) that
-//               must be re-parsed even if they were previously classified.
-//               Used by deploy paths so a post whose tags just changed
-//               gets reflected in the index.
-function buildTagsJsonContent(cacheItems, previous, dirty) {
-  const prev = previous || { tags: {}, noTags: [] };
-  const dirtySet = (dirty instanceof Set) ? dirty : new Set();
-
-  // Seed from the previous index — copy so we don't mutate the caller's data.
-  const index = {};
-  for (const [tag, slugs] of Object.entries(prev.tags || {})) {
-    index[tag] = Array.isArray(slugs) ? slugs.slice() : [];
-  }
-  const noTags = new Set(Array.isArray(prev.noTags) ? prev.noTags : []);
-
-  // Build a "we already know about this slug" lookup.
-  const knownSlugs = new Set(noTags);
-  for (const slugs of Object.values(index)) {
-    for (const slug of slugs) knownSlugs.add(slug);
-  }
-
-  if (!Array.isArray(cacheItems)) {
-    return JSON.stringify({ tags: index, noTags: Array.from(noTags).sort() });
-  }
-
-  // Track every slug that's still alive in this cache so we can GC removed
-  // posts at the end.
-  const liveSlugs = new Set();
-
-  for (const item of cacheItems) {
-    const fn = (item && item.fileName) || "";
-    if (!fn) continue;
-    const slug = fn.replace(/^public\//, "").replace(/\.md$/, "");
-    if (!slug || slug === "latest") continue;
-    liveSlugs.add(slug);
-
-    const isKnown = knownSlugs.has(slug);
-    const isDirty = dirtySet.has(slug);
-    if (isKnown && !isDirty) continue; // already classified, skip parse
-
-    // Re-parse: drop any prior classification before re-adding under the
-    // current tags.
-    if (isKnown) {
-      for (const tag of Object.keys(index)) {
-        const i = index[tag].indexOf(slug);
-        if (i >= 0) index[tag].splice(i, 1);
-      }
-      noTags.delete(slug);
-    }
-
-    const tags = extractFrontmatterTags(item.content || "");
-    if (tags.length === 0) {
-      noTags.add(slug);
-    } else {
-      for (const tag of tags) {
-        if (!tag) continue;
-        if (!index[tag]) index[tag] = [];
-        if (index[tag].indexOf(slug) < 0) index[tag].push(slug);
-      }
-    }
-  }
-
-  // GC: drop slugs that no longer exist in cacheItems.
-  for (const tag of Object.keys(index)) {
-    index[tag] = index[tag].filter(slug => liveSlugs.has(slug));
-    if (index[tag].length === 0) {
-      delete index[tag];
-    } else {
-      // Stable alphabetical order so git diffs stay readable; the blog
-      // template re-sorts newest-first using pages.json modifiedAt at
-      // render time.
-      index[tag].sort();
-    }
-  }
-  for (const slug of Array.from(noTags)) {
-    if (!liveSlugs.has(slug)) noTags.delete(slug);
-  }
-
-  return JSON.stringify({
-    tags: index,
-    noTags: Array.from(noTags).sort(),
-  });
+  return JSON.stringify(pages);
 }
 
 // Strip common inline markdown so the stored heading text matches what
@@ -634,7 +440,7 @@ function parseSearchIndexJson(text) {
 //     }
 //   }
 //
-// Generation strategy mirrors buildTagsJsonContent — INCREMENTAL: a slug
+// INCREMENTAL generation: a slug
 // already present in `previous.pages` is reused verbatim unless it appears
 // in `dirty` (the set of slugs changed in this commit). This keeps publish
 // fast even when most pages are lazy-loaded metadata-only stubs in the
@@ -710,8 +516,7 @@ function buildSearchIndexContent(cacheItems, previous, dirty) {
 
 // Combined initial commit with git history - single R2 call
 async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
-  const { siteName, repo, owner, siteType, importedPages } = siteSettings;
-  const isBlog = siteType === "blog";
+  const { siteName, repo, owner, importedPages } = siteSettings;
   // images.json is the editor's per-site image manifest. New sites start
   // empty — folder import no longer produces image attachments (CSAM
   // policy: AgoraPages does not host user-uploaded image bytes).
@@ -721,14 +526,13 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     siteName: siteName || repo || "Untitled Site",
     repo: repo || siteId.split("/")[1] || "",
     owner: owner || siteId.split("/")[0] || "",
-    siteType: siteType || "pages",
     createdAt: new Date().toISOString(),
-    ...(isBlog ? {} : { showHistory: true }),
+    showHistory: true,
   };
 
   // Imported-folder flow: caller passes already-parsed pages from a vault.
   // Skip the default Home page and seed pages.json from the import instead.
-  const hasImport = !isBlog && Array.isArray(importedPages) && importedPages.length > 0;
+  const hasImport = Array.isArray(importedPages) && importedPages.length > 0;
 
   const defaultHomeContent = "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above.";
   const now = new Date().toISOString();
@@ -756,9 +560,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   }
 
   let pagesJson;
-  if (isBlog) {
-    pagesJson = [];
-  } else if (hasImport) {
+  if (hasImport) {
     pagesJson = pagesToWrite.map(p => ({
       displayName: p.displayName,
       fileName: p.fileName,
@@ -776,33 +578,18 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
 
   // Initialize git repository and create initial commit with content
   await gitInit(siteId);
-  const pagesJsonContent = buildPagesJsonContent(pagesJson, isBlog);
-  // Blog sites also seed a tags.json inverted index. Pages sites have no
-  // tag concept, so this stays null and the file is never written.
-  const tagsJsonContent = isBlog
-    ? buildTagsJsonContent(
-        (Array.isArray(importedPages) ? importedPages : []).map(p => ({
-          fileName: `public/${p.fileName}.md`,
-          content: p.content,
-        }))
-      )
-    : null;
-  // Pages sites also seed search-index.json (per-page title + headings)
-  // so the first publish has a usable sidebar search; blog sites skip it.
-  const searchIndexContent = !isBlog
-    ? buildSearchIndexContent(
-        (Array.isArray(pagesToWrite) ? pagesToWrite : []).map(p => ({
-          fileName: `public/${p.fileName}.md`,
-          displayName: p.displayName,
-          content: p.content,
-        }))
-      )
-    : null;
+  const pagesJsonContent = buildPagesJsonContent(pagesJson);
+  // Seed search-index.json (per-page title + headings) so the first
+  // publish has a usable sidebar search.
+  const searchIndexContent = buildSearchIndexContent(
+    (Array.isArray(pagesToWrite) ? pagesToWrite : []).map(p => ({
+      fileName: `public/${p.fileName}.md`,
+      displayName: p.displayName,
+      content: p.content,
+    }))
+  );
   await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
   await gitWriteFile(siteId, "public/images.json", imagesManifest);
-  if (tagsJsonContent != null) {
-    await gitWriteFile(siteId, "public/tags.json", tagsJsonContent);
-  }
   if (searchIndexContent != null) {
     await gitWriteFile(siteId, "public/search-index.json", searchIndexContent);
   }
@@ -810,7 +597,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     for (const page of pagesToWrite) {
       await gitWriteFile(siteId, `public/${page.fileName}.md`, page.content);
     }
-  } else if (!isBlog) {
+  } else {
     await gitWriteFile(siteId, "public/home.md", defaultHomeContent);
   }
   await gitCommit(siteId, hasImport ? "Initial import" : "Initial commit");
@@ -870,14 +657,6 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     },
   ];
 
-  if (tagsJsonContent != null) {
-    files.push({
-      filePath: "public/tags.json",
-      content: tagsJsonContent,
-      contentType: "application/json",
-    });
-  }
-
   if (searchIndexContent != null) {
     files.push({
       filePath: "public/search-index.json",
@@ -896,7 +675,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
         contentType: "text/markdown",
       });
     }
-  } else if (!isBlog) {
+  } else {
     files.push({
       filePath: "public/home.md",
       content: defaultHomeContent,
@@ -904,12 +683,12 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     });
   }
 
-  // Build wikilinks.json (backlink index) for pages sites — at deploy-time
-  // this is regenerated from markdownCache, but on initial import the
-  // editor hasn't loaded the cache yet, so seed it from the pages we're
-  // about to write. Without this the imported site's "Links to this page"
+  // Build wikilinks.json (backlink index). At deploy-time this is
+  // regenerated from markdownCache, but on initial import the editor
+  // hasn't loaded the cache yet, so seed it from the pages we're about
+  // to write. Without this the imported site's "Links to this page"
   // sections stay empty until the user re-publishes.
-  if (!isBlog && hasImport && typeof AgoraWikilinks !== "undefined") {
+  if (hasImport && typeof AgoraWikilinks !== "undefined") {
     try {
       const indexablePages = pagesToWrite.map(p => ({
         fileName: p.fileName,
@@ -956,7 +735,8 @@ async function getPublicFiles(siteId) {
   }
 
   try {
-    const pages = flattenPagesJson(JSON.parse(pagesJson));
+    const pages = JSON.parse(pagesJson);
+    if (!Array.isArray(pages)) return [];
     return pages.map(page => `public/${page.fileName}.md`);
   } catch {
     return [];
@@ -1000,7 +780,6 @@ async function deployChanges(siteId) {
 
   // SPA shells (.html) are served by the worker from inlined templates;
   // the publish flow no longer fetches or writes them.
-  const isBlogSite = currentSiteType === "blog";
 
   const files = [];
 
@@ -1028,14 +807,12 @@ async function deployChanges(siteId) {
     for (const cacheItem of markdownCache) changedMd.add(cacheItem.fileName);
   }
 
-  // Pages sites lazy-load post bodies into markdownCache as the user
-  // browses. Before deploy we only need to fetch the subset that could
-  // affect the wikilinks.json backlink index — sources from the previous
-  // index plus anything changed in this commit. Pages with no wikilinks
-  // last publish and no edits this publish stay metadata-only.
-  // (The per-file write loop below only writes pages in changedMd, which
-  // are loaded by this call too, so the write step also has what it needs.)
-  if (!isBlogSite && typeof ensurePagesWithWikilinksLoaded === "function") {
+  // Lazy-load post bodies that the user hasn't opened yet but that could
+  // affect wikilinks.json. Pages with no wikilinks last publish and no
+  // edits this publish stay metadata-only. (The per-file write loop below
+  // only writes pages in changedMd, which are loaded by this call too,
+  // so the write step also has what it needs.)
+  if (typeof ensurePagesWithWikilinksLoaded === "function") {
     await ensurePagesWithWikilinksLoaded(siteId, changedMd);
   }
 
@@ -1046,9 +823,7 @@ async function deployChanges(siteId) {
   // the source.
   for (const deletedFile of deletedMd) {
     console.log("Preparing to delete file:", deletedFile);
-    if (!isBlogSite) {
-      files.push({ filePath: deletedFile.replace(".md", ".html"), action: "delete" });
-    }
+    files.push({ filePath: deletedFile.replace(".md", ".html"), action: "delete" });
     files.push({ filePath: deletedFile, action: "delete" });
   }
 
@@ -1067,95 +842,29 @@ async function deployChanges(siteId) {
       content: cacheItem.content,
       contentType: "text/markdown",
     });
-    if (!isBlogSite) {
-      files.push({
-        filePath: cacheItem.fileName.replace(/\.md$/, ".html"),
-        action: "delete",
-      });
-    }
+    files.push({
+      filePath: cacheItem.fileName.replace(/\.md$/, ".html"),
+      action: "delete",
+    });
   }
 
-  // Update pages.json (exclude latest.md). Blog sites get the batched
-  // shape so the published blog template can lazy-load post batches.
-  const pages = markdownCache
-    .filter(item => item.fileName !== "public/latest.md")
-    .map(item => {
-      const fileName = item.fileName.replace("public/", "").replace(".md", "");
-      const entry = {
-        displayName: item.displayName,
-        fileName: fileName,
-        createdAt: item.createdAt || new Date().toISOString(),
-        modifiedAt: item.modifiedAt || new Date().toISOString(),
-      };
-      if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
-      // Blog posts: surface the author-supplied date so the publish-time
-      // sort orders the feed by post date instead of file modifiedAt.
-      if (isBlogSite) {
-        const d = extractFrontmatterDate(item.content || "");
-        if (d) entry.date = d;
-      }
-      return entry;
-    });
+  // Update pages.json (flat array of `{ fileName, displayName, ... }`).
+  const pages = markdownCache.map(item => {
+    const fileName = item.fileName.replace("public/", "").replace(".md", "");
+    const entry = {
+      displayName: item.displayName,
+      fileName: fileName,
+      createdAt: item.createdAt || new Date().toISOString(),
+      modifiedAt: item.modifiedAt || new Date().toISOString(),
+    };
+    if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
+    return entry;
+  });
   files.push({
     filePath: "public/pages.json",
-    content: buildPagesJsonContent(pages, isBlogSite),
+    content: buildPagesJsonContent(pages),
     contentType: "application/json",
   });
-
-  // Blog sites also republish tags.json (inverted index of tag -> posts)
-  // alongside pages.json so the published blog template can tag-filter
-  // without loading every post body. Updates incrementally: posts already
-  // classified in the previous tags.json are reused verbatim, and only
-  // posts in `dirtyTagSlugs` (the slugs that actually changed in this
-  // commit) get re-parsed.
-  if (isBlogSite) {
-    const prevTagsText = await getFileFromR2(siteId, "public/tags.json");
-    const prevTags = parseTagsJson(prevTagsText);
-    const dirtyTagSlugs = new Set();
-    for (const fp of changedMd) {
-      dirtyTagSlugs.add(fp.replace(/^public\//, "").replace(/\.md$/, ""));
-    }
-    files.push({
-      filePath: "public/tags.json",
-      content: buildTagsJsonContent(markdownCache, prevTags, dirtyTagSlugs),
-      contentType: "application/json",
-    });
-  }
-
-  // Generate latest.md for blog sites (the most recent post by date)
-  if (isBlogSite && markdownCache.length > 0) {
-    let latestItem = null;
-    let latestDate = null;
-
-    for (const item of markdownCache) {
-      let postDate = null;
-      // Try to extract date from frontmatter
-      const frontmatterMatch = item.content.match(/^---\n([\s\S]*?)\n---\n/);
-      if (frontmatterMatch) {
-        const dateMatch = frontmatterMatch[1].match(/^date:\s*(.+)$/m);
-        if (dateMatch) {
-          postDate = new Date(dateMatch[1].trim());
-        }
-      }
-      // Fall back to modifiedAt
-      if (!postDate || isNaN(postDate.getTime())) {
-        postDate = new Date(item.modifiedAt || item.createdAt || 0);
-      }
-
-      if (!latestDate || postDate > latestDate) {
-        latestDate = postDate;
-        latestItem = item;
-      }
-    }
-
-    if (latestItem) {
-      files.push({
-        filePath: "public/latest.md",
-        content: latestItem.content,
-        contentType: "text/markdown",
-      });
-    }
-  }
 
   // Update images.json
   files.push({
@@ -1164,15 +873,13 @@ async function deployChanges(siteId) {
     contentType: "application/json",
   });
 
-  // Update folders.json (folder display names + sort orders) for pages sites
-  if (!isBlogSite) {
-    const safeFolderMeta = (typeof folderMeta === "object" && folderMeta) ? folderMeta : {};
-    files.push({
-      filePath: "public/folders.json",
-      content: JSON.stringify(safeFolderMeta),
-      contentType: "application/json",
-    });
-  }
+  // Update folders.json (folder display names + sort orders)
+  const safeFolderMeta = (typeof folderMeta === "object" && folderMeta) ? folderMeta : {};
+  files.push({
+    filePath: "public/folders.json",
+    content: JSON.stringify(safeFolderMeta),
+    contentType: "application/json",
+  });
 
   // Generate history.json from git log
   const historyJson = await generateHistoryJson(siteId);
@@ -1182,12 +889,12 @@ async function deployChanges(siteId) {
     contentType: "application/json",
   });
 
-  // Pages sites: republish search-index.json (per-page title + headings).
-  // Incremental — slugs already classified in the previous index are reused
-  // verbatim and only slugs in `dirtySlugs` (the ones that actually changed
-  // in this commit) get re-parsed. Stays consistent with the lazy-load
+  // Republish search-index.json (per-page title + headings). Incremental
+  // — slugs already classified in the previous index are reused verbatim
+  // and only slugs in `dirtySlugs` (the ones that actually changed in
+  // this commit) get re-parsed. Stays consistent with the lazy-load
   // strategy: pages still in metadata-only form keep their previous entry.
-  if (!isBlogSite) {
+  {
     const prevSearchText = await getFileFromR2(siteId, "public/search-index.json");
     const prevSearch = parseSearchIndexJson(prevSearchText);
     const dirtySlugs = new Set();
@@ -1201,15 +908,13 @@ async function deployChanges(siteId) {
     });
   }
 
-  // Generate wikilinks.json (backlink index) for pages sites
-  if (!isBlogSite && typeof AgoraWikilinks !== "undefined") {
+  // Generate wikilinks.json (backlink index)
+  if (typeof AgoraWikilinks !== "undefined") {
     try {
-      const indexablePages = markdownCache
-        .filter(c => c.fileName !== "public/latest.md")
-        .map(c => ({
-          fileName: c.fileName.replace(/^public\//, "").replace(/\.md$/, ""),
-          displayName: c.displayName || c.fileName,
-        }));
+      const indexablePages = markdownCache.map(c => ({
+        fileName: c.fileName.replace(/^public\//, "").replace(/\.md$/, ""),
+        displayName: c.displayName || c.fileName,
+      }));
       const contentByFileName = new Map(
         markdownCache.map(c => [
           c.fileName.replace(/^public\//, "").replace(/\.md$/, ""),
@@ -1271,156 +976,6 @@ async function deployChanges(siteId) {
   }
 
   return true;
-}
-
-// Deploy only a single changed blog post plus essential metadata
-// changedPost: { fileName, content?, oldFileName?, action? }
-async function deployBlogPost(siteId, changedPost) {
-  modified = false;
-  updateDeployButtonState();
-
-  const files = [];
-
-  // Handle the changed post
-  if (changedPost.action === 'delete') {
-    files.push({ filePath: changedPost.fileName, action: "delete" });
-  } else {
-    // Add or update the post
-    files.push({
-      filePath: changedPost.fileName,
-      content: changedPost.content,
-      contentType: "text/markdown",
-    });
-    // If renamed, delete the old file
-    if (changedPost.oldFileName) {
-      files.push({ filePath: changedPost.oldFileName, action: "delete" });
-    }
-  }
-
-  // Always update pages.json (exclude latest.md). deployBlogPost is only
-  // called for blog sites, so always emit the batched shape and surface
-  // the frontmatter `date` so feed order tracks post date, not modifiedAt.
-  const pages = markdownCache
-    .filter(item => item.fileName !== "public/latest.md")
-    .map(item => {
-      const fileName = item.fileName.replace("public/", "").replace(".md", "");
-      const entry = {
-        displayName: item.displayName,
-        fileName: fileName,
-        createdAt: item.createdAt || new Date().toISOString(),
-        modifiedAt: item.modifiedAt || new Date().toISOString(),
-      };
-      if (item.sortOrder != null) entry.sortOrder = item.sortOrder;
-      const d = extractFrontmatterDate(item.content || "");
-      if (d) entry.date = d;
-      return entry;
-    });
-  files.push({
-    filePath: "public/pages.json",
-    content: buildPagesJsonContent(pages, true),
-    contentType: "application/json",
-  });
-
-  // Republish tags.json (inverted index) so the tag-filter UI in the
-  // published blog template stays in sync with the post's frontmatter.
-  // Incremental: reuse the previous tags.json verbatim and only re-parse
-  // the post(s) actually touched in this deploy.
-  const prevTagsText = await getFileFromR2(siteId, "public/tags.json");
-  const prevTags = parseTagsJson(prevTagsText);
-  const dirtyTagSlugs = new Set();
-  if (changedPost && changedPost.fileName) {
-    dirtyTagSlugs.add(changedPost.fileName.replace(/^public\//, "").replace(/\.md$/, ""));
-  }
-  if (changedPost && changedPost.oldFileName) {
-    // The rename source is now gone — adding it to dirty so the GC step
-    // sees it as not-live and removes any stale classification.
-    dirtyTagSlugs.add(changedPost.oldFileName.replace(/^public\//, "").replace(/\.md$/, ""));
-  }
-  files.push({
-    filePath: "public/tags.json",
-    content: buildTagsJsonContent(markdownCache, prevTags, dirtyTagSlugs),
-    contentType: "application/json",
-  });
-
-  // Generate latest.md (most recent post by date)
-  if (markdownCache.length > 0) {
-    let latestItem = null;
-    let latestDate = null;
-
-    for (const item of markdownCache) {
-      let postDate = null;
-      const frontmatterMatch = item.content.match(/^---\n([\s\S]*?)\n---\n/);
-      if (frontmatterMatch) {
-        const dateMatch = frontmatterMatch[1].match(/^date:\s*(.+)$/m);
-        if (dateMatch) {
-          postDate = new Date(dateMatch[1].trim());
-        }
-      }
-      if (!postDate || isNaN(postDate.getTime())) {
-        postDate = new Date(item.modifiedAt || item.createdAt || 0);
-      }
-
-      if (!latestDate || postDate > latestDate) {
-        latestDate = postDate;
-        latestItem = item;
-      }
-    }
-
-    if (latestItem) {
-      files.push({
-        filePath: "public/latest.md",
-        content: latestItem.content,
-        contentType: "text/markdown",
-      });
-    }
-  }
-
-  // Generate history.json from git log
-  const historyJson = await generateHistoryJson(siteId);
-  files.push({
-    filePath: "public/history.json",
-    content: JSON.stringify(historyJson),
-    contentType: "application/json",
-  });
-
-  // Update site.json
-  try {
-    const siteJsonContent = await gitReadFile(siteId, "public/site.json");
-    if (siteJsonContent) {
-      files.push({
-        filePath: "public/site.json",
-        content: siteJsonContent,
-        contentType: "application/json",
-      });
-    }
-  } catch (error) {
-    console.log("No site.json found in git, skipping");
-  }
-
-  // No index.html write — the worker serves the blog SPA shell from
-  // an inlined constant for any .html (or root) request. Idempotently
-  // queue the legacy index.html for deletion so pre-migration shells
-  // get cleaned up on the next blog publish.
-  files.push({ filePath: "public/index.html", action: "delete" });
-
-  const result = await saveFilesToR2(siteId, files);
-  if (result) {
-    console.log("Blog post deployed to R2");
-    // Mirror the new HEAD SHA into D1 for conflict-resolution polling.
-    try {
-      const recent = await gitLog(siteId, 1);
-      if (recent.length > 0) {
-        await recordLastCommitShortSha(siteId, recent[0].oid.substring(0, 7));
-      }
-    } catch (e) {
-      console.warn("Couldn't record lastCommitShortSha after blog publish:", e);
-    }
-  } else {
-    modified = true;
-    console.error("Failed to deploy blog post to R2");
-  }
-  updateDeployButtonState();
-  return result;
 }
 
 async function createPage(siteId, pageName) {

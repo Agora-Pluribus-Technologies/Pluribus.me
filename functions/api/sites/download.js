@@ -1,5 +1,5 @@
 import { isOwner, forbidden } from "../auth/_authorize.js";
-import { templateForSiteType } from "../../_site-templates.js";
+import { SITE_TEMPLATE_HTML } from "../../_site-templates.js";
 
 // R2 key for each site's cached export bundle. Lives under a TOP-LEVEL
 // `_exports/` prefix — NOT under the site's own prefix — so it is
@@ -19,16 +19,12 @@ function exportBundleR2Key(siteId) {
   return `_exports/${siteId}.json`;
 }
 
-// Files we don't include in the export — they're either:
-//   - regenerated from sources at publish time (the .html shells),
-//   - or copies of files already in the export (latest.md duplicates
-//     the newest blog post).
-// Skipping these halves the per-file GET count on Pages sites and
-// shaves ~10% off blog sites with no functional loss on re-import.
+// Files we don't include in the export — they're regenerated from
+// sources at publish time (the .html shells). Skipping them halves the
+// per-file GET count with no functional loss on re-import.
 function isExportedFile(relativePath) {
   if (!relativePath) return false;
   if (relativePath.endsWith(".html")) return false;
-  if (relativePath === "public/latest.md") return false;
   return true;
 }
 
@@ -52,8 +48,8 @@ function utf8ToBase64(str) {
 // request time. We bake one shell per .md page (plus a root index.html)
 // into the export so the unzipped site is deployable as-is on a static
 // host (Netlify, GitHub Pages, Cloudflare Pages, etc.) without needing
-// the AgoraPages worker to materialize shells. Shells are byte-identical
-// per siteType, so this only adds a few hundred bytes per page.
+// the AgoraPages worker to materialize shells. The shell is byte-
+// identical per page so this only adds a few hundred bytes per page.
 //
 // Layout in the ZIP mirrors what the worker exposes at request time:
 //   public/<slug>.md      <- already in the bundle
@@ -62,9 +58,8 @@ function utf8ToBase64(str) {
 // The frontend ZIP-builder also drops the matching template .css/.js
 // under public/_templates/, so a deploy with `public/` as the publish
 // directory works out of the box.
-function synthesizeShellEntries(mdPaths, siteType) {
-  const shellHtml = templateForSiteType(siteType);
-  const shellBase64 = utf8ToBase64(shellHtml);
+function synthesizeShellEntries(mdPaths) {
+  const shellBase64 = utf8ToBase64(SITE_TEMPLATE_HTML);
   const entries = [];
   const seen = new Set();
 
@@ -81,8 +76,6 @@ function synthesizeShellEntries(mdPaths, siteType) {
   push("public/index.html");
   for (const mdPath of mdPaths) {
     if (!mdPath.startsWith("public/") || !mdPath.endsWith(".md")) continue;
-    // public/latest.md is excluded from the export and isn't a real page
-    if (mdPath === "public/latest.md") continue;
     push(mdPath.slice(0, -3) + ".html");
   }
   return entries;
@@ -140,9 +133,8 @@ async function buildExportBundle(env, siteId, siteConfig) {
 
   // Bake in one .html SPA shell per .md page (plus a root index.html).
   // See synthesizeShellEntries for layout rationale.
-  const siteType = siteConfig.siteType || "pages";
   const mdPaths = files.map(f => f.path).filter(p => p.endsWith(".md"));
-  const shellEntries = synthesizeShellEntries(mdPaths, siteType);
+  const shellEntries = synthesizeShellEntries(mdPaths);
 
   const exportData = {
     site: {
@@ -172,7 +164,7 @@ export async function onRequestGet(context) {
   }
 
   const siteConfig = await env.USERS_DB.prepare(
-    "SELECT siteId, owner, repo, siteType, lastCommitShortSha FROM Sites WHERE siteId = ?"
+    "SELECT siteId, owner, repo, lastCommitShortSha FROM Sites WHERE siteId = ?"
   ).bind(siteId).first();
 
   if (!siteConfig) {
