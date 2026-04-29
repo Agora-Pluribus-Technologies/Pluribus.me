@@ -705,7 +705,22 @@ function renderPosts(container, posts) {
     // Clean up body and convert to HTML
     let bodyText = post.body.replace(/<br\s*\/?>/gi, "").trim();
     const parsedBody = marked.parse(bodyText);
-    const sanitizedBody = DOMPurify.sanitize(parsedBody);
+    // Allow <iframe> in body sanitization so users can paste raw iframe
+    // HTML directly into post bodies (the new embed syntax). The legacy
+    // `language-embed` code-block path in processEmbeds still works for
+    // backwards compatibility.
+    let sanitizedBody = DOMPurify.sanitize(parsedBody, {
+      ADD_TAGS: ["iframe"],
+      ADD_ATTR: [
+        "allow", "allowfullscreen", "frameborder", "referrerpolicy",
+        "scrolling", "src", "width", "height", "sandbox",
+      ],
+      FORBID_TAGS: ["script", "style"],
+      FORBID_ATTR: ["onerror", "onload"],
+    });
+    // Force our enforced sandbox onto every iframe BEFORE the HTML
+    // enters the DOM — see injectIframeSandbox docs.
+    sanitizedBody = injectIframeSandbox(sanitizedBody);
     bodyDiv.innerHTML = sanitizedBody;
 
     // Process images in body to use correct paths
@@ -720,8 +735,13 @@ function renderPosts(container, posts) {
       }
     });
 
-    // Process embeds in body
+    // Process embeds in body (legacy fenced syntax + raw <iframe> styling)
     processEmbeds(bodyDiv, basePath);
+    // Apply non-security iframe styling (max-width + aspect ratio) to
+    // every iframe — both legacy embed-block iframes and raw <iframe>
+    // tags pasted into markdown directly. Sandbox enforcement happened
+    // earlier via injectIframeSandbox (pre-DOM); this only sets styles.
+    applyIframeStyles(bodyDiv);
 
     contentDiv.appendChild(bodyDiv);
 
@@ -794,17 +814,40 @@ function renderEmbed(embedContent) {
     return `<div class="embed-container"><iframe sandbox="allow-scripts allow-same-origin" width="100%" height="166" scrolling="no" frameborder="no" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false"></iframe></div>`;
   }
 
-  // Raw HTML embed — pre-inject sandbox into any iframe that doesn't
-  // already carry one, before the HTML enters the DOM.
+  // Raw HTML embed — sanitize, then force our enforced sandbox via
+  // injectIframeSandbox before the HTML enters the DOM.
   const sanitized = DOMPurify.sanitize(embedContent, {
     ADD_TAGS: ["iframe"],
     ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "src", "width", "height", "sandbox"],
   });
-  const sandboxed = sanitized.replace(
-    /<iframe\b(?![^>]*\bsandbox=)/gi,
-    '<iframe sandbox="allow-scripts allow-same-origin"'
-  );
-  return `<div class="embed-container">${sandboxed}</div>`;
+  return `<div class="embed-container">${injectIframeSandbox(sanitized)}</div>`;
+}
+
+// Force our enforced sandbox onto every <iframe> in an HTML string. MUST
+// run BEFORE the HTML is inserted into the DOM — calling
+// setAttribute("sandbox", ...) after attachment doesn't apply to the
+// initial src navigation (the dangerous race window). Always overwrites
+// an existing sandbox attribute so a user with edit access can't bypass
+// the sandbox by writing their own permissive value.
+function injectIframeSandbox(html) {
+  if (typeof html !== "string") return html;
+  return html.replace(/<iframe\b([^>]*)>/gi, (_match, attrs) => {
+    const cleaned = attrs.replace(/\s+sandbox\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    return `<iframe${cleaned} sandbox="allow-scripts allow-same-origin">`;
+  });
+}
+
+// Apply non-security iframe styling (max-width + aspect-ratio) after
+// iframes are attached to the DOM. Sandbox enforcement happens earlier
+// via injectIframeSandbox.
+function applyIframeStyles(root) {
+  if (!root) return;
+  root.querySelectorAll("iframe").forEach((iframe) => {
+    const w = iframe.width || 560;
+    const h = iframe.height || 315;
+    iframe.style.maxWidth = "90%";
+    iframe.style.aspectRatio = `${w / h}`;
+  });
 }
 
 function extractYouTubeVideoId(url) {
@@ -891,6 +934,12 @@ function processEmbeds(container, basePath) {
     }
 
     if (embedContent) {
+      // Legacy fenced-embed syntax (```embed\n<URL or HTML>\n```). The
+      // editor no longer emits this — new content uses raw <iframe> in
+      // markdown directly. Kept here so existing published posts with
+      // pre-migration content continue to render. Track in console so
+      // we can see if/when this branch can be removed.
+      console.warn("processEmbeds: legacy `language-embed` block detected — re-publish the post to convert to raw <iframe> markdown.");
       const embedHtml = renderEmbed(embedContent);
       const newDiv = document.createElement("div");
       newDiv.innerHTML = embedHtml;

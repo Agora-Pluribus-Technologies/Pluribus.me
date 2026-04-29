@@ -30,13 +30,18 @@ function parseMarkdownToBlocks(markdown) {
     const trimmed = section.trim();
     if (!trimmed) continue;
 
-    // Check for embed block
+    // Legacy embed block (```embed\n<URL or HTML>\n```). The editor no
+    // longer emits this — embeds are now raw <iframe> HTML inside a
+    // panel block. Convert on load so saving the page rewrites the
+    // legacy syntax to the new form, while published sites keep working
+    // via the renderer's backwards-compat branch in the meantime.
     const embedMatch = trimmed.match(/^```embed\n([\s\S]*?)\n```$/);
     if (embedMatch) {
+      const iframeHtml = embedContentToIframeHtml(embedMatch[1].trim());
       blocks.push({
         id: generateBlockId(),
-        type: 'embed',
-        content: embedMatch[1].trim()
+        type: 'panel',
+        content: iframeHtml,
       });
       continue;
     }
@@ -52,7 +57,8 @@ function parseMarkdownToBlocks(markdown) {
       continue;
     }
 
-    // Default: panel block. Standalone-image markdown (`![alt](url)`)
+    // Default: panel block. Panels can hold prose, iframes (raw HTML),
+    // images by URL, math, wikilinks, etc. Standalone-image markdown
     // used to be a dedicated `image` block type, but the in-editor
     // image upload feature was removed; existing image markdown now
     // lives inside panel blocks and renders normally through marked.
@@ -66,19 +72,49 @@ function parseMarkdownToBlocks(markdown) {
   return blocks;
 }
 
+// Convert legacy embed-block content (a YouTube URL, a SoundCloud URL,
+// or raw iframe HTML) to the iframe HTML the published-site renderer
+// understands. Mirrors the renderer-side helpers in owo-template.js
+// (youtubeUrlToEmbed / soundcloudUrlToEmbed) so a converted block
+// renders identically before and after the parser change. The output
+// is wrapped in a `<div class="embed-container">` so:
+//   1. Existing `.embed-container { text-align: center }` CSS keeps
+//      working — bare iframes wouldn't pick that up.
+//   2. The block starts with a `<div>`, which marked parses as a
+//      block-level HTML block reliably (a bare `<iframe>` straddles
+//      the inline-vs-block-level grey area in some marked versions).
+function embedContentToIframeHtml(content) {
+  if (!content) return '';
+  const trimmed = content.trim();
+  let iframe;
+  if (trimmed.includes('youtube.com') || trimmed.includes('youtu.be')) {
+    const videoId = extractYouTubeVideoId(trimmed);
+    if (videoId) {
+      iframe = `<iframe sandbox="allow-scripts allow-same-origin" width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+    }
+  } else if (trimmed.includes('soundcloud.com')) {
+    const encodedUrl = encodeURIComponent(trimmed);
+    iframe = `<iframe sandbox="allow-scripts allow-same-origin" width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>`;
+  }
+  // Not a recognized URL — assume the user already supplied raw HTML.
+  // Pass through verbatim; the renderer's body-level sanitize +
+  // injectIframeSandbox will lock down whatever they wrote.
+  if (!iframe) return trimmed;
+  return `<div class="embed-container">${iframe}</div>`;
+}
+
 function blocksToMarkdown(blocks) {
   const parts = [];
 
   for (const block of blocks) {
     switch (block.type) {
-      case 'embed':
-        parts.push(`\`\`\`embed\n${block.content}\n\`\`\``);
-        break;
       case 'link-button':
         parts.push(`\`\`\`link-button\n${block.content}\n\`\`\``);
         break;
       case 'panel':
       default:
+        // Embeds are panel blocks containing raw <iframe> HTML — they
+        // round-trip through this default branch unchanged.
         parts.push(block.content);
         break;
     }
@@ -262,8 +298,6 @@ function renderBlockPreview(block) {
   switch (block.type) {
     case 'panel':
       return renderPanelPreview(block.content);
-    case 'embed':
-      return renderEmbedPreview(block.content);
     case 'link-button':
       return renderLinkButtonPreview(block.content);
     default:
@@ -295,11 +329,40 @@ function renderPanelPreview(markdown) {
   }
 
   const parsed = marked.parse(source);
-  let sanitized = DOMPurify.sanitize(parsed, { ADD_ATTR: ["data-target"] });
+  // Mirror the published-site body sanitizer profile: allow <iframe>
+  // (panels can hold raw iframe HTML for embeds) and the iframe attribute
+  // allowlist. Then force the enforced sandbox value into every iframe
+  // before the preview HTML enters the editor DOM — same security
+  // boundary as the live renderer in owo-template.js / blog-template.js.
+  let sanitized = DOMPurify.sanitize(parsed, {
+    ADD_TAGS: ["iframe"],
+    ADD_ATTR: [
+      "data-target",
+      "allow", "allowfullscreen", "frameborder", "referrerpolicy",
+      "scrolling", "src", "width", "height", "sandbox",
+    ],
+    FORBID_TAGS: ["script", "style"],
+    FORBID_ATTR: ["onerror", "onload"],
+  });
+  sanitized = injectIframeSandboxForEditor(sanitized);
   if (mathPlaceholders.length > 0) {
     sanitized = AgoraMath.restoreMath(sanitized, mathPlaceholders);
   }
   return `<article class="h-entry"><div class="e-content">${sanitized}</div></article>`;
+}
+
+// Editor-side mirror of owo-template.js's injectIframeSandbox. Forces our
+// enforced sandbox onto every <iframe> in an HTML string BEFORE the
+// preview enters the editor DOM. Always overwrites an existing sandbox
+// so a user with edit access can't bypass the sandbox via their own
+// permissive value. Suffix `ForEditor` keeps the symbol distinct from
+// the renderer-side helper (which lives in a different file/scope).
+function injectIframeSandboxForEditor(html) {
+  if (typeof html !== "string") return html;
+  return html.replace(/<iframe\b([^>]*)>/gi, (_match, attrs) => {
+    const cleaned = attrs.replace(/\s+sandbox\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    return `<iframe${cleaned} sandbox="allow-scripts allow-same-origin">`;
+  });
 }
 
 // Read markdown back from a Toast UI WYSIWYG editor and undo three
@@ -355,29 +418,6 @@ function ensureKaTeXLoadedForEditor() {
   }).catch(err => {
     console.error("KaTeX failed to load; math will render as raw LaTeX:", err);
   });
-}
-
-function renderEmbedPreview(content) {
-  // YouTube
-  if (content.includes('youtube.com') || content.includes('youtu.be')) {
-    const videoId = extractYouTubeVideoId(content);
-    if (videoId) {
-      return `<div class="embed-container"><iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" frameborder="0" allowfullscreen style="max-width:100%;"></iframe></div>`;
-    }
-  }
-
-  // SoundCloud
-  if (content.includes('soundcloud.com')) {
-    const encodedUrl = encodeURIComponent(content);
-    return `<div class="embed-container"><iframe width="100%" height="166" scrolling="no" frameborder="no" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false"></iframe></div>`;
-  }
-
-  // Raw HTML embed
-  const sanitized = DOMPurify.sanitize(content, {
-    ADD_TAGS: ['iframe'],
-    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'src', 'width', 'height']
-  });
-  return `<div class="embed-container">${sanitized}</div>`;
 }
 
 function renderLinkButtonPreview(content) {
@@ -509,17 +549,32 @@ function showAddBlockMenu(wrapper, afterIndex) {
 // ============================================
 
 function addBlock(type, afterIndex) {
+  const insertIndex = afterIndex + 1;
+
+  // The "Embed" menu option is sugar for "panel block containing raw
+  // <iframe> HTML." Open the embed popup first; only insert a block
+  // once the user confirms a URL or HTML, and bake the iframe into the
+  // panel content. Cancelling the popup leaves the page unchanged.
+  if (type === 'embed') {
+    showEmbedPopup('', (rawContent) => {
+      const iframeHtml = embedContentToIframeHtml(rawContent);
+      currentBlocks.splice(insertIndex, 0, {
+        id: generateBlockId(),
+        type: 'panel',
+        content: iframeHtml,
+      });
+      saveBlocksToCache();
+      renderAllBlocks();
+    });
+    return;
+  }
+
   const newBlock = {
     id: generateBlockId(),
     type: type,
     content: ''
   };
-
-  // Insert at correct position
-  const insertIndex = afterIndex + 1;
   currentBlocks.splice(insertIndex, 0, newBlock);
-
-  // Save and re-render
   saveBlocksToCache();
   renderAllBlocks();
 
@@ -535,13 +590,6 @@ function editBlock(index) {
     case 'panel':
       if (activeInlineEditIndex === index) return;
       startInlineEdit(index, null);
-      break;
-    case 'embed':
-      showEmbedPopup(block.content, (newContent) => {
-        block.content = newContent;
-        saveBlocksToCache();
-        renderAllBlocks();
-      });
       break;
     case 'link-button':
       // Parse current URL and label from content (format: url|label)
@@ -823,17 +871,23 @@ function startInlineEdit(index, clickEvent) {
 
   const editorEl = preview.querySelector('.inline-panel-editor');
 
-  // Force markdown mode for math content. Toast UI's WYSIWYG parser/serializer
-  // mangles LaTeX in non-recoverable ways (consumes `\\` line breaks as
-  // markdown hard breaks, collapses multi-line `\begin{aligned}` blocks into
-  // a single row, drops markdown-spec backslash escapes inside math, etc.).
-  // Editing math as raw markdown sidesteps all of that and is the natural
-  // workflow for LaTeX anyway.
+  // Force markdown mode for content Toast UI's WYSIWYG can't round-trip
+  // safely:
+  //   - Math (LaTeX). The serializer consumes `\\` line breaks as markdown
+  //     hard breaks, collapses multi-line `\begin{aligned}` blocks into one
+  //     row, drops markdown-spec backslash escapes inside math, etc.
+  //   - Raw HTML iframes. ProseMirror's HTML node handling will silently
+  //     drop or mangle iframe markup; the user opens an embed in WYSIWYG
+  //     and the iframe is gone after the next save. Markdown mode shows
+  //     the iframe HTML as text, which round-trips verbatim.
+  // Either signal flips the editor to markdown mode for this block.
   const hasMath = typeof AgoraMath !== "undefined" && AgoraMath.containsMath(block.content);
-  const initialEditType = hasMath ? 'markdown' : 'wysiwyg';
+  const hasIframe = /<iframe\b/i.test(block.content);
+  const forceMarkdown = hasMath || hasIframe;
+  const initialEditType = forceMarkdown ? 'markdown' : 'wysiwyg';
   // Pre-escape only matters for WYSIWYG mode — markdown mode shows the source
   // verbatim, so we hand it the original block content unchanged.
-  const initialValue = hasMath ? block.content : escapeMathForEditor(block.content);
+  const initialValue = forceMarkdown ? block.content : escapeMathForEditor(block.content);
 
   // Initialize ToastUI editor inline
   panelEditor = new toastui.Editor({
@@ -1741,15 +1795,20 @@ function showBlogPostEditModal(content, displayName, callback) {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // Initialize ToastUI editor for body
+  // Initialize ToastUI editor for body. Same WYSIWYG-can't-round-trip
+  // logic as startInlineEdit: force markdown mode when the body contains
+  // math or a raw <iframe>, since ProseMirror would mangle either.
   const blogEditorEl = document.querySelector('#blogPostBodyEditor');
+  const bodyHasMath = typeof AgoraMath !== "undefined" && AgoraMath.containsMath(postData.body || '');
+  const bodyHasIframe = /<iframe\b/i.test(postData.body || '');
+  const blogForceMarkdown = bodyHasMath || bodyHasIframe;
   blogPostEditor = new toastui.Editor({
     el: blogEditorEl,
-    initialEditType: 'wysiwyg',
+    initialEditType: blogForceMarkdown ? 'markdown' : 'wysiwyg',
     previewStyle: 'vertical',
     theme: 'dark',
     height: '300px',
-    initialValue: escapeMathForEditor(postData.body),
+    initialValue: blogForceMarkdown ? (postData.body || '') : escapeMathForEditor(postData.body),
     hooks: {
       addImageBlobHook: rejectImageBlobHook,
     },

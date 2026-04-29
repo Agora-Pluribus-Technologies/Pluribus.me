@@ -50,6 +50,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   await fetchPageContent(origin, basePath, siteName, pagesJson, mainContent, foldersJson);
   decodeEmbeds(basePath);
+  // Apply non-security visual fixup (max-width + aspect ratio) to every
+  // iframe in the rendered body — both legacy embed-block iframes and
+  // raw <iframe> tags pasted into markdown directly. Sandbox enforcement
+  // happened earlier via injectIframeSandbox (pre-DOM); this only sets
+  // styles, which are safe to apply post-attachment.
+  applyIframeStyles(mainContent);
   decodeImages(basePath);
   createFooter(origin, basePath, showHistory);
 });
@@ -146,6 +152,37 @@ function soundcloudUrlToEmbed(url) {
   return `<iframe sandbox="allow-scripts allow-same-origin" width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=${encodedUrl}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>`;
 }
 
+// Force our enforced sandbox onto every <iframe> in an HTML string. MUST
+// run BEFORE the HTML is inserted into the DOM — calling
+// setAttribute("sandbox", ...) after attachment doesn't apply to the
+// initial src navigation (the dangerous race window). Always overwrites
+// an existing sandbox attribute so a user with edit access can't bypass
+// the sandbox by writing their own permissive value (e.g. `sandbox=""`).
+// The chosen value matches youtubeUrlToEmbed / soundcloudUrlToEmbed:
+// `allow-scripts allow-same-origin` lets embedded players run JS and
+// access their own origin's cookies, while still blocking top-navigation,
+// popups, form submission, downloads, plugins, and pointer-lock.
+function injectIframeSandbox(html) {
+  if (typeof html !== "string") return html;
+  return html.replace(/<iframe\b([^>]*)>/gi, (_match, attrs) => {
+    const cleaned = attrs.replace(/\s+sandbox\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    return `<iframe${cleaned} sandbox="allow-scripts allow-same-origin">`;
+  });
+}
+
+// Apply non-security iframe styling (max-width + aspect-ratio) after
+// iframes are attached to the DOM. Sandbox enforcement happens earlier
+// via injectIframeSandbox, so this function only touches presentation.
+function applyIframeStyles(root) {
+  if (!root) return;
+  root.querySelectorAll("iframe").forEach((iframe) => {
+    const w = iframe.width || 560;
+    const h = iframe.height || 315;
+    iframe.style.maxWidth = "90%";
+    iframe.style.aspectRatio = `${w / h}`;
+  });
+}
+
 function decodeEmbeds(basePath) {
   const preList = document.getElementsByTagName("pre");
   for (let i = preList.length - 1; i >= 0; i--) {
@@ -223,65 +260,42 @@ function decodeEmbeds(basePath) {
     }
 
     if (embedContent) {
-      console.log("Embed content: " + embedContent);
-      let embedHtml;
+      // Legacy fenced-embed syntax (```embed\n<URL or HTML>\n```). The
+      // editor no longer emits this — new content uses raw <iframe> in
+      // markdown directly, sanitized + sandbox-enforced inline by the
+      // body render pass. Kept here so existing published sites with
+      // pre-migration content continue to render. Track in console so we
+      // can see if/when this branch can be removed.
+      console.warn("decodeEmbeds: legacy `language-embed` block detected — re-publish the page to convert to raw <iframe> markdown.");
 
-      // Check if it's a YouTube URL and convert to iframe
+      let embedHtml;
       if (isYouTubeUrl(embedContent)) {
         embedHtml = youtubeUrlToEmbed(embedContent);
         if (!embedHtml) {
           console.error("Could not parse YouTube URL: " + embedContent);
           continue;
         }
-        console.log("Converted YouTube URL to embed");
       } else if (isSoundCloudUrl(embedContent)) {
         embedHtml = soundcloudUrlToEmbed(embedContent);
-        console.log("Converted SoundCloud URL to embed");
       } else {
-        // Treat as raw HTML
         embedHtml = embedContent;
       }
 
-      let newDiv = document.createElement("div");
+      const newDiv = document.createElement("div");
       newDiv.classList.add("embed-container");
-      const sanitizedHtml = DOMPurify.sanitize(embedHtml, {
-        // Allow iframes explicitly
+      let sanitizedHtml = DOMPurify.sanitize(embedHtml, {
         ADD_TAGS: ["iframe"],
-
-        // Allow only safe, expected attributes
         ADD_ATTR: [
-          "allow",
-          "allowfullscreen",
-          "frameborder",
-          "referrerpolicy",
-          "scrolling",
-          "src",
-          "width",
-          "height",
-          "sandbox",
+          "allow", "allowfullscreen", "frameborder", "referrerpolicy",
+          "scrolling", "src", "width", "height", "sandbox",
         ],
-
-        // Keep built-in protections on
-        FORBID_TAGS: ["script", "style"], // script already forbidden by default, but explicit is fine
-        FORBID_ATTR: ["onerror", "onload"], // event handlers (DOMPurify strips these by default too)
+        FORBID_TAGS: ["script", "style"],
+        FORBID_ATTR: ["onerror", "onload"],
       });
-      console.log("Sanitized: " + sanitizedHtml);
+      // Force our enforced sandbox before the iframe enters the DOM —
+      // see injectIframeSandbox docs for why post-attach is too late.
+      sanitizedHtml = injectIframeSandbox(sanitizedHtml);
       newDiv.innerHTML = sanitizedHtml;
-
-      // Apply sandbox + aspect-ratio fixup to every iframe inside the
-      // embed (covers YouTube, SoundCloud, and raw-HTML embeds that
-      // might contain multiple iframes). `allow-scripts allow-same-origin`
-      // lets the embedded player run JS and access its own origin's
-      // cookies (needed by YouTube/SoundCloud) while still blocking
-      // top-navigation, popups, form submission, downloads, plugins,
-      // and pointer-lock that the unrestricted default would permit.
-      newDiv.querySelectorAll("iframe").forEach((iframe) => {
-        iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
-        const w = iframe.width || 560;
-        const h = iframe.height || 315;
-        iframe.style.maxWidth = "90%";
-        iframe.style.aspectRatio = `${w / h}`;
-      });
 
       pre.parentElement.parentElement.replaceWith(newDiv);
     }
@@ -850,9 +864,25 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
       }
 
       const parsedMarkdown = await marked.parse(text);
+      // Allow <iframe> in body sanitization so users can paste raw iframe
+      // HTML directly into markdown (the new embed syntax — see
+      // injectIframeSandbox below). The legacy `language-embed` code-block
+      // path in decodeEmbeds still works for backwards compatibility.
       let sanitizedMarkdown = DOMPurify.sanitize(parsedMarkdown, {
-        ADD_ATTR: ["data-target"],
+        ADD_TAGS: ["iframe"],
+        ADD_ATTR: [
+          "data-target",
+          "allow", "allowfullscreen", "frameborder", "referrerpolicy",
+          "scrolling", "src", "width", "height", "sandbox",
+        ],
+        FORBID_TAGS: ["script", "style"],
+        FORBID_ATTR: ["onerror", "onload"],
       });
+      // Force our enforced sandbox onto every iframe BEFORE the HTML
+      // enters the DOM. Calling setAttribute("sandbox", ...) after the
+      // iframe is attached doesn't apply to the initial src navigation,
+      // which is the dangerous race window.
+      sanitizedMarkdown = injectIframeSandbox(sanitizedMarkdown);
       if (mathPlaceholders.length > 0) {
         sanitizedMarkdown = AgoraMath.restoreMath(sanitizedMarkdown, mathPlaceholders);
       }
