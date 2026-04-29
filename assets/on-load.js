@@ -1813,16 +1813,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           // wikilinks.js / math.js are loaded as <script defer src="/assets/...">
           // by the SPA shell (see templates/owo-template.html). Bundling them
-          // at the zip root under assets/ keeps the same absolute path layout
-          // a static-host deploy would expect.
+          // under public/assets/ matches the layout a static-host deploy with
+          // public/ as the publish directory would resolve `/assets/...` to.
           if (wikilinksResponse.ok) {
             const wikilinksContent = await wikilinksResponse.text();
-            zip.file(`assets/wikilinks.js`, wikilinksContent);
+            zip.file(`public/assets/wikilinks.js`, wikilinksContent);
           }
 
           if (mathResponse.ok) {
             const mathContent = await mathResponse.text();
-            zip.file(`assets/math.js`, mathContent);
+            zip.file(`public/assets/math.js`, mathContent);
           }
 
           console.log(`Added ${templateName} template files and shell assets to ZIP`);
