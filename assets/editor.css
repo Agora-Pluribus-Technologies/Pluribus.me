@@ -1982,6 +1982,46 @@ nav {
   color: var(--text-muted);
 }
 
+/* External Image Popup (Toast UI toolbar) */
+.external-image-form .form-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.external-image-preview-wrap {
+  margin: 12px 0 16px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.external-image-preview {
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 4px;
+  display: block;
+}
+
+.external-image-preview-status {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* Toolbar button label styling — text-based icons render at default
+   size but the surrounding button needs a touch of horizontal padding
+   to look balanced next to Toast UI's icon buttons. */
+.toastui-editor-toolbar-icons.external-image-toolbar-btn {
+  font-size: 16px;
+}
+
 /* Add Block Button */
 .add-block-wrapper {
   position: relative;

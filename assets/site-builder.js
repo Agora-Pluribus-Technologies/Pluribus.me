@@ -858,6 +858,12 @@ function startInlineEdit(index, clickEvent) {
       ['ul', 'ol', 'task', 'indent', 'outdent'],
       ['table', 'link', 'code', 'codeblock'],
       [{
+        name: 'externalImage',
+        tooltip: 'Insert image from URL',
+        text: '🖼',
+        className: 'toastui-editor-toolbar-icons external-image-toolbar-btn',
+        command: 'insertExternalImage'
+      }, {
         name: 'wikilink',
         tooltip: 'Insert wikilink (Cmd/Ctrl+K)',
         text: '[[ ]]',
@@ -868,6 +874,16 @@ function startInlineEdit(index, clickEvent) {
   });
 
   activeInlineEditorInstance = panelEditor;
+
+  panelEditor.addCommand('wysiwyg', 'insertExternalImage', () => {
+    insertExternalImageViaPopup(panelEditor);
+    return true;
+  });
+
+  panelEditor.addCommand('markdown', 'insertExternalImage', () => {
+    insertExternalImageViaPopup(panelEditor);
+    return true;
+  });
 
   panelEditor.addCommand('wysiwyg', 'insertWikilink', () => {
     insertWikilinkBrackets(panelEditor);
@@ -1408,6 +1424,164 @@ function showLinkButtonPopup(currentUrl, currentLabel, callback) {
 }
 
 // ============================================
+// External Image Popup (Toast UI toolbar)
+// ============================================
+
+// Inserts `![alt](url)` at the editor's cursor. Toggles markdown mode
+// briefly so insertText puts in raw markdown rather than escaping it
+// in the WYSIWYG ProseMirror state. Same pattern previously used by
+// the (now-removed) image-attachment uploader.
+function insertExternalImageViaPopup(editor) {
+  showExternalImagePopup(({ url, alt }) => {
+    if (!editor) return;
+    const wasWysiwyg = editor.isWysiwygMode && editor.isWysiwygMode();
+    if (wasWysiwyg) editor.changeMode('markdown');
+    editor.insertText(`![${alt || ''}](${url})`);
+    if (wasWysiwyg) editor.changeMode('wysiwyg');
+  });
+}
+
+// URL-only image picker. Deliberately does NOT accept file uploads —
+// the upload pipeline was removed sitewide; this restores image
+// embedding via external https:// links (the previewable kind a user
+// would copy from another website). Insert is gated on the preview
+// `<img>` actually loading, so a broken URL can't be inserted.
+function showExternalImagePopup(callback) {
+  const existingPopup = document.querySelector('.external-image-popup');
+  if (existingPopup) existingPopup.remove();
+
+  const popup = document.createElement('div');
+  popup.className = 'block-popup external-image-popup';
+
+  popup.innerHTML = `
+    <div class="popup-content">
+      <div class="popup-header">
+        <h3>Insert Image from URL</h3>
+        <button class="popup-close">&times;</button>
+      </div>
+      <div class="external-image-form">
+        <div class="form-group">
+          <label for="externalImageUrl">Image URL:</label>
+          <input type="url" id="externalImageUrl" placeholder="https://example.com/image.jpg" autocomplete="off" spellcheck="false">
+          <p class="form-hint">Only external https:// image URLs are supported.</p>
+        </div>
+        <div class="form-group">
+          <label for="externalImageAlt">Alt text (optional):</label>
+          <input type="text" id="externalImageAlt" placeholder="Description of the image">
+        </div>
+        <div class="external-image-preview-wrap">
+          <div class="external-image-preview-status">Enter a URL to preview the image</div>
+          <img class="external-image-preview" alt="" style="display: none;">
+        </div>
+        <div class="popup-buttons">
+          <button class="popup-cancel">Cancel</button>
+          <button class="popup-confirm" disabled>Insert</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  const urlInput = popup.querySelector('#externalImageUrl');
+  const altInput = popup.querySelector('#externalImageAlt');
+  const preview = popup.querySelector('.external-image-preview');
+  const status = popup.querySelector('.external-image-preview-status');
+  const confirmBtn = popup.querySelector('.popup-confirm');
+
+  urlInput.focus();
+
+  let debounceTimer = null;
+  let validUrl = '';
+  let pendingSrc = '';
+
+  function setStatus(text) {
+    status.textContent = text;
+    status.style.display = '';
+    preview.style.display = 'none';
+  }
+
+  function updatePreview() {
+    let raw = urlInput.value.trim();
+    if (!raw) {
+      validUrl = '';
+      pendingSrc = '';
+      confirmBtn.disabled = true;
+      setStatus('Enter a URL to preview the image');
+      return;
+    }
+    // Allow http:// inputs but force-upgrade to https — matches the
+    // link-button popup's normalization.
+    if (raw.startsWith('http://')) raw = 'https://' + raw.slice(7);
+    if (!/^https:\/\//i.test(raw)) {
+      validUrl = '';
+      pendingSrc = '';
+      confirmBtn.disabled = true;
+      setStatus('URL must start with https://');
+      return;
+    }
+
+    pendingSrc = raw;
+    setStatus('Loading…');
+    preview.onload = () => {
+      // Ignore stale loads when the user has typed a newer URL.
+      if (preview.src !== pendingSrc) return;
+      status.style.display = 'none';
+      preview.style.display = '';
+      validUrl = pendingSrc;
+      confirmBtn.disabled = false;
+    };
+    preview.onerror = () => {
+      if (preview.src !== pendingSrc) return;
+      validUrl = '';
+      confirmBtn.disabled = true;
+      setStatus("Couldn't load that image. Check the URL.");
+    };
+    // Setting .src starts the load; the handlers above resolve it.
+    preview.src = pendingSrc;
+  }
+
+  urlInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(updatePreview, 250);
+  });
+  // Immediate preview attempt when the user paste-and-blurs.
+  urlInput.addEventListener('blur', () => {
+    clearTimeout(debounceTimer);
+    updatePreview();
+  });
+
+  function close() {
+    clearTimeout(debounceTimer);
+    popup.remove();
+  }
+
+  popup.querySelector('.popup-close').addEventListener('click', close);
+  popup.querySelector('.popup-cancel').addEventListener('click', close);
+
+  confirmBtn.addEventListener('click', () => {
+    if (!validUrl) return;
+    const alt = altInput.value.trim();
+    close();
+    if (callback) callback({ url: validUrl, alt });
+  });
+
+  // Enter inside the URL field triggers Insert if the preview is valid.
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !confirmBtn.disabled) {
+      e.preventDefault();
+      confirmBtn.click();
+    }
+  });
+  altInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !confirmBtn.disabled) {
+      e.preventDefault();
+      confirmBtn.click();
+    }
+  });
+}
+
+// ============================================
 // Blog Post Editor
 // ============================================
 
@@ -1544,7 +1718,24 @@ function showBlogPostEditModal(content, displayName, callback) {
       ['heading', 'bold', 'italic', 'strike'],
       ['ul', 'ol', 'task', 'indent', 'outdent'],
       ['table', 'link', 'code', 'codeblock'],
+      [{
+        name: 'externalImage',
+        tooltip: 'Insert image from URL',
+        text: '🖼',
+        className: 'toastui-editor-toolbar-icons external-image-toolbar-btn',
+        command: 'insertExternalImage'
+      }]
     ]
+  });
+
+  blogPostEditor.addCommand('wysiwyg', 'insertExternalImage', () => {
+    insertExternalImageViaPopup(blogPostEditor);
+    return true;
+  });
+
+  blogPostEditor.addCommand('markdown', 'insertExternalImage', () => {
+    insertExternalImageViaPopup(blogPostEditor);
+    return true;
   });
 
   // Close button
