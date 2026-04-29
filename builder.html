@@ -523,6 +523,25 @@
     // Initialize theme on page load
     initTheme();
 
+    // Reserve space at the bottom of <body> equal to the footer's height
+    // so absolutely/fixed-positioned page chrome doesn't end up sitting
+    // on top of the footer's links. Recomputed on resize and whenever
+    // the footer's own size changes (theme-toggle text swap, font load,
+    // wrapping at narrow widths, etc.) so the reserved space stays in
+    // sync with whatever the footer actually measures.
+    (function syncBodyMarginToFooter() {
+      const footer = document.getElementById('footer');
+      if (!footer) return;
+      const apply = () => {
+        document.body.style.marginBottom = footer.offsetHeight + 'px';
+      };
+      apply();
+      window.addEventListener('resize', apply);
+      if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(apply).observe(footer);
+      }
+    })();
+
     // Card selection — scoped to each .site-type-cards group so the two
     // card groups (site-type and starting-content) stay independent.
     document.querySelectorAll('.site-type-cards').forEach(function(group) {
