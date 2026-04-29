@@ -1419,7 +1419,6 @@ function showLinkButtonPopup(currentUrl, currentLabel, callback) {
         <div class="form-group">
           <label for="linkButtonUrl">URL:</label>
           <input type="text" id="linkButtonUrl" placeholder="https://example.com" value="${escapeHtml(currentUrl)}">
-          <p class="form-hint">Local links start with /s/ • External links start with https://</p>
         </div>
         <div class="form-group">
           <label for="linkButtonLabel">Button Label:</label>
