@@ -2060,11 +2060,6 @@ nav {
   white-space: nowrap;
 }
 
-.external-image-toolbar-btn:hover {
-  background-color: var(--bg-tertiary) !important;
-  color: var(--text-primary) !important;
-}
-
 /* Add Block Button */
 .add-block-wrapper {
   position: relative;
