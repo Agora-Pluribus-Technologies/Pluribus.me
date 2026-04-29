@@ -569,6 +569,23 @@ function addBlock(type, afterIndex) {
     return;
   }
 
+  // Same idea for link buttons: open the URL/label popup first; insert
+  // a block only on confirm. Cancelling the popup leaves the page
+  // unchanged (previously this dropped an empty link-button block into
+  // the page that the user then had to delete by hand).
+  if (type === 'link-button') {
+    showLinkButtonPopup('', '', (url, label) => {
+      currentBlocks.splice(insertIndex, 0, {
+        id: generateBlockId(),
+        type: 'link-button',
+        content: `${url}|${label}`,
+      });
+      saveBlocksToCache();
+      renderAllBlocks();
+    });
+    return;
+  }
+
   const newBlock = {
     id: generateBlockId(),
     type: type,
