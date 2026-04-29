@@ -2054,6 +2054,7 @@ nav {
   background: none !important;
   background-image: none !important;
   text-indent: 0 !important;
+  border: none !important;
   font-size: 16px;
   line-height: 24px;
   color: var(--text-primary) !important;
