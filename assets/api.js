@@ -824,20 +824,11 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   }
   const gitHistoryJson = JSON.stringify(gitData);
 
-  // Fetch the appropriate template for the initial deploy
-  const templatePath = isBlog ? "/templates/blog-template.html" : "/templates/owo-template.html";
-  let templateHtml = "";
-  try {
-    const templateResp = await fetch(templatePath, {
-      method: "GET",
-      headers: { "Cache-Control": "no-cache, must-revalidate" },
-    });
-    if (templateResp.ok) {
-      templateHtml = await templateResp.text();
-    }
-  } catch (e) {
-    console.warn("Failed to fetch template for initial deploy:", e);
-  }
+  // SPA shells (.html for every page + index.html) are no longer
+  // written to R2 — the worker (functions/s/[username]/[site]/[[path]].js)
+  // serves an inlined template constant for any .html request. Keeping
+  // this comment so future readers don't wonder where the templateHtml
+  // upload step went.
 
   // Build initial history.json
   const historyJson = [{
@@ -895,15 +886,8 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
     });
   }
 
-  // Add template and home page content for pages sites
-  if (templateHtml) {
-    files.push({
-      filePath: "public/index.html",
-      content: templateHtml,
-      contentType: "text/html",
-    });
-  }
-
+  // .html shells are now served by the worker from inlined templates;
+  // we only write .md sources + JSON metadata to R2.
   if (hasImport) {
     for (const page of pagesToWrite) {
       files.push({
@@ -911,13 +895,6 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
         content: page.content,
         contentType: "text/markdown",
       });
-      if (templateHtml) {
-        files.push({
-          filePath: `public/${page.fileName}.html`,
-          content: templateHtml,
-          contentType: "text/html",
-        });
-      }
     }
   } else if (!isBlog) {
     files.push({
@@ -925,13 +902,6 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
       content: defaultHomeContent,
       contentType: "text/markdown",
     });
-    if (templateHtml) {
-      files.push({
-        filePath: "public/home.html",
-        content: templateHtml,
-        contentType: "text/html",
-      });
-    }
   }
 
   // Imported image attachments (already WebP-encoded by folder-import.js).
@@ -1039,17 +1009,9 @@ async function deployChanges(siteId) {
   modified = false;
   updateDeployButtonState();
 
-  // Determine which template to use based on site type
+  // SPA shells (.html) are served by the worker from inlined templates;
+  // the publish flow no longer fetches or writes them.
   const isBlogSite = currentSiteType === "blog";
-  const templatePath = isBlogSite ? "/templates/blog-template.html" : "/templates/owo-template.html";
-
-  var templateResp = await fetch(templatePath, {
-    method: "GET",
-    headers: {
-      "Cache-Control": "no-cache, must-revalidate",
-    },
-  });
-  const template = await templateResp.text();
 
   const files = [];
 
@@ -1088,7 +1050,11 @@ async function deployChanges(siteId) {
     await ensurePagesWithWikilinksLoaded(siteId, changedMd);
   }
 
-  // Handle deletions: markdown files removed in this commit
+  // Handle deletions: markdown files removed in this commit. Also
+  // queue a delete for the legacy .html shell at the same slug — for
+  // sites that were published before .html shells stopped being
+  // written, the old shell is still in R2 and should go away with
+  // the source.
   for (const deletedFile of deletedMd) {
     console.log("Preparing to delete file:", deletedFile);
     if (!isBlogSite) {
@@ -1097,22 +1063,27 @@ async function deployChanges(siteId) {
     files.push({ filePath: deletedFile, action: "delete" });
   }
 
-  // Handle creates and updates: only files that actually changed
+  // Handle creates and updates: only files that actually changed.
+  // .html shells are no longer written — the worker serves the
+  // inlined template for any .html request. We also queue a delete
+  // for any matching legacy .html that may still be in R2 from a
+  // prior publish (idempotent: deleting a non-existent R2 key is
+  // a no-op). This drains pre-migration shells gradually as pages
+  // are touched, without a separate sweep.
   for (const cacheItem of markdownCache) {
     if (!changedMd.has(cacheItem.fileName)) continue;
     console.log("Preparing to update file:", cacheItem.fileName);
-    if (!isBlogSite) {
-      files.push({
-        filePath: cacheItem.fileName.replace(".md", ".html"),
-        content: template,
-        contentType: "text/html",
-      });
-    }
     files.push({
       filePath: cacheItem.fileName,
       content: cacheItem.content,
       contentType: "text/markdown",
     });
+    if (!isBlogSite) {
+      files.push({
+        filePath: cacheItem.fileName.replace(/\.md$/, ".html"),
+        action: "delete",
+      });
+    }
   }
 
   // Update pages.json (exclude latest.md). Blog sites get the batched
@@ -1286,12 +1257,12 @@ async function deployChanges(siteId) {
     console.log("No site.json found in git, skipping");
   }
 
-  // Update index.html (use the appropriate template)
-  files.push({
-    filePath: "public/index.html",
-    content: template,
-    contentType: "text/html",
-  });
+  // Drain any legacy `public/index.html` shell from R2. The worker
+  // now serves the SPA shell for index.html requests from an inlined
+  // template — the R2 file is dead weight from sites published before
+  // the migration. Deleting a non-existent key is a no-op, so this
+  // is safe to queue on every publish.
+  files.push({ filePath: "public/index.html", action: "delete" });
 
   if (files.length > 0) {
     const result = await saveFilesToR2(siteId, files);
@@ -1437,17 +1408,11 @@ async function deployBlogPost(siteId, changedPost) {
     console.log("No site.json found in git, skipping");
   }
 
-  // Update index.html with blog template
-  const templateResp = await fetch("/templates/blog-template.html", {
-    method: "GET",
-    headers: { "Cache-Control": "no-cache, must-revalidate" },
-  });
-  const template = await templateResp.text();
-  files.push({
-    filePath: "public/index.html",
-    content: template,
-    contentType: "text/html",
-  });
+  // No index.html write — the worker serves the blog SPA shell from
+  // an inlined constant for any .html (or root) request. Idempotently
+  // queue the legacy index.html for deletion so pre-migration shells
+  // get cleaned up on the next blog publish.
+  files.push({ filePath: "public/index.html", action: "delete" });
 
   const result = await saveFilesToR2(siteId, files);
   if (result) {
@@ -1470,56 +1435,42 @@ async function deployBlogPost(siteId, changedPost) {
 }
 
 async function createPage(siteId, pageName) {
-  var owoTemplateResp = await fetch("/templates/owo-template.html", {
-    method: "GET",
-    headers: {
-      "Cache-Control": "no-cache, must-revalidate",
-    },
-  });
-  const owoTemplate = await owoTemplateResp.text();
-
-  const files = [
-    {
-      filePath: `public/${pageName}.html`,
-      content: owoTemplate,
-      contentType: "text/html",
-    },
+  // .html shells are served by the worker from inlined templates —
+  // no per-page .html PUT needed.
+  return await saveFilesToR2(siteId, [
     {
       filePath: `public/${pageName}.md`,
       content: `# ${pageName}\n\nThis is your new page.`,
       contentType: "text/markdown",
     },
-  ];
-
-  return await saveFilesToR2(siteId, files);
+  ]);
 }
 
 async function deletePage(siteId, pageName) {
-  const files = [
+  // Queue a delete for the legacy .html shell too — for sites
+  // published before .html shells stopped being written, the old
+  // shell is still in R2 and should go away with the source.
+  return await saveFilesToR2(siteId, [
     { filePath: `public/${pageName}.html`, action: "delete" },
     { filePath: `public/${pageName}.md`, action: "delete" },
-  ];
-
-  return await saveFilesToR2(siteId, files);
+  ]);
 }
 
 async function renamePage(siteId, pageName, newPageName) {
-  const htmlContent = await getFileFromR2(siteId, `public/${pageName}.html`);
   const mdContent = await getFileFromR2(siteId, `public/${pageName}.md`);
 
-  if (!htmlContent || !mdContent) {
-    console.error("Failed to read existing page files for rename");
+  if (!mdContent) {
+    console.error("Failed to read existing page .md for rename");
     return false;
   }
 
-  const files = [
-    { filePath: `public/${newPageName}.html`, content: htmlContent, contentType: "text/html" },
+  // Same legacy-cleanup pattern: also delete the old .html shell if
+  // it's there; we don't write a new one because the worker serves it.
+  return await saveFilesToR2(siteId, [
     { filePath: `public/${newPageName}.md`, content: mdContent, contentType: "text/markdown" },
     { filePath: `public/${pageName}.html`, action: "delete" },
     { filePath: `public/${pageName}.md`, action: "delete" },
-  ];
-
-  return await saveFilesToR2(siteId, files);
+  ]);
 }
 
 // All uploaded images live under public/attachments/ at the site root so

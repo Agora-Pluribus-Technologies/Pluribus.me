@@ -3,6 +3,8 @@
 // This function serves user sites from Cloudflare R2 storage.
 // URL shape: /s/:username/:site/... -> fetch from R2 and return the file.
 
+import { templateForSiteType } from "../../../_site-templates.js";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -43,9 +45,12 @@ export async function onRequest(context) {
 
   console.log("Site id:", siteId);
 
-  // Look up site configuration in D1 to verify the site exists
+  // Look up site configuration in D1 to verify the site exists.
+  // siteType decides which inlined SPA shell we serve for .html
+  // requests (pages → owo-template, blog → blog-template). Defaults
+  // to "pages" for legacy rows missing the column.
   const cfg = await env.USERS_DB.prepare(
-    "SELECT siteId, owner, repo FROM Sites WHERE siteId = ?"
+    "SELECT siteId, owner, repo, siteType FROM Sites WHERE siteId = ?"
   ).bind(siteId).first();
 
   if (!cfg) {
@@ -53,7 +58,8 @@ export async function onRequest(context) {
     return corsResponse("Unknown site", 404);
   }
 
-  console.log("Site config:", cfg);
+  const siteType = cfg.siteType || "pages";
+  console.log("Site config:", cfg, "siteType:", siteType);
 
   console.log("Raw URL:", request.url);
   console.log("URL pathname:", url.pathname);
@@ -117,10 +123,30 @@ export async function onRequest(context) {
     return corsResponse("Page not found", 404);
   }
 
-  // basePath is always "/public"
-  let basePath = "/public";
+  // .html requests (page shells + index.html for the SPA root) are
+  // served from the baked-in template constants — never from R2. The
+  // shell is identical for every page of a given site type; the actual
+  // page content is fetched client-side as <slug>.md by the SPA logic
+  // inside the template's bundled JS. This eliminates one R2 PUT per
+  // page at publish time, halves R2 storage for Pages sites, and
+  // means template updates only require a worker redeploy (not a
+  // republish on every site).
+  if (filePath.toLowerCase().endsWith(".html")) {
+    const headers = new Headers(corsHeaders);
+    headers.set("Content-Type", "text/html; charset=utf-8");
+    // Edge-cache the response so subsequent visitors of the same page
+    // skip the worker invocation entirely. The body is constant per
+    // siteType, so a long TTL is safe; cache is invalidated by the
+    // existing publish-time purge of <slug>.html URLs (see
+    // functions/api/files.js purgeCache).
+    headers.set("Cache-Control", "public, max-age=300, must-revalidate");
+    console.log("Serving inlined template for", filePath, "siteType:", siteType);
+    return new Response(templateForSiteType(siteType), { status: 200, headers });
+  }
 
-  // Normalize basePath
+  // Non-HTML requests (md, json, attachments, css, js, etc.) still
+  // come from R2.
+  let basePath = "/public";
   if (basePath.startsWith("/")) basePath = basePath.slice(1);
   if (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
 

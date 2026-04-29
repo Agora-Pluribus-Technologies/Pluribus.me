@@ -276,28 +276,17 @@ function decodeEmbeds(basePath) {
         FORBID_ATTR: ["onerror", "onload"], // event handlers (DOMPurify strips these by default too)
       });
       console.log("Sanitized: " + sanitizedHtml);
+      newDiv.innerHTML = sanitizedHtml;
 
-      // Pre-inject sandbox into any iframe that doesn't already carry
-      // one BEFORE assigning to innerHTML — setting sandbox after the
-      // iframe has been parsed and started loading wouldn't apply to
-      // the initial src navigation. The negative lookahead skips
-      // iframes that already have sandbox (e.g. our YouTube/SoundCloud
-      // synthesizers, or a hand-authored raw-HTML embed).
-      const sandboxedHtml = sanitizedHtml.replace(
-        /<iframe\b(?![^>]*\bsandbox=)/gi,
-        '<iframe sandbox="allow-scripts allow-same-origin"'
-      );
-      newDiv.innerHTML = sandboxedHtml;
-
-      // Failsafe: re-affirm sandbox on every iframe in case anything
-      // upstream (e.g. a future code path) skipped the pre-injection,
-      // and apply the aspect-ratio fixup. `setAttribute` here doesn't
-      // protect the initial navigation but at least ensures any later
-      // navigation within the iframe inherits the policy.
+      // Apply sandbox + aspect-ratio fixup to every iframe inside the
+      // embed (covers YouTube, SoundCloud, and raw-HTML embeds that
+      // might contain multiple iframes). `allow-scripts allow-same-origin`
+      // lets the embedded player run JS and access its own origin's
+      // cookies (needed by YouTube/SoundCloud) while still blocking
+      // top-navigation, popups, form submission, downloads, plugins,
+      // and pointer-lock that the unrestricted default would permit.
       newDiv.querySelectorAll("iframe").forEach((iframe) => {
-        if (!iframe.hasAttribute("sandbox")) {
-          iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
-        }
+        iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
         const w = iframe.width || 560;
         const h = iframe.height || 315;
         iframe.style.maxWidth = "90%";
@@ -943,10 +932,13 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
           panel.appendChild(sectionArticle);
         }
       }
+    } else if (content.status === 404) {
+      panel.innerHTML = "<h1>Page not found</h1><p>O_o</p>";
     } else {
-      throw new RuntimeException(errorMessage);
+      panel.innerHTML = errorMessage;
     }
   } catch (error) {
+    console.error("Error fetching page content:", error);
     panel.innerHTML = errorMessage;
   }
 

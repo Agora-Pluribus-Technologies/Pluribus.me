@@ -821,13 +821,14 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
   const dir = getRepoDir(siteId);
 
   try {
-    // Find every tracked file (in HEAD AND in the current index) and delete
-    // the ones no longer backed by a cache entry. This handles both .md
-    // sources and the .html shells generated alongside them — otherwise a
-    // nested-folder rename leaves stale .html files behind, and any file
-    // staged in the index this session (head=0, stage=2) wouldn't be picked
-    // up by a HEAD-only check. Unlink the file first, then remove it from
-    // the index, so a stale index entry can't outlive the working tree.
+    // Find every tracked file (in HEAD AND in the current index) and
+    // delete the ones no longer backed by a cache entry. Handles .md
+    // sources only — .html shells are no longer written (the worker
+    // serves them from inlined templates). Any legacy .html still in
+    // the working tree is also evicted so the next commit drops it
+    // cleanly, regardless of whether the source .md still exists.
+    // Unlink the file first, then remove it from the index, so a
+    // stale index entry can't outlive the working tree.
     let tracked;
     try {
       const [headFiles, indexFiles] = await Promise.all([
@@ -839,17 +840,15 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       tracked = new Set();
     }
     const cacheFileNames = new Set(markdownCache.map(item => item.fileName));
-    const cacheBaseNames = new Set(
-      markdownCache.map(item => item.fileName.replace(/\.md$/, ""))
-    );
     for (const filepath of tracked) {
       if (!filepath.startsWith("public/")) continue;
 
       let isOrphan = false;
       if (filepath.endsWith(".md")) {
         isOrphan = !cacheFileNames.has(filepath);
-      } else if (filepath.endsWith(".html") && filepath !== "public/index.html") {
-        isOrphan = !cacheBaseNames.has(filepath.replace(/\.html$/, ""));
+      } else if (filepath.endsWith(".html")) {
+        // Always orphan — we no longer produce .html shells.
+        isOrphan = true;
       }
       if (!isOrphan) continue;
 
