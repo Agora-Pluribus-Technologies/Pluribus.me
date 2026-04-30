@@ -2093,6 +2093,13 @@ async function createNewFolder(folderName) {
   updateDeployButtonState();
 
   selectedSidebarFolder = folderPath;
+  // Expand the new folder (and any ancestors) so the seeded untitled
+  // page is visible in the sidebar instead of hidden behind a collapsed
+  // arrow.
+  const segments = folderPath.split("/").filter(Boolean);
+  for (let i = 1; i <= segments.length; i++) {
+    expandedFolders.add(segments.slice(0, i).join("/"));
+  }
   await populateSidebar(currentSiteId);
   selectSidebarPage(pageFileName);
 }
@@ -2821,6 +2828,16 @@ function renderFolderNode(container, node, depth, siteId) {
     if (e.target.tagName === "BUTTON") return;
     if (isExpanded) {
       expandedFolders.delete(node.folderPath);
+      // Collapsing drops the user's "selected scope" — the next New
+      // folder/page action should target the root, not the folder they
+      // just closed. Reset whenever the selection sits inside (or on)
+      // the collapsed folder.
+      if (
+        selectedSidebarFolder === node.folderPath ||
+        selectedSidebarFolder.startsWith(`${node.folderPath}/`)
+      ) {
+        selectedSidebarFolder = "";
+      }
       // Deselect file if it's inside the folder being collapsed
       if (currentSitePath && currentSitePath.startsWith(`public/${node.folderPath}/`)) {
         const rootPage = markdownCache.find(c => !c.fileName.replace("public/", "").slice(0, -3).includes("/"));
