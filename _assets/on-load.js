@@ -2801,9 +2801,14 @@ function renderFolderNode(container, node, depth, siteId) {
   });
   actions.appendChild(deleteBtn);
 
-  // Drop target: drop file into folder
+  // Drop target: drop file into folder. stopPropagation so a drop on a
+  // nested folder doesn't bubble up to ancestor folders — each ancestor
+  // would otherwise re-fire handleFileDropIntoFolder with its own
+  // folderPath and yank the file out of the folder the user actually
+  // targeted, scrambling siblings on the way.
   folderEl.addEventListener("dragover", (e) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
     folderEl.classList.add("drop-into");
   });
@@ -2812,6 +2817,7 @@ function renderFolderNode(container, node, depth, siteId) {
   });
   folderEl.addEventListener("drop", async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     folderEl.classList.remove("drop-into");
     const draggedPath = e.dataTransfer.getData("text/plain");
     if (!draggedPath) return;
@@ -2894,9 +2900,14 @@ function renderFileNode(container, node, depth, siteId) {
     });
   }
 
-  // Drop target for reordering
+  // Drop target for reordering. stopPropagation so the same drop doesn't
+  // also bubble up to ancestor folder elements — each one would otherwise
+  // call handleFileDropIntoFolder with its own folderPath and move the
+  // file out of its current folder right after handleFileDrop just
+  // reordered it.
   fileEl.addEventListener("dragover", (e) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
     const rect = fileEl.getBoundingClientRect();
     const midY = rect.top + rect.height / 2;
@@ -2912,6 +2923,7 @@ function renderFileNode(container, node, depth, siteId) {
   });
   fileEl.addEventListener("drop", async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     clearDropIndicators();
     const draggedPath = e.dataTransfer.getData("text/plain");
     if (draggedPath === node.path) return;
