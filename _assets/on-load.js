@@ -3441,11 +3441,22 @@ function getFolderFromPath(filePath) {
 
 function getSiblingsInFolder(folder) {
   const prefix = folder ? `public/${folder}/` : "public/";
-  return markdownCache.filter(item => {
-    if (!item.fileName.startsWith(prefix)) return false;
-    const rest = item.fileName.slice(prefix.length);
-    return !rest.includes("/");
-  });
+  // Return siblings in the same order the sidebar renders them (sortOrder
+  // ascending, name tiebreak). Callers reassign sequential indices off
+  // this list, so an unsorted return value would clobber previously
+  // persisted user reorderings with markdownCache insertion order.
+  return markdownCache
+    .filter(item => {
+      if (!item.fileName.startsWith(prefix)) return false;
+      const rest = item.fileName.slice(prefix.length);
+      return !rest.includes("/");
+    })
+    .sort((a, b) => {
+      const aOrd = a.sortOrder != null ? a.sortOrder : Infinity;
+      const bOrd = b.sortOrder != null ? b.sortOrder : Infinity;
+      if (aOrd !== bOrd) return aOrd - bOrd;
+      return (a.displayName || "").localeCompare(b.displayName || "");
+    });
 }
 
 async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
