@@ -50,7 +50,12 @@ function clearPersistedLastSeen(siteId) {
 
 async function fetchUpstreamHead(siteId) {
   try {
-    const resp = await fetch(`/s/${siteId}/history.json`, {
+    // Fetch the prefixed URL so this request shares an edge-cache key with
+    // the purge in functions/api/files.js (which targets
+    // `/s/{siteId}/public/history.json`). The unprefixed form gets cached
+    // under a separate key that publish never evicts, so polling it would
+    // return a stale HEAD immediately after a self-publish.
+    const resp = await fetch(`/s/${siteId}/public/history.json`, {
       method: "GET",
       headers: { "Cache-Control": "no-cache, must-revalidate" },
     });
@@ -336,7 +341,11 @@ async function stageAllChanges(siteId) {
 async function replaceWorkingTreeWithUpstream(siteId) {
   const dir = getRepoDir(siteId);
 
-  const pagesResp = await fetch(`/s/${siteId}/pages.json`, {
+  // Use the `public/`-prefixed URL so this request shares an edge-cache
+  // key with the publish-time purge in functions/api/files.js. Stripping
+  // the prefix routes through a separate cache entry that publish never
+  // evicts, so divergence resolution would pull a stale pages.json.
+  const pagesResp = await fetch(`/s/${siteId}/public/pages.json`, {
     headers: { "Cache-Control": "no-cache, must-revalidate" },
   });
   if (!pagesResp.ok) throw new Error("Failed to fetch upstream pages.json");
@@ -351,10 +360,12 @@ async function replaceWorkingTreeWithUpstream(siteId) {
     }
   }
 
-  // Write upstream md content
+  // Write upstream md content. Same `public/`-prefix rationale as
+  // pages.json above — keep these requests aligned with the purge URL
+  // shape so a fresh publish doesn't bleed stale page bodies into the
+  // working tree.
   for (const file of upstreamMd) {
-    const servingPath = file.replace(/^public\//, "");
-    const resp = await fetch(`/s/${siteId}/${servingPath}`, {
+    const resp = await fetch(`/s/${siteId}/${file}`, {
       headers: { "Cache-Control": "no-cache, must-revalidate" },
     });
     if (!resp.ok) continue;

@@ -463,9 +463,15 @@ async function openSiteInEditor(site, initialPage = "index") {
     userMenuContainer.style.display = "none";
   }
 
-  // Fetch site tree from public URL
+  // Fetch site tree from public URL. Keep the `public/` prefix in the URL
+  // so the request shares a cache key with purgeCache in
+  // functions/api/files.js (which builds purge URLs as
+  // `/s/{siteId}/public/...`). Stripping the prefix here would route the
+  // editor through a separate edge-cache entry that publish never evicts,
+  // so the next page load could read a stale pages.json/history.json after
+  // a successful publish.
   const fetchPublicFileContent = async (filePath) => {
-    const servingPath = filePath.replace(/^public\//, "");
+    const servingPath = filePath.startsWith("public/") ? filePath : `public/${filePath}`;
     const resp = await fetch(`/s/${currentSiteId}/${servingPath}`, {
       method: "GET",
       headers: { "Cache-Control": "no-cache, must-revalidate" },
