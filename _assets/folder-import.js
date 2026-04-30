@@ -22,6 +22,10 @@
 
 (function (root) {
   const MARKDOWN_EXTENSIONS = [".md", ".markdown"];
+  // Mirror of MAX_FILE_CHARS in on-load.js. Files whose post-frontmatter
+  // content exceeds this are dropped from the import so they can't ride
+  // the initial-commit deploy past the editor's page-size guard.
+  const MAX_FILE_CHARS = 100000;
   // Folders never worth importing (Obsidian/Vault metadata, VCS, OS junk).
   const IGNORED_DIR_NAMES = new Set([
     ".obsidian",
@@ -172,11 +176,13 @@
 
   // Public entry point. Accepts either a DataTransfer (drag) or a FileList
   // (input[type=file] webkitdirectory). Returns:
-  //   { pages, skipped, errors }
+  //   { pages, skipped, oversized, errors }
   // where:
-  //   pages   = array of page objects ready for site creation
-  //   skipped = count of non-markdown files silently ignored (includes images)
-  //   errors  = per-file errors collected during read/parse
+  //   pages     = array of page objects ready for site creation
+  //   skipped   = count of non-markdown files silently ignored (includes images)
+  //   oversized = array of { path, length } for markdown files dropped because
+  //               their post-frontmatter content exceeds MAX_FILE_CHARS
+  //   errors    = per-file errors collected during read/parse
   async function importFromDataTransfer(dataTransferOrFileList) {
     let entries = [];
     const errors = [];
@@ -223,6 +229,7 @@
 
     // Process markdown.
     const pages = [];
+    const oversized = [];
     const seenSlugs = new Map(); // slug -> count, for de-duplicating collisions
 
     for (const { relativePath, file } of mdEntries) {
@@ -237,6 +244,15 @@
       }
 
       const { content, title } = extractFrontmatter(text);
+      // Drop pages over the per-page char cap before they enter the
+      // initial-commit pipeline. checkPageSizeLimit only fires after the
+      // site is opened in the editor, so without this guard an import
+      // would ship oversize pages to R2 and only complain on the next
+      // deploy.
+      if ((content || "").length > MAX_FILE_CHARS) {
+        oversized.push({ path: relativePath, length: content.length });
+        continue;
+      }
       const displayName = title || fileNameToDisplayName(baseName);
 
       let slug = pathToSlug(relativePath);
@@ -284,7 +300,7 @@
       pages.unshift(home);
     }
 
-    return { pages, skipped, errors };
+    return { pages, skipped, oversized, errors };
   }
 
   root.AgoraFolderImport = {
@@ -295,5 +311,6 @@
     fileNameToDisplayName,
     isMarkdownFile,
     shouldIgnoreDir,
+    MAX_FILE_CHARS,
   };
 })(typeof window !== "undefined" ? window : globalThis);

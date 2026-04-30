@@ -1207,21 +1207,28 @@ document.addEventListener("DOMContentLoaded", async function () {
       pendingImportPages = result.pages;
 
       const pageCount = result.pages.length;
+      const oversized = result.oversized || [];
+      const cap = (AgoraFolderImport.MAX_FILE_CHARS || MAX_FILE_CHARS).toLocaleString();
+      const oversizedMsg = oversized.length > 0
+        ? ` ${oversized.length} Markdown file(s) skipped for exceeding the ${cap}-character per-page limit: ${oversized.slice(0, 5).map(o => o.path).join(", ")}${oversized.length > 5 ? `, …and ${oversized.length - 5} more` : ""}.`
+        : "";
 
       if (pageCount === 0) {
         countEl.textContent = "No Markdown files found.";
-        skippedEl.textContent = result.skipped > 0
+        skippedEl.textContent = (result.skipped > 0
           ? `${result.skipped} non-Markdown file(s) ignored. AgoraPages doesn't host uploaded images — re-add any inline images via the editor's “Insert image from URL” button.`
-          : "";
+          : "") + oversizedMsg;
         document.getElementById("confirmImportButton").disabled = true;
         return;
       }
       countEl.textContent = `${pageCount} Markdown file${pageCount === 1 ? "" : "s"} ready to import.`;
+      let skippedText = "";
       if (result.skipped > 0) {
         // Image files land here too — call out the image policy so the
         // user knows to re-embed images by URL in the editor.
-        skippedEl.textContent = `${result.skipped} non-Markdown file(s) ignored. AgoraPages doesn't host uploaded images — re-add any inline images via the editor's “Insert image from URL” button.`;
+        skippedText = `${result.skipped} non-Markdown file(s) ignored. AgoraPages doesn't host uploaded images — re-add any inline images via the editor's “Insert image from URL” button.`;
       }
+      skippedEl.textContent = skippedText + oversizedMsg;
       const previewLimit = 50;
       const preview = result.pages.slice(0, previewLimit);
       preview.forEach(function (p) {
