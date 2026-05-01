@@ -41,6 +41,17 @@ let currentSitePathFull = null;
 let lastDeployTimeInterval = null;
 let modified = false;
 
+// Slugs (markdownCache.fileName values) the user has explicitly deleted
+// since the last successful publish. syncCacheToGit's orphan loop only
+// removes paths in this set — without it, any HEAD path missing from the
+// cache (e.g. due to a stale autosave restoration that pre-dates a page
+// added by a collaborator) gets silently unlinked. In a three-way merge
+// that "deletion" propagates to the merged tree and the file disappears
+// upstream too, even though neither user intended to delete it. Persisted
+// in autosave so reopening a session preserves the intent; cleared after
+// a successful publish.
+let pendingDeletedFileNames = new Set();
+
 // ==================== Auto-Save to localStorage ====================
 
 let _autoSaveTimer = null;
@@ -65,6 +76,10 @@ function performAutoSave() {
       documentCache: documentCache,
       folderMeta: folderMeta,
       currentSitePath: currentSitePath,
+      // Persist explicit-deletion intent so a session reopen can
+      // distinguish "user removed this page" from "cache simply doesn't
+      // know about it yet."
+      pendingDeletedFileNames: Array.from(pendingDeletedFileNames),
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(getAutoSaveKey(currentSiteId), JSON.stringify(payload));
@@ -104,6 +119,9 @@ function restoreAutoSave(siteId) {
   imageCache = data.imageCache || [];
   documentCache = data.documentCache || [];
   folderMeta = data.folderMeta || {};
+  pendingDeletedFileNames = new Set(
+    Array.isArray(data.pendingDeletedFileNames) ? data.pendingDeletedFileNames : []
+  );
   if (data.currentSitePath) {
     currentSitePath = data.currentSitePath;
   }
@@ -307,6 +325,12 @@ function getCacheByDisplayName(displayName) {
 }
 
 function addOrUpdateCache(fileName, displayName, content, options = {}) {
+  // If the user is re-creating a page at a slug they previously deleted
+  // this session, drop the pending-deletion marker so syncCacheToGit
+  // doesn't unlink the just-recreated file.
+  if (fileName && pendingDeletedFileNames.has(fileName)) {
+    pendingDeletedFileNames.delete(fileName);
+  }
   const existing = getCacheByFileName(fileName);
   const now = new Date().toISOString();
 
@@ -342,6 +366,11 @@ function removeCacheByFileName(fileName) {
   if (index !== -1) {
     markdownCache.splice(index, 1);
   }
+  // Mark as an explicit deletion so syncCacheToGit's orphan loop knows
+  // to actually unlink+remove this path on the next publish (and three-
+  // way merge). Cache absences without this signal are treated as stale
+  // state, not user intent.
+  if (fileName) pendingDeletedFileNames.add(fileName);
 }
 
 // Helper functions for documentCache
@@ -517,6 +546,31 @@ async function openSiteInEditor(site, initialPage = "index") {
     restoredFromAutoSave = restoreAutoSave(currentSiteId);
     setSiteAvailable(markdownFiles.length > 0);
     console.log("Auto-restored unpublished changes from", autoSaveData.savedAt);
+
+    // Self-heal: any path that's in the published pages.json but absent
+    // from the restored cache AND not explicitly deleted is almost
+    // certainly a page added since the autosave was written (e.g. a
+    // collaborator's publish landed while this tab was closed). Add a
+    // metadata-only stub so syncCacheToGit's orphan loop doesn't see
+    // its absence as user intent. The body lazy-loads on first open.
+    if (Array.isArray(pagesJsonData)) {
+      const cacheFileNames = new Set(markdownCache.map(c => c.fileName));
+      for (const page of pagesJsonData) {
+        const slug = canonicalPageSlug(page.fileName);
+        if (!slug) continue;
+        const fileName = `public/${slug}.md`;
+        if (cacheFileNames.has(fileName)) continue;
+        if (pendingDeletedFileNames.has(fileName)) continue;
+        markdownCache.push({
+          displayName: page.displayName || slug.split("/").pop(),
+          fileName,
+          // content intentionally undefined — lazy stub, fetched on demand.
+          createdAt: page.createdAt || new Date().toISOString(),
+          modifiedAt: page.modifiedAt || new Date().toISOString(),
+          sortOrder: page.sortOrder != null ? page.sortOrder : null,
+        });
+      }
+    }
   }
 
   if (!restoredFromAutoSave && markdownFiles.length === 0) {
@@ -1418,6 +1472,10 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (typeof recordSelfDeploy === "function") {
             await recordSelfDeploy(currentSiteId);
           }
+          // The deletions the user staged this session are now committed
+          // and uploaded; reset the explicit-deletion log so the next
+          // edit cycle starts from a clean slate.
+          pendingDeletedFileNames.clear();
         }
 
         // Reset modified flag after successful deployment
@@ -1888,6 +1946,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (typeof recordSelfDeploy === "function") {
             await recordSelfDeploy(currentSiteId);
           }
+          // Revert just published — the explicit-deletion log is no
+          // longer relevant to anything still pending.
+          pendingDeletedFileNames.clear();
         }
 
         // Update the sidebar with the new pages

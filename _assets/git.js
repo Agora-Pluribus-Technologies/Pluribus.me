@@ -995,12 +995,24 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       tracked = new Set();
     }
     const cacheFileNames = new Set(markdownCache.map(item => item.fileName));
+    // Only consider a tracked .md file an orphan if the user has
+    // explicitly deleted it this session (recorded via
+    // removeCacheByFileName → pendingDeletedFileNames). Cache absences
+    // without that signal are treated as stale state and left alone —
+    // otherwise a stale-autosave restoration that pre-dates a page
+    // added by a collaborator would silently unlink that page from
+    // both the local branch and (via the three-way merge) the upstream
+    // tree. .html shells stay always-orphan: the worker serves them
+    // from inlined templates and any leftover R2 copy is dead weight.
+    const explicitDeletes = (typeof pendingDeletedFileNames !== "undefined" && pendingDeletedFileNames instanceof Set)
+      ? pendingDeletedFileNames
+      : new Set();
     for (const filepath of tracked) {
       if (!filepath.startsWith("public/")) continue;
 
       let isOrphan = false;
       if (filepath.endsWith(".md")) {
-        isOrphan = !cacheFileNames.has(filepath);
+        isOrphan = !cacheFileNames.has(filepath) && explicitDeletes.has(filepath);
       } else if (filepath.endsWith(".html")) {
         // Always orphan — we no longer produce .html shells.
         isOrphan = true;
