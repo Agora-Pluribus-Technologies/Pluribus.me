@@ -573,7 +573,7 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
   // Skip the default Home page and seed pages.json from the import instead.
   const hasImport = Array.isArray(importedPages) && importedPages.length > 0;
 
-  const defaultHomeContent = "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above.";
+  const defaultHomeContent = "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button or anywhere on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above.";
   const now = new Date().toISOString();
 
   // Imports without their own home/index page get one prepended so the

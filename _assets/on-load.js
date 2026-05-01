@@ -529,7 +529,7 @@ async function openSiteInEditor(site, initialPage = "index") {
     addOrUpdateCache(
       "public/home.md",
       "Home",
-      "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, images, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above."
+      "# Welcome to your Agora Site!\n\nThis is your homepage. Click the **Edit** button or anywhere on this panel to change its content.\n\nUse the **+** buttons above or below this panel to add more panels, links, and embeds.\n\nTo add more pages, click the **+** button in the page menu bar above."
     );
     // Mark as modified for new sites (needs to be published)
     modified = true;
