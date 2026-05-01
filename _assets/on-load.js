@@ -3047,6 +3047,20 @@ async function selectSidebarPage(fileName) {
   const cacheItem = getCacheByFileName(fileName);
   if (!cacheItem) return;
 
+  // Flush any pending block-editor edits to the page we're navigating
+  // AWAY from before flipping currentSitePath. The await later in this
+  // function (ensurePageContentLoaded) yields the event loop, and a
+  // saveBlocksToCache that fires during that yield would otherwise read
+  // the new currentSitePath but the old currentBlocks — writing the
+  // previous page's markdown into the newly-selected page's cache
+  // entry. Most visibly: when conflict-resolution's
+  // reloadCacheFromWorkingTree falls back to selectSidebarPage on the
+  // homepage, the homepage gets clobbered with the in-flight edits from
+  // whichever page the user was working on.
+  if (currentSitePath && currentSitePath !== fileName && typeof saveBlocksToCache === "function") {
+    try { saveBlocksToCache(); } catch (_) { /* best-effort flush */ }
+  }
+
   currentSitePath = fileName;
 
   // Update active state in sidebar
