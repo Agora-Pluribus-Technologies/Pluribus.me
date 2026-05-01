@@ -22,7 +22,11 @@
 //        root. (Caused git desync; replaced by v3.)
 //   v3 — hybrid: shells at root, markdown stays under `public/` so the
 //        bundled `.git/` history lines up with the working tree.
-const BUNDLE_FORMAT_VERSION = 3;
+//   v4 — same on-disk layout as v3; bumped to invalidate bundles built
+//        before R2.list pagination + R2.get batching landed. Pre-v4
+//        bundles for sites with >1000 R2 keys silently truncated to the
+//        first 1000 (see buildExportBundle for the failure mode).
+export const BUNDLE_FORMAT_VERSION = 4;
 
 import { SITE_TEMPLATE_HTML } from "../_site-templates.js";
 
@@ -153,6 +157,15 @@ export function synthesizeShellEntries(mdPaths) {
   return entries;
 }
 
+// Cap on concurrent outbound R2.get calls per fan-out batch. Workers
+// allows ~1000 simple subrequests per request, but the bundle build
+// also issues an R2.list and (on the persist path) an R2.put, so leaving
+// substantial headroom keeps the build from clipping at the cap with no
+// observable error. 200 was chosen empirically: the GET phase becomes
+// pipelined-but-bounded and the wall-clock cost is dominated by the
+// slowest batch's longest GET, not by the batch count.
+const GET_BATCH_SIZE = 200;
+
 // Build the export bundle from R2 by listing the site prefix and
 // fetching every (non-skipped) file in parallel. Returns the bundle
 // object { site, files: [...] }, plus the JSON-stringified version
@@ -165,35 +178,72 @@ export function synthesizeShellEntries(mdPaths) {
 // deployability of the export comes from synthesizeShellEntries
 // emitting the `index.html` / `<slug>.html` shells AT the ZIP root,
 // while the markdown they load remains nested under `public/`.
+//
+// Returns `{ exportData, json, complete }`. `complete` is `false` when
+// any expected R2 object failed to read (caller MUST NOT persist a
+// partial bundle to the SHA-keyed cache — see loadOrBuildSiteBundle).
 export async function buildExportBundle(env, siteId, siteConfig) {
   const r2Prefix = `${siteId}/`;
-  const list = await env.PLURIBUS_BUCKET.list({ prefix: r2Prefix });
 
-  const includedKeys = list.objects
-    .map(obj => obj.key)
-    .filter(key => isExportedFile(key.replace(r2Prefix, "")));
-
-  // Parallel R2 GETs. Cloudflare Workers handle up to ~1000 concurrent
-  // outbound subrequests; for typical sites we're well under that.
-  const fileResults = await Promise.all(
-    includedKeys.map(async (key) => {
-      try {
-        const obj = await env.PLURIBUS_BUCKET.get(key);
-        if (!obj) return null;
-        const arrayBuffer = await obj.arrayBuffer();
-        return {
-          path: key.replace(r2Prefix, ""),
-          contentType: obj.httpMetadata?.contentType || "application/octet-stream",
-          content: arrayBufferToBase64(arrayBuffer),
-        };
-      } catch (e) {
-        console.error(`Error reading file ${key} for export:`, e);
-        return null;
+  // Paginate R2.list — a single call returns at most 1000 keys. Sites
+  // with ~1000+ pages (one R2 key per .md, plus a handful of metadata
+  // JSONs and the .git-history blob) silently truncated under the
+  // single-call version: the alphabetically-later keys (e.g.
+  // `public/projects/...`, `public/resources/...`) just never made it
+  // into the bundle. Loop until R2 reports `truncated: false`.
+  const includedKeys = [];
+  let cursor;
+  for (;;) {
+    const list = await env.PLURIBUS_BUCKET.list({ prefix: r2Prefix, cursor });
+    for (const obj of list.objects) {
+      if (isExportedFile(obj.key.replace(r2Prefix, ""))) {
+        includedKeys.push(obj.key);
       }
-    })
-  );
+    }
+    if (!list.truncated) break;
+    cursor = list.cursor;
+  }
 
-  const files = fileResults.filter(Boolean);
+  // Chunk the parallel R2.get fan-out so the bundle build never sits at
+  // the 1000-subrequest cap. On the cap, R2.get rejects, the catch
+  // returns null, and a silent drop lands in the bundle — same failure
+  // mode as the LIST truncation above, just at a different layer.
+  const files = [];
+  let getFailures = 0;
+  for (let i = 0; i < includedKeys.length; i += GET_BATCH_SIZE) {
+    const batch = includedKeys.slice(i, i + GET_BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(async (key) => {
+        try {
+          const obj = await env.PLURIBUS_BUCKET.get(key);
+          if (!obj) return { key, ok: false };
+          const arrayBuffer = await obj.arrayBuffer();
+          return {
+            key,
+            ok: true,
+            entry: {
+              path: key.replace(r2Prefix, ""),
+              contentType: obj.httpMetadata?.contentType || "application/octet-stream",
+              content: arrayBufferToBase64(arrayBuffer),
+            },
+          };
+        } catch (e) {
+          console.error(`Error reading file ${key} for export:`, e);
+          return { key, ok: false };
+        }
+      })
+    );
+    for (const r of batchResults) {
+      if (r.ok) files.push(r.entry);
+      else getFailures++;
+    }
+  }
+
+  if (getFailures > 0) {
+    console.warn(
+      `download: ${getFailures}/${includedKeys.length} file(s) failed to fetch for ${siteId}; bundle marked incomplete`
+    );
+  }
 
   // Bake in one .html SPA shell per .md page (plus a root index.html
   // and a `.nojekyll`). The shells go to the ZIP ROOT (no `public/`)
@@ -211,7 +261,11 @@ export async function buildExportBundle(env, siteId, siteConfig) {
     files: [...files, ...shellEntries],
   };
 
-  return { exportData, json: JSON.stringify(exportData) };
+  return {
+    exportData,
+    json: JSON.stringify(exportData),
+    complete: getFailures === 0,
+  };
 }
 
 // Load this site's bundle, preferring the persisted R2 copy when its
@@ -252,9 +306,14 @@ export async function loadOrBuildSiteBundle(env, siteConfig) {
     }
   }
 
-  const { exportData, json } = await buildExportBundle(env, siteId, siteConfig);
+  const { exportData, json, complete } = await buildExportBundle(env, siteId, siteConfig);
 
-  if (currentSha) {
+  // Only persist when the build is complete. A partial bundle (some
+  // R2.get failed) keyed by the current shortSha would be served to
+  // every subsequent download until the next publish bumped the SHA —
+  // turning a transient fetch failure into a sticky one. Skipping the
+  // persist forces the next download to rebuild and self-heal.
+  if (currentSha && complete) {
     try {
       await env.PLURIBUS_BUCKET.put(bundleKey, json, {
         httpMetadata: { contentType: "application/json" },
@@ -267,5 +326,10 @@ export async function loadOrBuildSiteBundle(env, siteConfig) {
     }
   }
 
-  return { bundle: exportData, json, source: "rebuild" };
+  return {
+    bundle: exportData,
+    json,
+    source: complete ? "rebuild" : "rebuild-partial",
+    complete,
+  };
 }

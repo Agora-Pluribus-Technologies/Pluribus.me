@@ -1,5 +1,5 @@
 import { isOwner, forbidden } from "../auth/_authorize.js";
-import { loadOrBuildSiteBundle } from "../_export-helpers.js";
+import { loadOrBuildSiteBundle, BUNDLE_FORMAT_VERSION } from "../_export-helpers.js";
 
 // GET /api/sites/download - Download a single site as JSON (ZIP created client-side)
 export async function onRequestGet(context) {
@@ -33,9 +33,13 @@ export async function onRequestGet(context) {
   // Including the SHA means a fresh publish (which advances the SHA)
   // automatically misses the cache without us having to purge anything.
   // Old SHAs become unreferenced and TTL out naturally.
+  // BUNDLE_FORMAT_VERSION is folded into the key so a version bump
+  // (e.g. when a builder bug is fixed) invalidates the edge cache for
+  // every site without a manual purge — same SHA, new version → cold
+  // cache → rebuild path runs.
   const cache = caches.default;
   const cacheKey = new Request(
-    `https://internal-site-export/${encodeURIComponent(siteId)}/${currentSha || "0"}`
+    `https://internal-site-export/v${BUNDLE_FORMAT_VERSION}/${encodeURIComponent(siteId)}/${currentSha || "0"}`
   );
   if (currentSha) {
     const cached = await cache.match(cacheKey);
@@ -54,7 +58,7 @@ export async function onRequestGet(context) {
     // rebuilds from per-file LIST + GET and persists for next time.
     // Same code path as /api/users/download.js, so per-site bundles
     // warm each other's caches.
-    const { json, source } = await loadOrBuildSiteBundle(env, siteConfig);
+    const { json, source, complete } = await loadOrBuildSiteBundle(env, siteConfig);
     console.log(`download: served ${siteId} from ${source}`);
 
     const response = new Response(json, {
@@ -67,7 +71,11 @@ export async function onRequestGet(context) {
       },
     });
 
-    if (currentSha) {
+    // Only seed the edge cache when the bundle is complete. A partial
+    // build (any R2.get failures) cached here would be served for the
+    // 24 h TTL — same sticky-failure mode the R2 persist path now
+    // skips. Forces the next call to rebuild and self-heal.
+    if (currentSha && complete !== false) {
       // Cache for the edge under the SHA-keyed URL. New publishes
       // advance the SHA → new key → cold cache → rebuild path runs.
       // Keep TTL short on the headers but rely on the cache-key
