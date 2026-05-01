@@ -955,6 +955,21 @@ nav {
   }
 }
 
+/* Inline throbber for buttons that kick off long-running work (e.g. the
+ * folder-import "Create Site" button — a 1000-page vault takes ~30 s to
+ * commit + upload, and without visible motion the page reads as frozen). */
+.btn-throbber {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spinner 0.6s linear infinite;
+}
+
 .alert-bar {
   position: fixed;
   top: 0;

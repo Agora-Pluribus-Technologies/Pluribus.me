@@ -1177,9 +1177,13 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     confirmBtn.addEventListener("click", async function () {
       if (!pendingImportContext || !pendingImportPages || pendingImportPages.length === 0) return;
-      const originalText = confirmBtn.innerText;
+      // Capture the original markup, swap to a throbber + label while the
+      // import runs, restore on completion. innerHTML rather than
+      // innerText so the spinning <span> renders as an element instead of
+      // a literal "<span ...>" string.
+      const originalHtml = confirmBtn.innerHTML;
       confirmBtn.disabled = true;
-      confirmBtn.innerText = "Creating...";
+      confirmBtn.innerHTML = '<span class="btn-throbber" aria-hidden="true"></span>Creating site…';
       try {
         const ok = await createNewSite({
           ...pendingImportContext,
@@ -1190,7 +1194,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.error("Import-create failed:", e);
         showImportError("Failed to create site from imported folder.");
       } finally {
-        confirmBtn.innerText = originalText;
+        confirmBtn.innerHTML = originalHtml;
         confirmBtn.disabled = !pendingImportPages || pendingImportPages.length === 0;
       }
     });
