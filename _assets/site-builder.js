@@ -1333,10 +1333,12 @@ function showEmbedPopup(currentContent, callback) {
         <div id="youtubeEmbedSection">
           <label>YouTube URL:</label>
           <input type="text" id="youtubeUrlInput" placeholder="https://youtu.be/...">
+          <p class="form-hint"><a href="https://agorapages.com/s/agorapages/tutorials/how-to-embed-a-youtube-video.html" target="_blank" rel="noopener noreferrer">How to embed a YouTube video</a></p>
         </div>
         <div id="soundcloudEmbedSection" style="display:none;">
           <label>SoundCloud URL:</label>
           <input type="text" id="soundcloudUrlInput" placeholder="https://soundcloud.com/...">
+          <p class="form-hint"><a href="https://agorapages.com/s/agorapages/tutorials/how-to-embed-a-soundcloud-song.html" target="_blank" rel="noopener noreferrer">How to embed a SoundCloud song</a></p>
         </div>
         <div id="htmlEmbedSection" style="display:none;">
           <label>HTML Code:</label>
@@ -1550,7 +1552,7 @@ function showExternalImagePopup(callback) {
         <div class="form-group">
           <label for="externalImageUrl">Image URL:</label>
           <input type="url" id="externalImageUrl" placeholder="https://example.com/image.jpg" autocomplete="off" spellcheck="false">
-          <p class="form-hint">Only external https:// image URLs are supported.</p>
+          <p class="form-hint">Only external https:// image URLs are supported. <a href="https://agorapages.com/s/agorapages/tutorials/how-to-add-images-to-your-site" target="_blank" rel="noopener noreferrer">How to add images to your site</a></p>
         </div>
         <div class="form-group">
           <label for="externalImageAlt">Alt text (optional):</label>
