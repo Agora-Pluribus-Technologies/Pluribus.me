@@ -1302,8 +1302,19 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.warn("Couldn't compute pending-change count:", e);
         pageCount = markdownCache.length;
       }
-      const ok = confirm(`Do you want to delete pending changes for ${pageCount} pages?`);
+      const ok = confirm(`Do you want to discard pending changes for ${pageCount} pages?`);
       if (!ok) return;
+      // Cancel any pending auto-save timer and flip `modified` off before
+      // clearing localStorage. Without this, a setTimeout queued by the
+      // last edit fires between clearAutoSave() and the reload's unload,
+      // re-persists the pending markdownCache, and the next page load
+      // restores it via restoreAutoSave — exactly the "had to discard
+      // twice" symptom.
+      if (typeof _autoSaveTimer !== "undefined" && _autoSaveTimer) {
+        clearTimeout(_autoSaveTimer);
+        _autoSaveTimer = null;
+      }
+      modified = false;
       clearAutoSave(currentSiteId);
       window.location.reload();
     });
