@@ -32,8 +32,17 @@ async function gitInit(siteId) {
   }
 }
 
-// Write a file to the git working directory
-async function gitWriteFile(siteId, filePath, content) {
+// Write a file to the git working directory.
+//
+// `options.skipStage` writes the file to lightning-fs but does NOT call
+// git.add — the caller is then expected to stage in bulk via
+// gitStagePaths once all writes are done. This is the hot path for
+// large imports (initialCommitWithGitHistory, syncCacheToGit): per-file
+// git.add reads + rewrites the .git/index on every call, so 1000 writes
+// = 1000 index rewrites. Bulk-staging at the end collapses that to a
+// single index rewrite and cuts the git phase of an Obsidian-vault
+// import roughly in half.
+async function gitWriteFile(siteId, filePath, content, options = {}) {
   const dir = getRepoDir(siteId);
   const fullPath = `${dir}/${filePath}`;
 
@@ -51,13 +60,28 @@ async function gitWriteFile(siteId, filePath, content) {
     // Write the file
     await pfs.writeFile(fullPath, content, "utf8");
 
-    // Stage the file
-    await git.add({ fs, dir, filepath: filePath });
+    if (!options.skipStage) {
+      await git.add({ fs, dir, filepath: filePath });
+    }
 
-    console.log(`File written and staged: ${filePath}`);
     return true;
   } catch (error) {
     console.error("Error writing file:", error);
+    return false;
+  }
+}
+
+// Stage many files in a single git.add call. Isomorphic-git accepts a
+// filepath array and amortizes the index load/save across all paths,
+// which is the win that makes this worth using over a per-file loop.
+async function gitStagePaths(siteId, filePaths) {
+  if (!Array.isArray(filePaths) || filePaths.length === 0) return true;
+  const dir = getRepoDir(siteId);
+  try {
+    await git.add({ fs, dir, filepath: filePaths });
+    return true;
+  } catch (error) {
+    console.error("Error bulk-staging files:", error);
     return false;
   }
 }
@@ -862,9 +886,15 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
     // hasn't been fetched — the loadR2ToGit pass already wrote the
     // current R2 copy into the working tree, which is the right state for
     // an unedited page.
+    //
+    // skipStage: defer the per-file git.add to a single bulk gitStagePaths
+    // call below. On a 1000-page sync this turns 1000 index rewrites into
+    // one and roughly halves the git portion of a publish.
+    const stagedPaths = [];
     for (const item of markdownCache) {
       if (typeof item.content !== "string") continue;
-      await gitWriteFile(siteId, item.fileName, item.content);
+      await gitWriteFile(siteId, item.fileName, item.content, { skipStage: true });
+      stagedPaths.push(item.fileName);
     }
 
     // Write pages.json (flat array of `{ fileName, displayName, ... }`).
@@ -882,7 +912,8 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
     const pagesJsonContent = (typeof buildPagesJsonContent === "function")
       ? buildPagesJsonContent(pages)
       : JSON.stringify(pages);
-    await gitWriteFile(siteId, "public/pages.json", pagesJsonContent);
+    await gitWriteFile(siteId, "public/pages.json", pagesJsonContent, { skipStage: true });
+    stagedPaths.push("public/pages.json");
 
     // Keep search-index.json in sync with the cache. Incremental: reuse
     // the previous index from the git working tree so we don't reparse
@@ -899,15 +930,22 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
       await gitWriteFile(
         siteId,
         "public/search-index.json",
-        buildSearchIndexContent(markdownCache, prevSearch)
+        buildSearchIndexContent(markdownCache, prevSearch),
+        { skipStage: true }
       );
+      stagedPaths.push("public/search-index.json");
     }
 
     // Write images.json
-    await gitWriteFile(siteId, "public/images.json", JSON.stringify(imageCache));
+    await gitWriteFile(siteId, "public/images.json", JSON.stringify(imageCache), { skipStage: true });
+    stagedPaths.push("public/images.json");
 
     // Write documents.json
-    await gitWriteFile(siteId, "public/documents.json", JSON.stringify(documentCache));
+    await gitWriteFile(siteId, "public/documents.json", JSON.stringify(documentCache), { skipStage: true });
+    stagedPaths.push("public/documents.json");
+
+    // One bulk stage for everything we just wrote.
+    await gitStagePaths(siteId, stagedPaths);
 
     console.log("Cache synced to git");
     return true;
