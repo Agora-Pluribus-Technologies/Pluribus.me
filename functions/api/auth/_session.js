@@ -1,6 +1,10 @@
 const SESSION_TTL = 604800; // 7 days
 const SESSION_REFRESH_THRESHOLD = 518400; // 6 days (refresh in last 24h of 7-day TTL)
 const COOKIE_NAME = "__session";
+// Cap on concurrent active sessions per user. Each fresh login adds a row;
+// when the count exceeds this, the oldest (by lastAccess) sessions are
+// evicted so a single user can be signed in on at most this many devices.
+const MAX_SESSIONS_PER_USER = 3;
 
 // OAuth `state` defends against login CSRF: an attacker can't trick a
 // victim's browser into completing OAuth with the attacker's authorization
@@ -52,13 +56,26 @@ export async function createSession(env, sessionData) {
     lastAccess: nowIso,
   };
 
-  // INSERT OR REPLACE keyed on userKey: a fresh login from the same
-  // provider+providerId silently invalidates any prior session for that
-  // user. Other devices holding the old token will see getSession return
-  // null on their next request — accepted trade-off for one-session-per-user.
+  // Insert the new session, then evict the oldest rows for this userKey
+  // beyond the per-user concurrent-session cap. Each row's tokenHash is
+  // distinct, so multiple sessions coexist for the same user — up to
+  // MAX_SESSIONS_PER_USER. The Sessions.userKey column must NOT carry a
+  // UNIQUE constraint for this to work (drop it via a recreate-and-copy
+  // migration if it still does — D1/SQLite can't ALTER it in place).
   await env.USERS_DB.prepare(
-    "INSERT OR REPLACE INTO Sessions (tokenHash, userKey, data, createdAt, lastAccess) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO Sessions (tokenHash, userKey, data, createdAt, lastAccess) VALUES (?, ?, ?, ?, ?)"
   ).bind(hash, userKey, JSON.stringify(session), nowSec, nowSec).run();
+
+  await env.USERS_DB.prepare(
+    `DELETE FROM Sessions
+     WHERE userKey = ?
+       AND tokenHash NOT IN (
+         SELECT tokenHash FROM Sessions
+         WHERE userKey = ?
+         ORDER BY lastAccess DESC, createdAt DESC
+         LIMIT ?
+       )`
+  ).bind(userKey, userKey, MAX_SESSIONS_PER_USER).run();
 
   return token;
 }
