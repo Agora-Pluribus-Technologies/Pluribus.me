@@ -889,6 +889,13 @@ async function deployChanges(siteId) {
     contentType: "application/json",
   });
 
+  // Slugs of every .md file changed in this commit. Shared by the
+  // search-index and wikilinks incremental builders below.
+  const dirtySlugs = new Set();
+  for (const fp of changedMd) {
+    dirtySlugs.add(fp.replace(/^public\//, "").replace(/\.md$/, ""));
+  }
+
   // Republish search-index.json (per-page title + headings). Incremental
   // — slugs already classified in the previous index are reused verbatim
   // and only slugs in `dirtySlugs` (the ones that actually changed in
@@ -897,10 +904,6 @@ async function deployChanges(siteId) {
   {
     const prevSearchText = await getFileFromR2(siteId, "public/search-index.json");
     const prevSearch = parseSearchIndexJson(prevSearchText);
-    const dirtySlugs = new Set();
-    for (const fp of changedMd) {
-      dirtySlugs.add(fp.replace(/^public\//, "").replace(/\.md$/, ""));
-    }
     files.push({
       filePath: "public/search-index.json",
       content: buildSearchIndexContent(markdownCache, prevSearch, dirtySlugs),
@@ -908,7 +911,11 @@ async function deployChanges(siteId) {
     });
   }
 
-  // Generate wikilinks.json (backlink index)
+  // Generate wikilinks.json (backlink index). Incremental — same strategy
+  // as search-index.json above. Sources outside `dirtySlugs` keep whatever
+  // entries they contributed last publish, so a metadata-only lazy-load
+  // stub for an unchanged page contributes verbatim without needing its
+  // body fetched.
   if (typeof AgoraWikilinks !== "undefined") {
     try {
       const indexablePages = markdownCache.map(c => ({
@@ -922,11 +929,32 @@ async function deployChanges(siteId) {
         ])
       );
       const folders = typeof folderMeta !== "undefined" ? folderMeta : null;
-      const backlinks = AgoraWikilinks.buildBacklinkIndex(
-        indexablePages,
-        (fileName) => contentByFileName.get(fileName),
-        folders
-      );
+
+      let prevBacklinks = {};
+      try {
+        const prevWikilinksText = await getFileFromR2(siteId, "public/wikilinks.json");
+        if (prevWikilinksText) {
+          const parsed = JSON.parse(prevWikilinksText);
+          if (parsed && typeof parsed === "object") prevBacklinks = parsed;
+        }
+      } catch (_) { /* first publish or malformed — start fresh */ }
+
+      const builder = typeof AgoraWikilinks.buildIncrementalBacklinkIndex === "function"
+        ? AgoraWikilinks.buildIncrementalBacklinkIndex
+        : null;
+      const backlinks = builder
+        ? builder(
+            indexablePages,
+            (fileName) => contentByFileName.get(fileName),
+            folders,
+            prevBacklinks,
+            dirtySlugs
+          )
+        : AgoraWikilinks.buildBacklinkIndex(
+            indexablePages,
+            (fileName) => contentByFileName.get(fileName),
+            folders
+          );
       files.push({
         filePath: "public/wikilinks.json",
         content: JSON.stringify(backlinks),

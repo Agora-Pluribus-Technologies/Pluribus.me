@@ -351,6 +351,105 @@
     return index;
   }
 
+  // Incremental variant of buildBacklinkIndex. Carries over `previous`
+  // entries verbatim for source pages that aren't dirty, then re-parses
+  // only the dirty (or new) sources whose content is actually loaded.
+  // Mirrors buildSearchIndexContent's strategy so a publish stays fast
+  // even when most cache entries are lazy-loaded metadata-only stubs.
+  //
+  // pages       array of { fileName, displayName } (slug form, no public/, no .md)
+  // getContent  fn(fileName) -> markdown string for that source, or
+  //             undefined when the body isn't loaded
+  // folders     optional folders.json for display-name resolution
+  // previous    prior backlink index (target -> [{ fileName, displayName }, ...])
+  //             — defaults to an empty index for first publishes
+  // dirty       Set of source slugs to re-parse (typically every page
+  //             changed in the latest commit). Pages absent from this set
+  //             keep whatever entries they contributed last time.
+  function buildIncrementalBacklinkIndex(pages, getContent, folders, previous, dirty) {
+    if (!Array.isArray(pages) || typeof getContent !== "function") return {};
+
+    const prev = (previous && typeof previous === "object") ? previous : {};
+    const dirtySet = (dirty instanceof Set) ? dirty : new Set();
+
+    // Shallow clone the prior index so we can mutate freely.
+    const index = {};
+    for (const target of Object.keys(prev)) {
+      const sources = prev[target];
+      if (Array.isArray(sources)) index[target] = sources.slice();
+    }
+
+    const liveSlugs = new Set();
+    const displayNameBySlug = new Map();
+    for (const p of pages) {
+      if (!p || !p.fileName) continue;
+      liveSlugs.add(p.fileName);
+      displayNameBySlug.set(p.fileName, p.displayName || p.fileName);
+    }
+
+    // Drop every dirty source's prior contributions from each target list —
+    // they'll be re-derived below from the source's new content. (Sources
+    // that were deleted entirely are also pruned in the GC step.)
+    if (dirtySet.size > 0) {
+      for (const target of Object.keys(index)) {
+        const filtered = index[target].filter(s => !dirtySet.has(s.fileName));
+        if (filtered.length === 0) delete index[target];
+        else index[target] = filtered;
+      }
+    }
+
+    // Re-parse dirty sources. Skip ones whose content isn't loaded — there's
+    // nothing to derive, and they had no entries left after the drop above.
+    for (const source of pages) {
+      if (!dirtySet.has(source.fileName)) continue;
+      const content = getContent(source.fileName);
+      if (!content) continue;
+
+      const bodies = extractWikilinkBodies(content);
+      const seenTargets = new Set();
+      for (const body of bodies) {
+        const { target } = parseWikilinkBody(body);
+        const resolved = resolveWikilink(target, pages, folders);
+        if (!resolved) continue;
+        if (resolved.fileName === source.fileName) continue; // skip self-links
+        if (seenTargets.has(resolved.fileName)) continue;
+        seenTargets.add(resolved.fileName);
+
+        if (!index[resolved.fileName]) index[resolved.fileName] = [];
+        index[resolved.fileName].push({
+          fileName: source.fileName,
+          displayName: source.displayName || source.fileName,
+        });
+      }
+    }
+
+    // GC: drop targets that are no longer pages, and drop source entries
+    // pointing to pages that have been deleted since the last publish.
+    for (const target of Object.keys(index)) {
+      if (!liveSlugs.has(target)) {
+        delete index[target];
+        continue;
+      }
+      const alive = index[target].filter(s => liveSlugs.has(s.fileName));
+      if (alive.length === 0) delete index[target];
+      else index[target] = alive;
+    }
+
+    // Refresh displayName for surviving (non-dirty) source entries — the
+    // page body may not have changed but the sidebar label might have.
+    for (const target of Object.keys(index)) {
+      for (const entry of index[target]) {
+        const live = displayNameBySlug.get(entry.fileName);
+        if (live) entry.displayName = live;
+      }
+      index[target].sort((a, b) =>
+        (a.displayName || a.fileName).localeCompare(b.displayName || b.fileName)
+      );
+    }
+
+    return index;
+  }
+
   // Choose the best replacement target text for a wikilink whose resolved
   // page was renamed.
   //   - Original wrote the full path  -> new full path
@@ -494,6 +593,7 @@
     slugifyHeading,
     extractWikilinkBodies,
     buildBacklinkIndex,
+    buildIncrementalBacklinkIndex,
     chooseRenamedTarget,
     rewriteWikilinkTargets,
     unescapeWikilinkBrackets,

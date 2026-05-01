@@ -3060,57 +3060,17 @@ async function ensureAllPagesLoaded() {
   await Promise.all(missing.map(item => ensurePageContentLoaded(item)));
 }
 
-// Targeted load: only pull the cache entries that could affect the
-// backlink index (wikilinks.json) on the next publish. The set is:
-//   1. Every source page named in the existing wikilinks.json — those
-//      pages are known to contain `[[...]]` references and may still
-//      contribute even if their content is unchanged.
-//   2. Every page changed in the latest commit (`changedMd`) — its
-//      wikilinks may have just been added or removed.
-// Pages outside both sets had no wikilinks last publish and weren't
-// touched this publish, so they can't possibly affect the new index and
-// stay metadata-only. `siteId` defaults to currentSiteId.
+// Targeted load: ensure every page changed in this commit has its body
+// in cache before the publish-time wikilinks.json rebuild reads it.
+// Unchanged sources inherit their previous index entries verbatim (see
+// buildIncrementalBacklinkIndex), so they can stay metadata-only — no
+// need to preload prior-source pages whose .md didn't change.
 async function ensurePagesWithWikilinksLoaded(siteId, changedMd) {
   if (!Array.isArray(markdownCache) || markdownCache.length === 0) return;
-  const id = siteId || currentSiteId;
-  if (!id) return;
-
-  const wantedCacheKeys = new Set();
-
-  // (1) Pages that contained wikilinks at the last publish.
-  try {
-    const resp = await fetch(`/s/${id}/wikilinks.json`, {
-      method: "GET",
-      headers: { "Cache-Control": "no-cache, must-revalidate" },
-    });
-    if (resp.ok) {
-      const prevIndex = await resp.json();
-      if (prevIndex && typeof prevIndex === "object") {
-        for (const sources of Object.values(prevIndex)) {
-          if (!Array.isArray(sources)) continue;
-          for (const src of sources) {
-            if (src && src.fileName) {
-              wantedCacheKeys.add(`public/${src.fileName}.md`);
-            }
-          }
-        }
-      }
-    }
-  } catch (e) {
-    // First-publish sites won't have wikilinks.json yet; just fall back
-    // to the changed-this-commit set below.
-    console.warn("Couldn't read existing wikilinks.json for incremental load:", e);
-  }
-
-  // (2) Pages changed in this commit.
-  if (changedMd instanceof Set) {
-    for (const fp of changedMd) wantedCacheKeys.add(fp);
-  }
-
-  if (wantedCacheKeys.size === 0) return;
+  if (!(changedMd instanceof Set) || changedMd.size === 0) return;
 
   const toLoad = markdownCache.filter(item =>
-    wantedCacheKeys.has(item.fileName) && typeof item.content !== "string"
+    changedMd.has(item.fileName) && typeof item.content !== "string"
   );
   if (toLoad.length === 0) return;
   await Promise.all(toLoad.map(item => ensurePageContentLoaded(item)));
