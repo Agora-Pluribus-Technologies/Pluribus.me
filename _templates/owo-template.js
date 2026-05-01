@@ -410,8 +410,29 @@ async function fetchFoldersJson(origin, basePath) {
   }
 }
 
-function renderBacklinksSection(backlinksForPage, origin, basePath) {
+function renderBacklinksSection(backlinksForPage, origin, basePath, foldersJson) {
   if (!Array.isArray(backlinksForPage) || backlinksForPage.length === 0) return null;
+
+  const folders = (typeof foldersJson === "object" && foldersJson) ? foldersJson : {};
+  // Same fallback rules as createSidebarSearch.folderSegmentName: prefer
+  // folders.json displayName, otherwise convert dashes/underscores in the
+  // path segment back to spaces so root-imports without folders.json
+  // metadata still read naturally.
+  function folderSegmentName(folderPath, segment) {
+    const info = folders[folderPath];
+    if (info && info.displayName) return info.displayName;
+    return (segment || "").replace(/[-_]+/g, " ");
+  }
+
+  function breadcrumb(slug, pageDisplayName) {
+    const parts = (slug || "").split("/").filter(Boolean);
+    if (parts.length <= 1) return pageDisplayName || parts[0] || slug || "";
+    const folderParts = parts.slice(0, -1);
+    const folderNames = folderParts.map((seg, i) =>
+      folderSegmentName(folderParts.slice(0, i + 1).join("/"), seg)
+    );
+    return folderNames.join(" / ") + " / " + (pageDisplayName || parts[parts.length - 1]);
+  }
 
   const section = document.createElement("section");
   section.className = "backlinks-section";
@@ -430,7 +451,7 @@ function renderBacklinksSection(backlinksForPage, origin, basePath) {
     const a = document.createElement("a");
     a.className = "backlinks-link";
     a.href = `${basePath}/${ref.fileName}`;
-    a.textContent = ref.displayName || ref.fileName;
+    a.textContent = breadcrumb(ref.fileName, ref.displayName);
     li.appendChild(a);
     list.appendChild(li);
   }
@@ -925,10 +946,14 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
             tempDiv.innerHTML = section;
             const header = tempDiv.querySelector("h" + hNum);
             if (header) {
-              const titleText = header.textContent;
               let title = document.createElement("h" + hNum);
               title.classList.add("p-name");
-              title.textContent = titleText;
+              // Use innerHTML, not textContent — wikilinks (and any other
+              // inline markup) inside the heading were already converted to
+              // <a> elements by preprocessWikilinks and sanitized by
+              // DOMPurify above. Copying textContent would flatten them
+              // back to plain text and drop the links.
+              title.innerHTML = header.innerHTML;
               sectionArticle.appendChild(title);
               section = section
                 .substring(section.indexOf("</h" + hNum + ">") + 5)
@@ -981,7 +1006,7 @@ async function fetchPageContent(origin, basePath, siteName, pagesJson, mainConte
     const backlinks = await fetchWikilinksJson(origin, basePath);
     const refs = backlinks && backlinks[pathName];
     if (Array.isArray(refs) && refs.length > 0) {
-      const section = renderBacklinksSection(refs, origin, basePath);
+      const section = renderBacklinksSection(refs, origin, basePath, foldersJson);
       if (section) panel.appendChild(section);
     }
   } catch (e) {
