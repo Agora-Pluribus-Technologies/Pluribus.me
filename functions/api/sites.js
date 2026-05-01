@@ -197,16 +197,26 @@ export async function onRequestDelete(context) {
   }
 
   try {
-    // Delete all R2 files for this site
+    // Delete every R2 key under the site prefix. Paginate LIST (1000-key
+    // cap per call) and use R2's array-form delete to wipe each page in
+    // a single subrequest — for a 1000-page site this turns ~1000
+    // sequential round-trips (≈45 s) into one or two batch calls (≈1 s).
     try {
       const prefix = `${siteId}/`;
-      const listed = await env.PLURIBUS_BUCKET.list({ prefix });
-
-      if (listed.objects.length > 0) {
-        for (const obj of listed.objects) {
-          await env.PLURIBUS_BUCKET.delete(obj.key);
+      const allKeys = [];
+      let cursor;
+      for (;;) {
+        const listed = await env.PLURIBUS_BUCKET.list({ prefix, cursor });
+        for (const obj of listed.objects) allKeys.push(obj.key);
+        if (!listed.truncated) break;
+        cursor = listed.cursor;
+      }
+      if (allKeys.length > 0) {
+        const BATCH = 1000;
+        for (let i = 0; i < allKeys.length; i += BATCH) {
+          await env.PLURIBUS_BUCKET.delete(allKeys.slice(i, i + BATCH));
         }
-        console.log(`Deleted ${listed.objects.length} files from R2 for site: ${siteId}`);
+        console.log(`Deleted ${allKeys.length} files from R2 for site: ${siteId}`);
       }
     } catch (error) {
       console.error("Error deleting R2 files:", error);

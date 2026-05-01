@@ -361,20 +361,31 @@ export async function onRequestDelete(context) {
 
   try {
     if (deleteAll) {
-      // Delete all files for this site
+      // Delete every R2 key under the site prefix. Paginate LIST (1000-key
+      // cap per call) and use R2's array-form delete to wipe each page in
+      // a single subrequest — for a 1000-page site this turns ~1000
+      // sequential round-trips (≈45 s) into one or two batch calls (≈1 s).
       const prefix = `${siteId}/`;
-      const listed = await env.PLURIBUS_BUCKET.list({ prefix });
+      const allKeys = [];
+      let cursor;
+      for (;;) {
+        const listed = await env.PLURIBUS_BUCKET.list({ prefix, cursor });
+        for (const obj of listed.objects) allKeys.push(obj.key);
+        if (!listed.truncated) break;
+        cursor = listed.cursor;
+      }
 
-      if (listed.objects.length > 0) {
-        const keysToDelete = listed.objects.map(obj => obj.key);
-        for (const key of keysToDelete) {
-          await env.PLURIBUS_BUCKET.delete(key);
+      if (allKeys.length > 0) {
+        // R2 binding accepts up to 1000 keys per delete call.
+        const BATCH = 1000;
+        for (let i = 0; i < allKeys.length; i += BATCH) {
+          await env.PLURIBUS_BUCKET.delete(allKeys.slice(i, i + BATCH));
         }
-        const deletedPaths = keysToDelete.map(k => k.replace(`${siteId}/`, ""));
+        const deletedPaths = allKeys.map(k => k.replace(`${siteId}/`, ""));
         context.waitUntil(purgeCache(env, siteId, deletedPaths, new URL(request.url).origin));
       }
 
-      return new Response(JSON.stringify({ success: true, deleted: listed.objects.length }), {
+      return new Response(JSON.stringify({ success: true, deleted: allKeys.length }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
