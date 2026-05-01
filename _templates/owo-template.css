@@ -364,8 +364,8 @@ a:hover {
 }
 
 .sidebar-arrow {
-    width: 18px;
-    font-size: 12px;
+    width: 20px;
+    font-size: 18px;
     flex-shrink: 0;
     color: var(--text-muted);
 }
