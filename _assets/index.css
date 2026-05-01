@@ -71,6 +71,21 @@ body {
   text-decoration: none;
 }
 
+.example-link {
+  margin-top: 12px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.example-link a {
+  color: gold;
+  text-decoration: underline;
+}
+
+.example-link a:hover {
+  color: #ffe780;
+}
+
 .btn-support {
   display: inline-block;
   background-color: transparent;
