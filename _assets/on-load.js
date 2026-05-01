@@ -1099,7 +1099,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     console.log("Site config stored successfully");
 
     await initialCommitWithGitHistory(siteId, {
-      siteName: sanitized,
+      // site.json carries the user-facing display name. Passing the slug
+      // here would leave the editor's settings panel showing "my-site"
+      // instead of "My Site" until the user manually renames it.
+      siteName: rawSiteName,
       repo,
       owner,
       importedPages,
