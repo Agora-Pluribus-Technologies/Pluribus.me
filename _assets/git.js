@@ -86,6 +86,115 @@ async function gitStagePaths(siteId, filePaths) {
   }
 }
 
+// Build the entire initial commit from in-memory file contents, skipping
+// the working-tree round-trip + per-file git.add of the standard flow.
+//
+// Per file the standard path costs:
+//   pfs.writeFile (working tree)         3-5 ms (IndexedDB put)
+//   git.add re-reads the file we just wrote  2-3 ms
+//   SHA-1 + deflate (required either way)    6-12 ms
+//   write blob to .git/objects (IndexedDB)   3-5 ms
+//   per-file index entry update              <1 ms
+//
+// Going through writeBlob from in-memory bytes drops both the worktree
+// write AND the redundant re-read — about half the per-file overhead on
+// large imports. The downside is the index is empty after this commit
+// (the standard flow populates it via git.add); syncCacheToGit detects
+// the empty-index-but-HEAD-has-files state and rebuilds the index from
+// HEAD on the first publish so subsequent commits don't drop unchanged
+// files from their tree.
+//
+// `files` is an array of { path, content }. `path` includes the
+// `public/` prefix where applicable; `content` is a string (utf8) or a
+// Uint8Array.
+async function gitInitialCommitFromBlobs(siteId, files, { author, message }) {
+  const dir = getRepoDir(siteId);
+  const enc = new TextEncoder();
+
+  // 1. Write every blob to .git/objects in parallel batches. Lightning-fs
+  //    serializes through one IndexedDB transaction queue, but JS-level
+  //    Promise scheduling overhead drops with chunked Promise.all.
+  const BATCH = 50;
+  const blobOidByPath = new Map();
+  for (let i = 0; i < files.length; i += BATCH) {
+    const chunk = files.slice(i, i + BATCH);
+    await Promise.all(chunk.map(async (f) => {
+      const bytes = typeof f.content === "string" ? enc.encode(f.content) : f.content;
+      const oid = await git.writeBlob({ fs, dir, blob: bytes });
+      blobOidByPath.set(f.path, oid);
+    }));
+  }
+
+  // 2. Group blobs into a nested directory tree.
+  const root = { children: new Map(), blobs: new Map() };
+  for (const [path, oid] of blobOidByPath) {
+    const parts = path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i];
+      if (!node.children.has(seg)) {
+        node.children.set(seg, { children: new Map(), blobs: new Map() });
+      }
+      node = node.children.get(seg);
+    }
+    node.blobs.set(parts[parts.length - 1], oid);
+  }
+
+  // 3. Write tree objects bottom-up.
+  async function writeNode(node) {
+    const tree = [];
+    for (const [name, oid] of node.blobs) {
+      tree.push({ mode: "100644", path: name, oid, type: "blob" });
+    }
+    for (const [name, child] of node.children) {
+      const childOid = await writeNode(child);
+      tree.push({ mode: "040000", path: name, oid: childOid, type: "tree" });
+    }
+    return await git.writeTree({ fs, dir, tree });
+  }
+  const rootTreeOid = await writeNode(root);
+
+  // 4. Build the commit object directly. timestamp/timezoneOffset are
+  //    required by isomorphic-git's writeCommit (no auto-fill at this
+  //    layer).
+  const ts = Math.floor(Date.now() / 1000);
+  const ident = {
+    name: author?.name || "user",
+    email: author?.email || "user@noreply.agorapages.com",
+    timestamp: ts,
+    timezoneOffset: 0,
+  };
+  const commitOid = await git.writeCommit({
+    fs,
+    dir,
+    commit: {
+      message: message + "\n",
+      tree: rootTreeOid,
+      parent: [],
+      author: ident,
+      committer: ident,
+    },
+  });
+
+  // 5. Update the current branch ref to point at the new commit. git.init
+  //    set HEAD → refs/heads/<branch>; resolve that and rewrite the ref.
+  let branch;
+  try {
+    branch = await git.currentBranch({ fs, dir, fullname: false });
+  } catch {
+    branch = "main";
+  }
+  await git.writeRef({
+    fs,
+    dir,
+    ref: `refs/heads/${branch || "main"}`,
+    value: commitOid,
+    force: true,
+  });
+
+  return commitOid;
+}
+
 // Read a file from the git working directory
 async function gitReadFile(siteId, filePath) {
   const dir = getRepoDir(siteId);
@@ -845,6 +954,28 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
   const dir = getRepoDir(siteId);
 
   try {
+    // Index-rebuild bridge for sites whose initial commit was built via
+    // gitInitialCommitFromBlobs (writeBlob + writeTree + writeCommit).
+    // That path leaves the index empty even though HEAD has every file,
+    // so the next commit's tree would otherwise be assembled solely from
+    // the staged paths and silently drop every file the user hasn't
+    // touched this session. checkout({ noUpdate: true }) populates the
+    // index from HEAD without writing the working tree — exactly the
+    // shape we need for the publish flow's stage-and-commit logic to
+    // work normally from here on.
+    try {
+      const [headFiles, indexFiles] = await Promise.all([
+        git.listFiles({ fs, dir, ref: "HEAD" }).catch(() => []),
+        git.listFiles({ fs, dir }).catch(() => []),
+      ]);
+      if (headFiles.length > 0 && indexFiles.length === 0) {
+        console.log("Rebuilding index from HEAD (post-import first publish)");
+        await git.checkout({ fs, dir, ref: "HEAD", noUpdate: true });
+      }
+    } catch (e) {
+      console.warn("Index rebuild check failed; proceeding anyway:", e);
+    }
+
     // Find every tracked file (in HEAD AND in the current index) and
     // delete the ones no longer backed by a cache entry. Handles .md
     // sources only — .html shells are no longer written (the worker

@@ -92,15 +92,54 @@ async function recordLastCommitShortSha(siteId, shortSha) {
   }
 }
 
-// Save multiple files to R2 in a batch
+// Save multiple files to R2.
+//
+// Chunks the request into smaller POSTs so a single import (e.g. a
+// 7000-page Obsidian vault) doesn't blow past three Cloudflare limits at
+// once: the 100 MB Pages-Functions request-body cap, the ~1000
+// simple-subrequest budget per Worker invocation (one R2.put each), and
+// the per-request CPU-time budget. Each chunk is well under all three.
+//
+// Chunks run sequentially: parallel POSTs would multiply load on the
+// /api/files endpoint without speeding up the underlying R2 writes
+// (which are I/O-bound at the Cloudflare edge), and serial keeps the
+// failure model simple — first chunk to fail aborts and surfaces the
+// error to the caller, instead of mid-upload partials needing reconciliation.
+//
+// FILES_PER_CHUNK is empirical: 200 files at average ~5 KB ≈ 1 MB body
+// per request, ~200 R2.put subrequests per invocation. Both leave wide
+// headroom for outliers (large notes, .git-history.json) and keep the
+// per-chunk wall time short enough that progress feels responsive.
+const FILES_PER_CHUNK = 200;
+
 async function saveFilesToR2(siteId, files) {
+  if (!Array.isArray(files) || files.length === 0) return true;
+
+  // Single chunk fast-path: most edits commit a handful of files. Avoids
+  // an extra slice() + the chunked-loop bookkeeping.
+  if (files.length <= FILES_PER_CHUNK) {
+    return await sendFileChunk(siteId, files);
+  }
+
+  for (let i = 0; i < files.length; i += FILES_PER_CHUNK) {
+    const chunk = files.slice(i, i + FILES_PER_CHUNK);
+    const ok = await sendFileChunk(siteId, chunk);
+    if (!ok) {
+      console.error(
+        `saveFilesToR2: chunk ${Math.floor(i / FILES_PER_CHUNK) + 1} of ` +
+        `${Math.ceil(files.length / FILES_PER_CHUNK)} failed; aborting upload`
+      );
+      return false;
+    }
+  }
+  return true;
+}
+
+async function sendFileChunk(siteId, files) {
   const response = await fetch("/api/files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      siteId,
-      files,
-    }),
+    body: JSON.stringify({ siteId, files }),
   });
 
   if (!response.ok) {
@@ -588,29 +627,33 @@ async function initialCommitWithGitHistory(siteId, siteSettings = {}) {
       content: p.content,
     }))
   );
-  // Skip per-file staging during the bulk write loop; one gitStagePaths
-  // call below batches the index update. For a 1000-note vault this is
-  // the difference between 1000 sequential index rewrites and one — a
-  // 30-50% reduction in total import time on the browser side.
-  const stagedPaths = ["public/pages.json", "public/images.json"];
-  await gitWriteFile(siteId, "public/pages.json", pagesJsonContent, { skipStage: true });
-  await gitWriteFile(siteId, "public/images.json", imagesManifest, { skipStage: true });
+  // Build the initial commit directly from in-memory blobs — skipping
+  // the working-tree round-trip + per-file git.add. For large imports
+  // this is the dominant savings: see gitInitialCommitFromBlobs for the
+  // breakdown. The index is left empty by this path; syncCacheToGit
+  // rebuilds it from HEAD on the first publish.
+  const filesForCommit = [
+    { path: "public/pages.json", content: pagesJsonContent },
+    { path: "public/images.json", content: imagesManifest },
+  ];
   if (searchIndexContent != null) {
-    await gitWriteFile(siteId, "public/search-index.json", searchIndexContent, { skipStage: true });
-    stagedPaths.push("public/search-index.json");
+    filesForCommit.push({ path: "public/search-index.json", content: searchIndexContent });
   }
   if (hasImport) {
     for (const page of pagesToWrite) {
-      const filePath = `public/${page.fileName}.md`;
-      await gitWriteFile(siteId, filePath, page.content, { skipStage: true });
-      stagedPaths.push(filePath);
+      filesForCommit.push({ path: `public/${page.fileName}.md`, content: page.content });
     }
   } else {
-    await gitWriteFile(siteId, "public/home.md", defaultHomeContent, { skipStage: true });
-    stagedPaths.push("public/home.md");
+    filesForCommit.push({ path: "public/home.md", content: defaultHomeContent });
   }
-  await gitStagePaths(siteId, stagedPaths);
-  await gitCommit(siteId, hasImport ? "Initial import" : "Initial commit");
+  const commitAuthor = {
+    name: owner || "user",
+    email: `${owner || "user"}@noreply.agorapages.com`,
+  };
+  await gitInitialCommitFromBlobs(siteId, filesForCommit, {
+    author: commitAuthor,
+    message: hasImport ? "Initial import" : "Initial commit",
+  });
   console.log("Git repo initialized for site:", siteId);
 
   // Serialize git history
