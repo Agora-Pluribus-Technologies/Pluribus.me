@@ -568,6 +568,27 @@ nav {
   vertical-align: middle;
 }
 
+.discard-changes-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+  margin-right: 4px;
+  display: none;
+}
+.discard-changes-btn:hover {
+  background-color: rgba(220, 53, 69, 0.12);
+  border-color: rgba(220, 53, 69, 0.3);
+}
+.discard-changes-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .publish-status.pending-changes {
   background-color: #ffc107;
   color: #212529;

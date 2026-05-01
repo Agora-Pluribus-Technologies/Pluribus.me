@@ -1280,6 +1280,35 @@ document.addEventListener("DOMContentLoaded", async function () {
     window.location.href = document.location.origin + "/builder.html";
   });
 
+  // Discard pending changes — counts pages with unpublished edits, asks
+  // for confirmation, then drops the local autosave and reloads so the
+  // editor re-pulls the published state from R2/git.
+  const discardBtn = document.getElementById("discardChangesButton");
+  if (discardBtn) {
+    discardBtn.addEventListener("click", async function () {
+      if (!currentSiteId || !modified) return;
+      let pageCount = 0;
+      try {
+        await syncCacheToGit(currentSiteId, markdownCache, imageCache);
+        const changes = await gitStatus(currentSiteId);
+        const dirtySlugs = new Set();
+        for (const c of changes) {
+          if (!c.filepath.startsWith("public/")) continue;
+          if (!c.filepath.endsWith(".md")) continue;
+          dirtySlugs.add(c.filepath);
+        }
+        pageCount = dirtySlugs.size;
+      } catch (e) {
+        console.warn("Couldn't compute pending-change count:", e);
+        pageCount = markdownCache.length;
+      }
+      const ok = confirm(`Do you want to delete pending changes for ${pageCount} pages?`);
+      if (!ok) return;
+      clearAutoSave(currentSiteId);
+      window.location.reload();
+    });
+  }
+
   // Handle deploy button click - show commit modal
   document
     .getElementById("deployButton")
@@ -2110,6 +2139,8 @@ async function createNewFolder(folderName) {
 function updateDeployButtonState() {
   const deployButton = document.getElementById("deployButton");
   const publishStatus = document.getElementById("publishStatus");
+  const discardBtn = document.getElementById("discardChangesButton");
+  if (discardBtn) discardBtn.style.display = modified ? "inline-block" : "none";
 
   // Don't make the user wait for the next interval poll to learn that
   // upstream advanced — fire one now. pollHistoryForConflicts is itself
