@@ -234,8 +234,41 @@ async function handleDifferentAuthorDivergence(siteId, upstream) {
       showAlertBar("Upstream changes merged into your edits.", true);
     }
   } catch (e) {
-    console.error("Three-way merge failed:", e);
-    showAlertBar("Failed to merge upstream changes: " + (e.message || e), false);
+    // Log the full Error (with stack) rather than just the message so
+    // we can pinpoint where minified isomorphic-git frames blow up.
+    console.error("Three-way merge failed:", e, e && e.stack);
+    // Best-effort cleanup so a half-checked-out merge branch doesn't
+    // poison subsequent retries or normal publishes.
+    try {
+      const dir = getRepoDir(siteId);
+      for (const branch of ["agora-merge-local", "agora-merge-upstream"]) {
+        try { await git.deleteBranch({ fs, dir, ref: branch }); } catch {}
+      }
+    } catch {}
+
+    // Offer the user a clean recovery path: discard local edits and
+    // reload from upstream. Same code path the trash button and same-
+    // author divergence use, so the failure mode bottoms out in a
+    // known-good state instead of a stranded mid-merge repo.
+    const ok = confirm(
+      "Failed to merge upstream changes: " + (e && e.message ? e.message : e) +
+      "\n\nDiscard your pending changes and reload to the latest upstream version?"
+    );
+    if (ok) {
+      clearPersistedLastSeen(siteId);
+      stopConflictPolling();
+      if (typeof window.discardLocalAndReload === "function") {
+        window.discardLocalAndReload(siteId);
+      } else {
+        try { clearAutoSave(siteId); } catch {}
+        window.location.reload();
+      }
+    } else {
+      showAlertBar(
+        "Merge failed — your pending edits are still local. Resolve the divergence manually or discard to continue.",
+        false
+      );
+    }
   }
 }
 
@@ -255,7 +288,24 @@ async function performThreeWayMerge(siteId) {
     console.error("Failed to reload .git from upstream, proceeding with local state:", e);
   }
 
-  const baseOid = lastSeenBaseCommitOid || (await git.resolveRef({ fs, dir, ref: "HEAD" }));
+  // Resolve baseOid up-front and bail out cleanly if HEAD is unresolvable
+  // — passing undefined to git.branch later would surface as the
+  // confusing "null is not an object (evaluating 'n.length')" error
+  // from inside isomorphic-git rather than something actionable.
+  let baseOid = lastSeenBaseCommitOid;
+  if (!baseOid) {
+    try {
+      baseOid = await git.resolveRef({ fs, dir, ref: "HEAD" });
+    } catch (e) {
+      throw new Error(
+        "Cannot merge: local repository has no resolvable HEAD. Reload the page and try again."
+      );
+    }
+  }
+  if (!baseOid) {
+    throw new Error("Cannot merge: missing base commit OID for the local repository.");
+  }
+
   const username = getStoredUsername() || "user";
   const authorObj = { name: username, email: `${username}@noreply.agorapages.com` };
 
@@ -335,6 +385,12 @@ async function performThreeWayMerge(siteId) {
 
   await reloadCacheFromWorkingTree(siteId, []);
 
+  // Best-effort cleanup of the temporary merge branches so a subsequent
+  // merge attempt isn't tripped up by leftover refs from this run.
+  for (const branch of ["agora-merge-local", "agora-merge-upstream"]) {
+    try { await git.deleteBranch({ fs, dir, ref: branch }); } catch {}
+  }
+
   return { conflictsDiscarded: mergeConflicted };
 }
 
@@ -362,8 +418,18 @@ async function replaceWorkingTreeWithUpstream(siteId) {
     headers: { "Cache-Control": "no-cache, must-revalidate" },
   });
   if (!pagesResp.ok) throw new Error("Failed to fetch upstream pages.json");
-  const pages = await pagesResp.json();
-  const upstreamMd = new Set(pages.map(p => `public/${p.fileName}.md`));
+  const parsed = await pagesResp.json();
+  // Defensive: pages.json should always be an array of {fileName,...},
+  // but a malformed response would otherwise blow up at .map with a
+  // confusing "n.length" / "map is not a function" error during the
+  // merge flow. Drop entries missing a fileName so the downstream Set
+  // never contains "public/undefined.md".
+  const pages = Array.isArray(parsed) ? parsed : [];
+  const upstreamMd = new Set(
+    pages
+      .map(p => p && p.fileName ? `public/${p.fileName}.md` : null)
+      .filter(Boolean)
+  );
 
   // Remove md files no longer in upstream
   const matrix = await git.statusMatrix({ fs, dir });
