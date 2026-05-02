@@ -176,20 +176,39 @@ async function gitInitialCommitFromBlobs(siteId, files, { author, message }) {
     },
   });
 
-  // 5. Update the current branch ref to point at the new commit. git.init
-  //    set HEAD → refs/heads/<branch>; resolve that and rewrite the ref.
-  let branch;
+  // 5. Update the current branch ref AND HEAD to point at the new
+  //    commit. We can't rely on git.init's default branch matching
+  //    the value we use here — historically it's been "master" but
+  //    newer isomorphic-git builds default to "main", and
+  //    git.currentBranch can also throw on freshly-init'd repos in
+  //    some versions. If our chosen branch and HEAD's symbolic
+  //    target diverge, HEAD walks to a ref with no commit on it,
+  //    git.log({ ref: "HEAD" }) throws, generateHistoryJson catches
+  //    that and writes `history.json` as `"[]"` — exactly the
+  //    "history.json is an empty list after a discard" symptom that
+  //    persists across reloads (the broken HEAD pointer is in the
+  //    persisted lightning-fs .git; clearAutoSave doesn't touch it).
+  //    Writing HEAD explicitly after the branch ref makes the
+  //    pairing deterministic regardless of init defaults.
+  let branch = "main";
   try {
-    branch = await git.currentBranch({ fs, dir, fullname: false });
-  } catch {
-    branch = "main";
-  }
+    const detected = await git.currentBranch({ fs, dir, fullname: false });
+    if (detected) branch = detected;
+  } catch { /* keep the "main" default */ }
   await git.writeRef({
     fs,
     dir,
-    ref: `refs/heads/${branch || "main"}`,
+    ref: `refs/heads/${branch}`,
     value: commitOid,
     force: true,
+  });
+  await git.writeRef({
+    fs,
+    dir,
+    ref: "HEAD",
+    value: `refs/heads/${branch}`,
+    force: true,
+    symbolic: true,
   });
 
   return commitOid;
@@ -1103,11 +1122,31 @@ async function loadR2ToGit(siteId) {
   const dir = getRepoDir(siteId);
 
   try {
-    // Check if repo already exists in local filesystem
+    // Treat the local repo as healthy only when (a) the .git directory
+    // exists AND (b) HEAD actually resolves to a commit. The directory-
+    // exists-only check from before would silently keep using a repo
+    // whose HEAD pointed at a non-existent ref (e.g. an early
+    // gitInitialCommitFromBlobs that wrote refs/heads/main while
+    // git.init had set HEAD to refs/heads/master), which made
+    // generateHistoryJson silently emit `[]` on every publish.
+    // Re-deriving from R2 when HEAD is broken self-heals those sites
+    // without requiring the user to clear IndexedDB by hand.
     try {
       await pfs.stat(`${dir}/.git`);
-      console.log("Git repo already exists, skipping R2 sync");
-      return true;
+      try {
+        await git.resolveRef({ fs, dir, ref: "HEAD" });
+        console.log("Git repo already exists, skipping R2 sync");
+        return true;
+      } catch (headErr) {
+        console.warn(
+          `Local .git for ${siteId} exists but HEAD does not resolve — rebuilding from R2.`,
+          headErr
+        );
+        // Drop the broken .git so deserializeGitDirectory below starts
+        // from a clean slate. Best-effort; if delete fails we still
+        // proceed and let writes overlay.
+        try { await rmdirRecursive(`${dir}/.git`); } catch (_) {}
+      }
     } catch (e) {
       // Repo doesn't exist locally, need to load from R2
     }
@@ -1255,6 +1294,32 @@ function base64ToArrayBuffer(base64) {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+
+// Recursively delete a directory and everything under it. Used by
+// loadR2ToGit when it detects a corrupted local .git (HEAD doesn't
+// resolve) and needs to wipe the on-disk repo before rehydrating from
+// R2's .git-history.json. LightningFS lacks native recursive removal,
+// so walk the tree and unlink leaves first.
+async function rmdirRecursive(path) {
+  let entries;
+  try {
+    entries = await pfs.readdir(path);
+  } catch (e) {
+    // Path doesn't exist or isn't a directory; nothing to do.
+    return;
+  }
+  for (const name of entries) {
+    const child = `${path}/${name}`;
+    let stat;
+    try { stat = await pfs.stat(child); } catch (_) { continue; }
+    if (stat && stat.isDirectory && stat.isDirectory()) {
+      await rmdirRecursive(child);
+    } else {
+      try { await pfs.unlink(child); } catch (_) {}
+    }
+  }
+  try { await pfs.rmdir(path); } catch (_) {}
 }
 
 // Helper function to create directories recursively (LightningFS doesn't support recursive well)
