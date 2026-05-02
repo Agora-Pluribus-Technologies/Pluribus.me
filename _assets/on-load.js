@@ -3157,7 +3157,15 @@ async function ensurePageContentLoaded(cacheItem) {
   if (!cacheItem) return;
   if (typeof cacheItem.content === "string") return;
   try {
-    const servingPath = cacheItem.fileName.replace(/^public\//, "");
+    // Keep the `public/` prefix in the URL so lazy loads share an
+    // edge-cache key with the publish-time purge in
+    // functions/api/files.js (which builds purge URLs as
+    // `/s/{siteId}/public/...`). Stripping the prefix routes through a
+    // separate cache entry that publish never evicts, so a freshly
+    // edited page would otherwise serve stale content here.
+    const servingPath = cacheItem.fileName.startsWith("public/")
+      ? cacheItem.fileName
+      : `public/${cacheItem.fileName}`;
     const resp = await fetch(`/s/${currentSiteId}/${servingPath}`, {
       method: "GET",
       headers: { "Cache-Control": "no-cache, must-revalidate" },
