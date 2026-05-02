@@ -746,9 +746,9 @@ async function openSiteInEditor(site, initialPage = "index") {
     updateDeployButtonState();
 
     // Start polling history.json for upstream commits
-    initConflictPolling(currentSiteId).catch(err =>
-      console.error("Failed to start conflict polling:", err)
-    );
+    // initConflictPolling(currentSiteId).catch(err =>
+    //   console.error("Failed to start conflict polling:", err)
+    // );
 
     // Start onboarding tour after editor is fully rendered
     setTimeout(() => startOnboardingTour(), 500);
@@ -1544,20 +1544,22 @@ document.addEventListener("DOMContentLoaded", async function () {
       const username = getStoredUsername();
       const isOwner = site && site.owner.toLowerCase() === username.toLowerCase();
 
-      // Update modal content
+      // Update modal content. siteSettingsOwner and the collaborator
+      // elements are commented out in builder.html (collaborators
+      // feature disabled-but-not-removed), so only touch the inputs
+      // that are still in the DOM here.
       document.getElementById("siteSettingsNameInput").value = site ? (site.displayName || site.repo) : currentSiteId;
-      document.getElementById("siteSettingsOwner").textContent = site ? site.owner : currentSiteId.split("/")[0];
+      // document.getElementById("siteSettingsOwner").textContent = site ? site.owner : currentSiteId.split("/")[0];
 
-      // Show/hide add collaborator section based on ownership
-      const addCollaboratorSection = document.getElementById("addCollaboratorSection");
-      addCollaboratorSection.style.display = isOwner ? "block" : "none";
+      // // Collaborator-specific UI is disabled — see builder.html.
+      // const addCollaboratorSection = document.getElementById("addCollaboratorSection");
+      // addCollaboratorSection.style.display = isOwner ? "block" : "none";
+      // document.getElementById("collaboratorError").style.display = "none";
+      // document.getElementById("collaboratorSuccess").style.display = "none";
+      // document.getElementById("collaboratorUsernameInput").value = "";
 
-      // Clear any previous error/success messages
-      document.getElementById("collaboratorError").style.display = "none";
-      document.getElementById("collaboratorSuccess").style.display = "none";
-      document.getElementById("collaboratorUsernameInput").value = "";
-
-      // Load site.json settings
+      // Load site.json so the still-active Site Name input and
+      // Show-edit-history checkbox reflect the persisted settings.
       try {
         const siteJsonContent = await getFileContent(currentSiteId, "public/site.json");
         if (siteJsonContent) {
@@ -1574,70 +1576,71 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.getElementById("showHistoryCheckbox").checked = false;
       }
 
-      // Show modal with loading state
-      const collaboratorsList = document.getElementById("collaboratorsList");
-      collaboratorsList.innerHTML = "<p style='color: #888;'>Loading collaborators...</p>";
+      // Show the modal. The button has no data-toggle attribute, so
+      // this is the only path that opens it.
       $("#siteSettingsModal").modal("show");
 
-      // Load and display collaborators
-      await refreshCollaboratorsList(currentSiteId, isOwner);
+      // // Collaborator list refresh disabled — see builder.html.
+      // const collaboratorsList = document.getElementById("collaboratorsList");
+      // collaboratorsList.innerHTML = "<p style='color: #888;'>Loading collaborators...</p>";
+      // await refreshCollaboratorsList(currentSiteId, isOwner);
     });
 
   // Handle add collaborator button click
-  document
-    .getElementById("addCollaboratorButton")
-    .addEventListener("click", async function () {
-      const usernameInput = document.getElementById("collaboratorUsernameInput");
-      const errorElement = document.getElementById("collaboratorError");
-      const successElement = document.getElementById("collaboratorSuccess");
-      const username = usernameInput.value.trim();
+  // document
+  //   .getElementById("addCollaboratorButton")
+  //   .addEventListener("click", async function () {
+  //     const usernameInput = document.getElementById("collaboratorUsernameInput");
+  //     const errorElement = document.getElementById("collaboratorError");
+  //     const successElement = document.getElementById("collaboratorSuccess");
+  //     const username = usernameInput.value.trim();
 
-      // Reset messages
-      errorElement.style.display = "none";
-      successElement.style.display = "none";
+  //     // Reset messages
+  //     errorElement.style.display = "none";
+  //     successElement.style.display = "none";
 
-      if (!username) {
-        errorElement.textContent = "Please enter a username.";
-        errorElement.style.display = "block";
-        return;
-      }
+  //     if (!username) {
+  //       errorElement.textContent = "Please enter a username.";
+  //       errorElement.style.display = "block";
+  //       return;
+  //     }
 
-      if (!currentSiteId) {
-        errorElement.textContent = "No site selected.";
-        errorElement.style.display = "block";
-        return;
-      }
+  //     if (!currentSiteId) {
+  //       errorElement.textContent = "No site selected.";
+  //       errorElement.style.display = "block";
+  //       return;
+  //     }
 
-      const addButton = document.getElementById("addCollaboratorButton");
-      addButton.disabled = true;
-      addButton.textContent = "Adding...";
+  //     const addButton = document.getElementById("addCollaboratorButton");
+  //     addButton.disabled = true;
+  //     addButton.textContent = "Adding...";
 
-      try {
-        await addCollaborator(currentSiteId, username);
-        successElement.textContent = `Added ${username} as a collaborator.`;
-        successElement.style.display = "block";
-        usernameInput.value = "";
+  //     try {
+  //       await addCollaborator(currentSiteId, username);
+  //       successElement.textContent = `Added ${username} as a collaborator.`;
+  //       successElement.style.display = "block";
+  //       usernameInput.value = "";
 
-        // Refresh the list
-        await refreshCollaboratorsList(currentSiteId, true);
-      } catch (error) {
-        errorElement.textContent = error.message || "Failed to add collaborator.";
-        errorElement.style.display = "block";
-      } finally {
-        addButton.disabled = false;
-        addButton.textContent = "Add";
-      }
-    });
+  //       // Refresh the list
+  //       await refreshCollaboratorsList(currentSiteId, true);
+  //     } catch (error) {
+  //       errorElement.textContent = error.message || "Failed to add collaborator.";
+  //       errorElement.style.display = "block";
+  //     } finally {
+  //       addButton.disabled = false;
+  //       addButton.textContent = "Add";
+  //     }
+  //   });
 
   // Handle Enter key in collaborator username input
-  document
-    .getElementById("collaboratorUsernameInput")
-    .addEventListener("keypress", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        document.getElementById("addCollaboratorButton").click();
-      }
-    });
+  // document
+  //   .getElementById("collaboratorUsernameInput")
+  //   .addEventListener("keypress", function (e) {
+  //     if (e.key === "Enter") {
+  //       e.preventDefault();
+  //       document.getElementById("addCollaboratorButton").click();
+  //     }
+  //   });
 
   // Handle save site settings button click
   document

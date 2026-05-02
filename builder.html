@@ -360,28 +360,36 @@
             <label for="siteSettingsNameInput">Site Name</label>
             <input type="text" class="form-control" id="siteSettingsNameInput" placeholder="Site display name">
           </div>
-          <div class="form-group">
-            <label>Owner</label>
-            <p id="siteSettingsOwner" class="form-control-static"></p>
-          </div>
-          <hr>
-          <div class="form-group">
-            <label>Collaborators</label>
-            <p class="help-block">Collaborators can edit this site.</p>
-            <div id="collaboratorsList" style="margin-bottom: 10px;">
-              <p style="color: #888;">Loading collaborators...</p>
+          <!-- Owner + Collaborators are wrapped in a hidden container
+               instead of an HTML comment so the JS in on-load.js can
+               still resolve their getElementById calls at boot
+               (otherwise the DOMContentLoaded listener wiring throws on
+               null and breaks every listener registered after it).
+               To re-enable the feature, drop the inline display:none. -->
+          <!-- <div style="display: none;">
+            <div class="form-group">
+              <label>Owner</label>
+              <p id="siteSettingsOwner" class="form-control-static"></p>
             </div>
-            <div id="addCollaboratorSection" style="display: none;">
-              <div class="input-group">
-                <input type="text" class="form-control" id="collaboratorUsernameInput" placeholder="Enter username">
-                <span class="input-group-btn">
-                  <button id="addCollaboratorButton" class="btn btn-primary" type="button">Add</button>
-                </span>
+            <hr>
+            <div class="form-group">
+              <label>Collaborators</label>
+              <p class="help-block">Collaborators can edit this site.</p>
+              <div id="collaboratorsList" style="margin-bottom: 10px;">
+                <p style="color: #888;">Loading collaborators...</p>
               </div>
-              <p id="collaboratorError" class="text-danger" style="display: none; margin-top: 5px;"></p>
-              <p id="collaboratorSuccess" class="text-success" style="display: none; margin-top: 5px;"></p>
+              <div id="addCollaboratorSection" style="display: none;">
+                <div class="input-group">
+                  <input type="text" class="form-control" id="collaboratorUsernameInput" placeholder="Enter username">
+                  <span class="input-group-btn">
+                    <button id="addCollaboratorButton" class="btn btn-primary" type="button">Add</button>
+                  </span>
+                </div>
+                <p id="collaboratorError" class="text-danger" style="display: none; margin-top: 5px;"></p>
+                <p id="collaboratorSuccess" class="text-success" style="display: none; margin-top: 5px;"></p>
+              </div>
             </div>
-          </div>
+          </div> -->
           <hr>
           <div class="form-group">
             <label>Site Options</label>
