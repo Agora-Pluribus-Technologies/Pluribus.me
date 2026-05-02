@@ -10,7 +10,7 @@ let hasUnresolvedConflicts = false;
 let conflictedFiles = new Set();
 let conflictResolutionInFlight = false;
 
-const CONFLICT_POLL_INTERVAL_MS = 60000;
+const CONFLICT_POLL_INTERVAL_MS = 10000;
 const CONFLICT_MARKER_REGEX = /^<{7} |^={7}\s*$|^>{7} /m;
 
 function lastSeenStorageKey(siteId) {
@@ -178,20 +178,33 @@ async function pollHistoryForConflicts(siteId) {
 async function handleSameAuthorDivergence(siteId) {
   console.log("Same-author divergence: discarding pending changes and reloading");
 
-  markdownCache = [];
-  imageCache = [];
-  documentCache = [];
-  currentSitePath = null;
-  modified = false;
-
-  clearAutoSave(siteId);
+  // Route through the same trash-button code path the user gets when
+  // they manually discard. The previous implementation reset the in-
+  // memory caches and called openSiteInEditor for an in-place reload,
+  // which mishandled lazy-loaded markdownCache stubs (and persisted-
+  // last-seen state) in ways that left the editor in an inconsistent
+  // state. A full window.location.reload tears every bit of that down
+  // cleanly and rebuilds from R2/git on next page load.
   clearPersistedLastSeen(siteId);
   stopConflictPolling();
-
-  const site = { siteId, displayName: siteId.split("/")[1] || siteId };
-  await openSiteInEditor(site);
-
-  showAlertBar("Site was updated from another session. Pending changes discarded and latest version loaded.", true);
+  showAlertBar(
+    "Site was updated from another session. Reloading the latest version…",
+    true
+  );
+  // Tiny delay so the alert bar paints before the reload tears down
+  // the page; the user sees why they're being bounced.
+  setTimeout(() => {
+    if (typeof window.discardLocalAndReload === "function") {
+      window.discardLocalAndReload(siteId);
+    } else {
+      // Defensive fallback: if the on-load.js helper hasn't attached
+      // yet (it lives inside the DOMContentLoaded callback), do the
+      // minimum equivalent so we still don't strand the user with a
+      // stale local cache.
+      try { clearAutoSave(siteId); } catch {}
+      window.location.reload();
+    }
+  }, 250);
 }
 
 async function handleDifferentAuthorDivergence(siteId, upstream) {

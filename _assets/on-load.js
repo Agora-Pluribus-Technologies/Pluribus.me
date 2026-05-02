@@ -1340,7 +1340,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Discard pending changes — counts pages with unpublished edits, asks
   // for confirmation, then drops the local autosave and reloads so the
-  // editor re-pulls the published state from R2/git.
+  // editor re-pulls the published state from R2/git. The reload core is
+  // exposed as window.discardLocalAndReload so the same-author
+  // divergence handler in conflict-resolution.js can reuse it instead
+  // of running its own bespoke teardown (which had a string of
+  // correctness bugs around lazy-loaded cache state).
   const discardBtn = document.getElementById("discardChangesButton");
   if (discardBtn) {
     discardBtn.addEventListener("click", async function () {
@@ -1362,21 +1366,28 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
       const ok = confirm(`Do you want to discard pending changes for ${pageCount} pages?`);
       if (!ok) return;
-      // Cancel any pending auto-save timer and flip `modified` off before
-      // clearing localStorage. Without this, a setTimeout queued by the
-      // last edit fires between clearAutoSave() and the reload's unload,
-      // re-persists the pending markdownCache, and the next page load
-      // restores it via restoreAutoSave — exactly the "had to discard
-      // twice" symptom.
-      if (typeof _autoSaveTimer !== "undefined" && _autoSaveTimer) {
-        clearTimeout(_autoSaveTimer);
-        _autoSaveTimer = null;
-      }
-      modified = false;
-      clearAutoSave(currentSiteId);
-      window.location.reload();
+      discardLocalAndReload(currentSiteId);
     });
   }
+
+  // Cancel any pending auto-save, clear the localStorage cache, and
+  // reload so the editor re-pulls the published state from R2/git.
+  // Cancelling the timer + flipping `modified` off BEFORE clearAutoSave
+  // matters: a setTimeout queued by the last edit can otherwise fire
+  // between clearAutoSave() and the reload's unload, re-persist the
+  // pending markdownCache, and the next page load restores it via
+  // restoreAutoSave — the "had to discard twice" symptom this guards
+  // against. Exposed on window so conflict-resolution.js can call it.
+  function discardLocalAndReload(siteId) {
+    if (typeof _autoSaveTimer !== "undefined" && _autoSaveTimer) {
+      clearTimeout(_autoSaveTimer);
+      _autoSaveTimer = null;
+    }
+    modified = false;
+    clearAutoSave(siteId || currentSiteId);
+    window.location.reload();
+  }
+  window.discardLocalAndReload = discardLocalAndReload;
 
   // Handle deploy button click - show commit modal
   document
