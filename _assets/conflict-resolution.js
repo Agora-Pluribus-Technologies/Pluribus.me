@@ -208,6 +208,35 @@ async function handleSameAuthorDivergence(siteId) {
 }
 
 async function handleDifferentAuthorDivergence(siteId, upstream) {
+  // Fast path: when the local user has nothing pending, there's nothing
+  // to merge. Skip the three-way merge entirely and route through the
+  // same discard-and-reload code the trash button uses, so the editor
+  // bottoms out in a clean R2-rehydrated state. The merge code is
+  // expensive and historically fragile (orphan-deletion, missing-index
+  // handling, edge cases with parentless commits) — avoiding it
+  // whenever possible is the simpler, safer behavior.
+  if (typeof modified !== "undefined" && !modified) {
+    console.log(
+      "Different-author divergence with no local pending changes: " +
+      "skipping three-way merge and reloading from upstream"
+    );
+    clearPersistedLastSeen(siteId);
+    stopConflictPolling();
+    showAlertBar(
+      "Site was updated by another collaborator. Reloading the latest version…",
+      true
+    );
+    setTimeout(() => {
+      if (typeof window.discardLocalAndReload === "function") {
+        window.discardLocalAndReload(siteId);
+      } else {
+        try { clearAutoSave(siteId); } catch {}
+        window.location.reload();
+      }
+    }, 250);
+    return;
+  }
+
   console.log("Different-author divergence: attempting three-way merge");
   try {
     const result = await performThreeWayMerge(siteId);
