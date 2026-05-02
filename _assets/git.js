@@ -994,21 +994,41 @@ async function syncCacheToGit(siteId, markdownCache, imageCache) {
   try {
     // Index-rebuild bridge for sites whose initial commit was built via
     // gitInitialCommitFromBlobs (writeBlob + writeTree + writeCommit).
-    // That path leaves the index empty even though HEAD has every file,
-    // so the next commit's tree would otherwise be assembled solely from
-    // the staged paths and silently drop every file the user hasn't
-    // touched this session. checkout({ noUpdate: true }) populates the
-    // index from HEAD without writing the working tree — exactly the
-    // shape we need for the publish flow's stage-and-commit logic to
-    // work normally from here on.
+    // That path leaves the working tree AND index empty even though
+    // HEAD has every file, which causes two failure modes downstream:
+    //
+    //   1. statusMatrix reports every HEAD path as workdir=0/stage=0,
+    //      which gitStatus interprets as "deleted" — the publish-modal
+    //      diff explodes with red deletion lines for the 999 untouched
+    //      pages of a 1000-page import.
+    //   2. git.commit builds the next tree from the index. With an
+    //      empty index, the new commit's tree contains only the few
+    //      paths gitStageAll just added — every untouched page is
+    //      silently dropped from the tree, and deployChanges propagates
+    //      that as R2.delete calls. The pendingDeletedFileNames guard
+    //      in gitStageAll suppresses the explicit removes but doesn't
+    //      restore the missing index entries needed to keep those files
+    //      in the new tree.
+    //
+    // Earlier this branch tried `checkout({ noUpdate: true })` to
+    // populate the index without paying for the working-tree writes,
+    // but that flag does not actually update the index in the loaded
+    // isomorphic-git build. Use a plain force-checkout instead: writes
+    // the working tree from HEAD's blobs AND populates the index. One-
+    // time ~5-10 s cost on the first publish after a writeBlob import;
+    // every subsequent publish sees a populated working tree and skips
+    // this branch entirely.
     try {
       const [headFiles, indexFiles] = await Promise.all([
         git.listFiles({ fs, dir, ref: "HEAD" }).catch(() => []),
         git.listFiles({ fs, dir }).catch(() => []),
       ]);
       if (headFiles.length > 0 && indexFiles.length === 0) {
-        console.log("Rebuilding index from HEAD (post-import first publish)");
-        await git.checkout({ fs, dir, ref: "HEAD", noUpdate: true });
+        console.log(
+          `Rebuilding working tree + index from HEAD for ${headFiles.length} files ` +
+          "(post-import first publish; one-time cost)"
+        );
+        await git.checkout({ fs, dir, ref: "HEAD", force: true });
       }
     } catch (e) {
       console.warn("Index rebuild check failed; proceeding anyway:", e);
