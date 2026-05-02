@@ -178,20 +178,31 @@ function loadPageIntoBlockEditor(content) {
 }
 
 function saveBlocksToCache() {
-  const markdown = blocksToMarkdown(currentBlocks);
   const cacheItem = getCacheByFileName(currentSitePath);
-  if (cacheItem) {
-    cacheItem.content = markdown;
-    cacheItem.modifiedAt = new Date().toISOString();
-    modified = true;
-    if (typeof rescanForConflictMarkers === "function") {
-      rescanForConflictMarkers();
-    }
-    if (typeof checkPageSizeLimit === "function") {
-      checkPageSizeLimit();
-    }
-    updateDeployButtonState();
+  if (!cacheItem) return;
+  const markdown = blocksToMarkdown(currentBlocks);
+  // No-op when the serialized blocks match the cached content. This
+  // matters for navigation-time flushes (selectSidebarPage calls
+  // saveBlocksToCache before flipping currentSitePath to commit any
+  // pending edits to the OLD page): without this guard, navigating
+  // between pages with no actual changes would still flip `modified`
+  // to true via the unconditional assignment below, making the editor
+  // think there are pending changes to discard. The discard prompt
+  // would then read "0 pages" because gitStatus correctly reports no
+  // diff while `modified` says otherwise.
+  if (typeof cacheItem.content === "string" && cacheItem.content === markdown) {
+    return;
   }
+  cacheItem.content = markdown;
+  cacheItem.modifiedAt = new Date().toISOString();
+  modified = true;
+  if (typeof rescanForConflictMarkers === "function") {
+    rescanForConflictMarkers();
+  }
+  if (typeof checkPageSizeLimit === "function") {
+    checkPageSizeLimit();
+  }
+  updateDeployButtonState();
 }
 
 // ============================================
