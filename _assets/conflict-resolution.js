@@ -107,10 +107,20 @@ async function initConflictPolling(siteId) {
   conflictedFiles.clear();
   hideConflictBanner();
 
-  // Prefer the persisted base from a prior session — that's the commit the
-  // current pending changes were based on. Falling back to the upstream head
-  // is only correct for a fresh session with no pending edits.
-  const persisted = loadPersistedLastSeen(siteId);
+  // When the editor opens with no local pending edits, the persisted
+  // lastSeenShortSha is meaningless — there's nothing for it to be the
+  // "base" of, and trusting a stale value causes the conflict poll to
+  // immediately fire a divergence handler against an upstream head we
+  // never actually disagreed with. Re-anchor to the current upstream
+  // HEAD so the next poll only triggers if a NEW upstream commit lands
+  // after this session started.
+  //
+  // When there ARE pending edits (modified === true), keep the
+  // persisted base — that's the commit the in-memory edits were
+  // derived from, and the conflict-resolution flow needs it to detect
+  // genuine divergence vs the user's own pending work.
+  const hasPendingEdits = (typeof modified !== "undefined" && modified === true);
+  let persisted = hasPendingEdits ? loadPersistedLastSeen(siteId) : null;
   if (persisted) {
     lastSeenShortSha = persisted.shortSha;
     lastSeenAuthor = persisted.author;
@@ -123,6 +133,9 @@ async function initConflictPolling(siteId) {
     } else {
       lastSeenShortSha = null;
       lastSeenAuthor = null;
+      // No upstream record found — clear any stale persisted entry so a
+      // later self-publish re-anchors cleanly.
+      if (!hasPendingEdits) clearPersistedLastSeen(siteId);
     }
   }
 
