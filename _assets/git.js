@@ -323,6 +323,22 @@ async function gitStatus(siteId) {
 async function gitStageAll(siteId) {
   const dir = getRepoDir(siteId);
 
+  // Only files the user explicitly deleted (tracked via
+  // pendingDeletedFileNames in on-load.js) are eligible for git.remove.
+  // The unconditional `head === 1 && workdir === 0 → git.remove` branch
+  // this used to have was a severe data-loss vector: any time the
+  // working tree was a subset of HEAD (writeBlob-imported sites with
+  // an empty worktree, partial autosave restores, multi-tab sessions
+  // with stale local state), every HEAD file missing from the worktree
+  // got dropped from the index, the new commit's tree shed those
+  // entries, and deployChanges propagated the "deletions" as R2.delete
+  // calls. Now removals require the explicit-deletion signal that
+  // removeCacheByFileName records — same guard we use in
+  // syncCacheToGit's orphan loop.
+  const explicitDeletes = (typeof pendingDeletedFileNames !== "undefined" && pendingDeletedFileNames instanceof Set)
+    ? pendingDeletedFileNames
+    : new Set();
+
   try {
     const statusMatrix = await git.statusMatrix({ fs, dir });
 
@@ -333,8 +349,11 @@ async function gitStageAll(siteId) {
       if (workdir === 2) {
         await git.add({ fs, dir, filepath });
       }
-      // Remove deleted files
-      else if (head === 1 && workdir === 0) {
+      // Remove deleted files — only when the deletion was an explicit
+      // user action. A workdir=0 row without that signal is treated as
+      // a stale-state artifact and the index entry is preserved, so
+      // the next commit's tree still references HEAD's blob.
+      else if (head === 1 && workdir === 0 && explicitDeletes.has(filepath)) {
         await git.remove({ fs, dir, filepath });
       }
     }
