@@ -2623,7 +2623,15 @@ function folderKeyBelongsToFolder(metaKey, folderPath) {
 // Updates every descendant file path, every folderMeta entry beneath the
 // folder, and any UI/selection state that referenced the old path. Returns
 // true on success, false on validation failure.
-function renameFolder(folderPath, newDisplayName) {
+//
+// Async because we have to lazy-load every descendant page's body BEFORE
+// mutating its fileName. Lazy stubs (content === undefined) survive the
+// rename with new paths but no body in cache; syncCacheToGit's write loop
+// then skips them (`typeof content !== "string"`), the new R2 path never
+// gets a put, and pages.json ends up pointing at a 404. From the user's
+// perspective the content is lost — the bytes are still at the OLD R2
+// path but nothing references them.
+async function renameFolder(folderPath, newDisplayName) {
   if (!folderPath) return false;
   // Defensive: strip any leading/trailing slashes the caller may have included.
   folderPath = folderPath.replace(/^\/+|\/+$/g, "");
@@ -2685,6 +2693,25 @@ function renameFolder(folderPath, newDisplayName) {
   if (conflict) {
     alert("A folder with that name already exists in this location.");
     return false;
+  }
+
+  // Eagerly fetch any lazy-stub descendants from R2 BEFORE we mutate
+  // their fileName. Once fileName flips to the new path,
+  // ensurePageContentLoaded would refetch from the new (404) path and
+  // permanently lose the body. Reading at the OLD path while
+  // cacheItem.fileName still reflects it ensures content lands in
+  // memory; the next publish then writes that content to the new R2
+  // key and the rename round-trips correctly.
+  const lazyDescendants = markdownCache.filter(item =>
+    fileBelongsToFolder(item.fileName, folderPath) &&
+    typeof item.content !== "string"
+  );
+  if (lazyDescendants.length > 0) {
+    const HYDRATE_BATCH = 50;
+    for (let i = 0; i < lazyDescendants.length; i += HYDRATE_BATCH) {
+      const slice = lazyDescendants.slice(i, i + HYDRATE_BATCH);
+      await Promise.all(slice.map(item => ensurePageContentLoaded(item)));
+    }
   }
 
   // Snapshot pre-rename pages list and build rename map (for wikilink rewrite).
@@ -3490,6 +3517,14 @@ function startRenameInSidebar(fileEl, node, siteId) {
       return;
     }
 
+    // Eagerly fetch the body if this is a lazy stub. After we mutate
+    // cacheItem.fileName below, ensurePageContentLoaded would try the
+    // (404) new R2 path and the body would be permanently lost — same
+    // failure mode as renameFolder for unloaded descendants.
+    if (typeof cacheItem.content !== "string") {
+      await ensurePageContentLoaded(cacheItem);
+    }
+
     // Snapshot pages list before mutation so wikilink rewriter can resolve
     // [[old-name]] references against the pre-rename layout.
     const oldPagesList = (typeof AgoraWikilinks !== "undefined")
@@ -3550,7 +3585,7 @@ function startRenameFolderInSidebar(folderEl, label, node, siteId) {
       alert(`Folder name must be ${MAX_NAME_LENGTH} characters or fewer.`);
       return;
     }
-    if (!renameFolder(node.folderPath, newName)) return;
+    if (!(await renameFolder(node.folderPath, newName))) return;
     modified = true;
     updateDeployButtonState();
     await populateSidebar(siteId);
@@ -3630,6 +3665,13 @@ async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
       return;
     }
 
+    // Lazy-load the body BEFORE flipping fileName. After the swap,
+    // ensurePageContentLoaded would fetch the (404) new R2 path and
+    // the body would be permanently lost.
+    if (typeof draggedItem.content !== "string") {
+      await ensurePageContentLoaded(draggedItem);
+    }
+
     const oldPagesList = (typeof AgoraWikilinks !== "undefined")
       ? AgoraWikilinks.pagesFromCache(markdownCache)
       : [];
@@ -3692,6 +3734,13 @@ async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
   if (getCacheByFileName(newPath)) {
     alert("A file with that name already exists in the target folder.");
     return;
+  }
+
+  // Lazy-load the body BEFORE flipping fileName. After the swap,
+  // ensurePageContentLoaded would fetch the (404) new R2 path and the
+  // body would be permanently lost.
+  if (typeof draggedItem.content !== "string") {
+    await ensurePageContentLoaded(draggedItem);
   }
 
   const oldPagesList = (typeof AgoraWikilinks !== "undefined")
