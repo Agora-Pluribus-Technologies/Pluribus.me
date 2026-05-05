@@ -1,5 +1,5 @@
 # About AgoraPages
-AgoraPages is a free, mobile-friendly tool for publishing interconnected writing on the web. Write in Markdown, link your pages together, and put your work somewhere it will stay. Sites can be solo or shared; invite collaborators to work on a site together, wiki-style.
+AgoraPages is a free, mobile-friendly tool for publishing interconnected writing on the web. Write in Markdown, link your pages together, and put your work somewhere it will stay.
 
 ---
 
