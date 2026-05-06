@@ -1928,6 +1928,21 @@ document.addEventListener("DOMContentLoaded", async function () {
           return;
         }
 
+        // Compute the set of fileNames that exist NOW but are absent
+        // from the target commit, and mark each as an explicit delete.
+        // Without this, the orphan-deletion guards in syncCacheToGit
+        // and gitStageAll would correctly preserve those files (no
+        // user-driven removal signal) — which means the "revert"
+        // commit would still contain every page added since the target
+        // commit. The user explicitly chose to revert, so this IS the
+        // user-driven removal signal we need.
+        const targetFileNames = new Set(markdownFiles.map(f => f.fileName));
+        for (const item of markdownCache) {
+          if (item && item.fileName && !targetFileNames.has(item.fileName)) {
+            pendingDeletedFileNames.add(item.fileName);
+          }
+        }
+
         // Clear the current cache and repopulate with files from the commit
         markdownCache.length = 0;
         for (const file of markdownFiles) {
@@ -2702,6 +2717,13 @@ async function renameFolder(folderPath, newDisplayName) {
   // cacheItem.fileName still reflects it ensures content lands in
   // memory; the next publish then writes that content to the new R2
   // key and the rename round-trips correctly.
+  //
+  // ensurePageContentLoaded leaves cacheItem.content === undefined on
+  // network errors (it does retry-on-next-call, but only for the same
+  // path — once we mutate fileName, that retry would target the new
+  // 404 path). Detect any descendant that's still a lazy stub after
+  // the eager-load and abort the rename rather than ship a partial
+  // result. The user can retry once the network's stable.
   const lazyDescendants = markdownCache.filter(item =>
     fileBelongsToFolder(item.fileName, folderPath) &&
     typeof item.content !== "string"
@@ -2711,6 +2733,14 @@ async function renameFolder(folderPath, newDisplayName) {
     for (let i = 0; i < lazyDescendants.length; i += HYDRATE_BATCH) {
       const slice = lazyDescendants.slice(i, i + HYDRATE_BATCH);
       await Promise.all(slice.map(item => ensurePageContentLoaded(item)));
+    }
+    const stillUnloaded = lazyDescendants.filter(item => typeof item.content !== "string");
+    if (stillUnloaded.length > 0) {
+      alert(
+        `Couldn't load ${stillUnloaded.length} page(s) from this folder. ` +
+        "Check your connection and try renaming again."
+      );
+      return false;
     }
   }
 
@@ -3520,9 +3550,14 @@ function startRenameInSidebar(fileEl, node, siteId) {
     // Eagerly fetch the body if this is a lazy stub. After we mutate
     // cacheItem.fileName below, ensurePageContentLoaded would try the
     // (404) new R2 path and the body would be permanently lost — same
-    // failure mode as renameFolder for unloaded descendants.
+    // failure mode as renameFolder for unloaded descendants. Abort
+    // the rename if the load fails so we never ship a partial result.
     if (typeof cacheItem.content !== "string") {
       await ensurePageContentLoaded(cacheItem);
+      if (typeof cacheItem.content !== "string") {
+        alert("Couldn't load this page from the server. Check your connection and try renaming again.");
+        return;
+      }
     }
 
     // Snapshot pages list before mutation so wikilink rewriter can resolve
@@ -3667,9 +3702,14 @@ async function handleFileDrop(draggedPath, targetNode, insertBefore, siteId) {
 
     // Lazy-load the body BEFORE flipping fileName. After the swap,
     // ensurePageContentLoaded would fetch the (404) new R2 path and
-    // the body would be permanently lost.
+    // the body would be permanently lost. Abort the move if the load
+    // fails so we never ship a partial result.
     if (typeof draggedItem.content !== "string") {
       await ensurePageContentLoaded(draggedItem);
+      if (typeof draggedItem.content !== "string") {
+        alert("Couldn't load this page from the server. Check your connection and try moving it again.");
+        return;
+      }
     }
 
     const oldPagesList = (typeof AgoraWikilinks !== "undefined")
@@ -3738,9 +3778,14 @@ async function handleFileDropIntoFolder(draggedPath, targetFolderPath, siteId) {
 
   // Lazy-load the body BEFORE flipping fileName. After the swap,
   // ensurePageContentLoaded would fetch the (404) new R2 path and the
-  // body would be permanently lost.
+  // body would be permanently lost. Abort the move if the load fails
+  // so we never ship a partial result.
   if (typeof draggedItem.content !== "string") {
     await ensurePageContentLoaded(draggedItem);
+    if (typeof draggedItem.content !== "string") {
+      alert("Couldn't load this page from the server. Check your connection and try moving it again.");
+      return;
+    }
   }
 
   const oldPagesList = (typeof AgoraWikilinks !== "undefined")
